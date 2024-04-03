@@ -11,3 +11,5 @@ diesel_migrations = { version = "2.1.0", features = ["postgres"] }
 dotenvy = "0.15"
 hex = "0.4.3"
 tokio = "1.37.0"
+serde = "1.0.197"
+serde_json = "1.0.115"

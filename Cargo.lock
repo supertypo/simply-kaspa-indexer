@@ -1335,6 +1335,8 @@ dependencies = [
  "hex",
  "kaspa-rpc-core",
  "kaspa-wrpc-client",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

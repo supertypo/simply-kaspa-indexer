@@ -5,15 +5,16 @@ use std::time::Duration;
 
 use diesel::{ExpressionMethods, insert_into, QueryDsl, r2d2, RunQueryDsl};
 use diesel::pg::PgConnection;
-use diesel::r2d2::ConnectionManager;
+use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use dotenvy::dotenv;
 use kaspa_rpc_core::api::rpc::RpcApi;
-use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use kaspa_wrpc_client::client::ConnectOptions;
+use kaspa_wrpc_client::KaspaRpcClient;
+use tokio::time::sleep;
 
 use kaspa_db_filler_ng::database::schema::blocks::dsl::blocks;
 use kaspa_db_filler_ng::database::schema::blocks::hash;
+use kaspa_db_filler_ng::kaspad::client::connect;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -58,30 +59,54 @@ async fn main() {
         println!("hash: {}", hex::encode(r))
     }
 
-    process_blocks().await.expect("");
+    run_loop(db_pool).await.expect("TODO");
 }
 
-async fn process_blocks() -> Result<(), ()> {
-    let url = env::var("KASPAD_RPC_URL").expect("KASPAD_RPC_URL must be set");
-    println!("Connecting to kaspad {}", url);
-    let client = KaspaRpcClient::new(WrpcEncoding::Borsh, &url)
-        .expect("Unable to connect to kaspad");
-    client.connect(ConnectOptions::default()).await
-        .expect("Unable to connect to kaspad");
+async fn run_loop(db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+    loop {
+        let mut con_option = None;
+        while con_option.is_none() {
+            match db_pool.get(){
+                Ok(r) => con_option = Some(r),
+                Err(e) => {
+                    println!("Postgres connection FAILED. Reason: '{e}'. Retrying in 10 seconds...");
+                    sleep(Duration::from_secs(10)).await;
+                }
+            }
+        }
+        let con = con_option.unwrap();
 
-    let server_info = client.get_server_info().await
-        .expect("Error when invoking GetServerInfo");
-    println!("Connected to kaspad version {}", server_info.server_version);
+        let url = env::var("KASPAD_RPC_URL").expect("KASPAD_RPC_URL must be set");
+        let network = env::var("KASPAD_NETWORK").map(|n| Some(n)).unwrap_or_default();
+        let mut client_option = None;
+        while client_option.is_none() {
+            match connect(&url, &network).await {
+                Ok(r) => client_option = Some(r),
+                Err(e) => {
+                    println!("Kaspad connection FAILED. Reason: '{e}'. Retrying in 10 seconds...");
+                    sleep(Duration::from_secs(10)).await;
+                }
+            };
+        }
+        let client = client_option.unwrap();
 
+        process_blocks(con, client).await?;
+    }
+}
+
+async fn process_blocks(con: PooledConnection<ConnectionManager<PgConnection>>, client: KaspaRpcClient) -> Result<(), ()> {
     let block_dag_info = client.get_block_dag_info().await
         .expect("Error when invoking GetBlockDagInfo");
     println!("BlockDagInfo received: pruning_point={}, first_parent={}",
              block_dag_info.pruning_point_hash, block_dag_info.virtual_parent_hashes[0]);
+    let mut lowhash = block_dag_info.pruning_point_hash;
 
-    println!("Getting blocks with lowhash={}", block_dag_info.virtual_parent_hashes[0]);
-    let res = client.get_blocks(Some(block_dag_info.virtual_parent_hashes[0]), true, true).await
-        .expect("Error when invoking GetBlocks");
-    println!("Got {} blocks", res.blocks.len());
+    loop {
+        println!("Getting blocks with lowhash={}", lowhash);
+        let res = client.get_blocks(Some(lowhash), true, true).await
+            .expect("Error when invoking GetBlocks");
+        println!("Got {} blocks", res.block_hashes.len());
 
-    return Ok(());
+        lowhash = *res.block_hashes.last().unwrap();
+    }
 }
