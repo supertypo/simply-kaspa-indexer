@@ -2,6 +2,7 @@ extern crate diesel;
 
 use std::env;
 use std::time::Duration;
+use crossbeam_queue::ArrayQueue;
 
 use diesel::{ExpressionMethods, insert_into, QueryDsl, r2d2, RunQueryDsl};
 use diesel::pg::PgConnection;
@@ -9,6 +10,7 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use dotenvy::dotenv;
 use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_rpc_core::RpcBlock;
 use kaspa_wrpc_client::KaspaRpcClient;
 use tokio::time::sleep;
 
@@ -101,12 +103,21 @@ async fn process_blocks(con: PooledConnection<ConnectionManager<PgConnection>>, 
              block_dag_info.pruning_point_hash, block_dag_info.virtual_parent_hashes[0]);
     let mut lowhash = block_dag_info.pruning_point_hash;
 
+    let blocks_queue: ArrayQueue<_> = ArrayQueue::new(100);
+
     loop {
         println!("Getting blocks with lowhash={}", lowhash);
         let res = client.get_blocks(Some(lowhash), true, true).await
             .expect("Error when invoking GetBlocks");
-        println!("Got {} blocks", res.block_hashes.len());
+        println!("Adding {} blocks to queue", res.block_hashes.len());
 
+        for b in res.blocks {
+            while blocks_queue.is_full() {
+                println!("Queue full, sleeping 2 seconds");
+                sleep(Duration::from_secs(2)).await;
+            }
+            blocks_queue.push(b).unwrap();
+        }
         lowhash = *res.block_hashes.last().unwrap();
     }
 }
