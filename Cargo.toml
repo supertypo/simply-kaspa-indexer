@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
 kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", branch = "master" }
-diesel = { version = "2.1.5", features = ["postgres", "r2d2"] }
+diesel = { version = "2.1.5", features = ["postgres", "r2d2", "numeric"] }
 diesel_migrations = { version = "2.1.0", features = ["postgres"] }
 dotenvy = "0.15"
 hex = "0.4.3"
@@ -14,3 +14,6 @@ tokio = "1.37.0"
 serde = "1.0.197"
 serde_json = "1.0.115"
 crossbeam-queue = "0.3.11"
+bigdecimal = "0.4.3"
+env_logger = "0.11.3"
+log = "0.4.21"
