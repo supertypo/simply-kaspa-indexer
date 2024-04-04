@@ -1,9 +1,10 @@
 extern crate diesel;
 
 use std::env;
+use std::sync::Arc;
 use std::time::Duration;
-use crossbeam_queue::ArrayQueue;
 
+use crossbeam_queue::ArrayQueue;
 use diesel::{ExpressionMethods, insert_into, QueryDsl, r2d2, RunQueryDsl};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
@@ -12,6 +13,7 @@ use dotenvy::dotenv;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::RpcBlock;
 use kaspa_wrpc_client::KaspaRpcClient;
+use tokio::task;
 use tokio::time::sleep;
 
 use kaspa_db_filler_ng::database::schema::blocks::dsl::blocks;
@@ -68,7 +70,7 @@ async fn run_loop(db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), 
     loop {
         let mut con_option = None;
         while con_option.is_none() {
-            match db_pool.get(){
+            match db_pool.get() {
                 Ok(r) => con_option = Some(r),
                 Err(e) => {
                     println!("Postgres connection FAILED. Reason: '{e}'. Retrying in 10 seconds...");
@@ -76,7 +78,6 @@ async fn run_loop(db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), 
                 }
             }
         }
-        let con = con_option.unwrap();
 
         let url = env::var("KASPAD_RPC_URL").expect("KASPAD_RPC_URL must be set");
         let network = env::var("KASPAD_NETWORK").map(|n| Some(n)).unwrap_or_default();
@@ -92,18 +93,39 @@ async fn run_loop(db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), 
         }
         let client = client_option.unwrap();
 
-        process_blocks(con, client).await?;
+        let blocks_queue = Arc::new(ArrayQueue::new(1000));
+        let mut tasks = vec![];
+        tasks.push(task::spawn(fetch_blocks(client, blocks_queue.clone())));
+        tasks.push(task::spawn(process_blocks(con_option, blocks_queue.clone())));
+
+        let mut abort = false;
+        for task in tasks {
+            if abort {
+                task.abort();
+            } else {
+                match task.await {
+                    Ok(_) => {
+                        println!("Task unexpectedly completed. Shutting down remaining tasks");
+                        abort = true;
+                    }
+                    Err(e) => {
+                        println!("Task FAILURE: {e}. Shutting down remaining tasks");
+                        abort = true;
+                    }
+                }
+            }
+        }
+        println!("Sleeping 10 seconds before restarting...");
+        sleep(Duration::from_secs(10)).await;
     }
 }
 
-async fn process_blocks(con: PooledConnection<ConnectionManager<PgConnection>>, client: KaspaRpcClient) -> Result<(), ()> {
+async fn fetch_blocks(client: KaspaRpcClient, blocks_queue: Arc<ArrayQueue<RpcBlock>>) -> Result<(), ()> {
     let block_dag_info = client.get_block_dag_info().await
         .expect("Error when invoking GetBlockDagInfo");
     println!("BlockDagInfo received: pruning_point={}, first_parent={}",
              block_dag_info.pruning_point_hash, block_dag_info.virtual_parent_hashes[0]);
     let mut lowhash = block_dag_info.pruning_point_hash;
-
-    let blocks_queue: ArrayQueue<_> = ArrayQueue::new(100);
 
     loop {
         println!("Getting blocks with lowhash={}", lowhash);
@@ -113,11 +135,33 @@ async fn process_blocks(con: PooledConnection<ConnectionManager<PgConnection>>, 
 
         for b in res.blocks {
             while blocks_queue.is_full() {
-                println!("Queue full, sleeping 2 seconds");
+                println!("Queue is full, sleeping 2 seconds...");
                 sleep(Duration::from_secs(2)).await;
             }
             blocks_queue.push(b).unwrap();
         }
         lowhash = *res.block_hashes.last().unwrap();
+    }
+}
+
+async fn process_blocks(con_option: Option<PooledConnection<ConnectionManager<PgConnection>>>, blocks_queue: Arc<ArrayQueue<RpcBlock>>) -> Result<(), ()> {
+    let con = &mut con_option.unwrap();
+    loop {
+        let block_option = blocks_queue.pop();
+        if block_option.is_some() {
+            let block = block_option.unwrap();
+            let b = vec![
+                hash.eq(block.header.hash.as_bytes().to_vec())
+            ];
+            insert_into(blocks)
+                .values(b)
+                .on_conflict_do_nothing()
+                .execute(con)
+                .expect("Unable to persist block");
+            println!("Inserted block {}", block.header.hash);
+        } else {
+            println!("Queue is empty, sleeping 2 seconds...");
+            sleep(Duration::from_secs(2)).await;
+        }
     }
 }
