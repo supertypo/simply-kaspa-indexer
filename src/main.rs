@@ -124,8 +124,9 @@ async fn run_loop(db_pool: &Pool<ConnectionManager<PgConnection>>) -> Result<(),
 async fn fetch_blocks(client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>) -> Result<(), ()> {
     let block_dag_info = client.get_block_dag_info().await
         .expect("Error when invoking GetBlockDagInfo");
-    info!("BlockDagInfo received: pruning_point={}", block_dag_info.pruning_point_hash);
-    let mut lowhash = block_dag_info.pruning_point_hash;
+    println!("BlockDagInfo received: pruning_point={}, first_parent={}",
+             block_dag_info.pruning_point_hash, block_dag_info.virtual_parent_hashes[0]);
+    let mut lowhash = block_dag_info.virtual_parent_hashes[0];
 
     loop {
         info!("Getting blocks with lowhash={}", lowhash);
@@ -183,18 +184,10 @@ async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
 }
 
 async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
-    // loop {
+    loop {
         info!("Process blocks started");
-        // let con = match db_pool.get() {
-        //     Ok(r) => { Some(r) }
-        //     Err(e) => {
-        //         info!("Database connection failed with {}. Sleeping for 10 seconds...", e);
-        //         sleep(Duration::from_secs(10)).await;
-        //         continue;
-        //     }
-        // };
-        // let mut insert_queue = vec![];
-        // let mut last_commit_time = SystemTime::now();
+        let mut insert_queue = vec![];
+        let mut last_commit_time = SystemTime::now();
         loop {
             let con = match db_pool.get() {
                 Ok(r) => { Some(r) }
@@ -204,26 +197,21 @@ async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<Co
                     continue;
                 }
             };
-            // if insert_queue.len() >= 100 || SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2 {
-            //     let inserted_rows = insert_into(dsl::blocks)
-            //         .values(&insert_queue)
-            //         .on_conflict_do_nothing()
-            //         .execute(con.unwrap().deref_mut());
-            //     info!("Commited {} rows to database", inserted_rows.unwrap());
-            //     insert_queue.clear();
-            //     last_commit_time = SystemTime::now();
-            // }
-            let block_option = db_blocks_queue.pop();
-            if block_option.is_some() {
-                // insert_queue.push(block_option.unwrap());
-                let a = insert_into(dsl::blocks)
-                    // .values(&insert_queue)
-                    .values(block_option.unwrap())
+            if insert_queue.len() >= 100 || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
+                let inserted_rows = insert_into(dsl::blocks)
+                    .values(insert_queue)
                     .on_conflict_do_nothing()
                     .execute(con.unwrap().deref_mut());
+                info!("Commited {} new rows to database", inserted_rows.unwrap());
+                insert_queue = vec![];
+                last_commit_time = SystemTime::now();
+            }
+            let block_option = db_blocks_queue.pop();
+            if block_option.is_some() {
+                insert_queue.push(block_option.unwrap());
             }
         }
-    // }
+    }
 }
 //
 // async fn process_blocks(db_pool: Pool<ConnectionManager<PgConnection>>, blocks_queue: Arc<ArrayQueue<RpcBlock>>) -> Result<(), ()> {

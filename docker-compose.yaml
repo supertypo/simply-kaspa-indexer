@@ -1,11 +1,14 @@
-kaspa_db_filler_ng:
-  container_name: kaspa_db_filler_ng
-  image: postgres:16-alpine
-  restart: unless-stopped
-  shm_size: 1gb
-  environment:
-    POSTGRES_USER: ${POSTGRES_USER}
-    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    POSTGRES_DB: ${POSTGRES_DB}
-  ports:
-    - "55543:5432"
+version: "3"
+
+services:
+  kaspa_db_filler_db:
+    container_name: kaspa_db_filler_db
+    image: postgres:16-alpine
+    restart: unless-stopped
+    shm_size: 1gb
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "55543:5432"
