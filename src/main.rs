@@ -1,9 +1,10 @@
 extern crate diesel;
 
 use std::env;
-use std::ops::DerefMut;
+use std::ops::{DerefMut, Div};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+use bigdecimal::BigDecimal;
 
 use crossbeam_queue::ArrayQueue;
 use diesel::{insert_into, Insertable, r2d2, RunQueryDsl};
@@ -157,23 +158,25 @@ async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
         let block = block_option.unwrap();
         let db_block = Block {
             hash: block.header.hash.as_bytes().to_vec(),
-            accepted_id_merkle_root: None,
-            difficulty: None,
-            is_chain_block: None,
-            merge_set_blues_hashes: None,
-            merge_set_reds_hashes: None,
-            selected_parent_hash: None,
-            bits: None,
-            blue_score: None,
-            blue_work: None,
-            daa_score: None,
-            hash_merkle_root: None,
-            nonce: None,
-            parents: None,
-            pruning_point: None,
-            timestamp: None,
-            utxo_commitment: None,
-            version: None,
+            accepted_id_merkle_root: Some(block.header.accepted_id_merkle_root.as_bytes().to_vec()),
+            difficulty: block.verbose_data.as_ref().map(|v| v.difficulty),
+            is_chain_block: block.verbose_data.as_ref().map(|v| v.is_chain_block),
+            merge_set_blues_hashes: block.verbose_data.as_ref().map(|v| v.merge_set_blues_hashes.iter()
+                .map(|w| Some(w.as_bytes().to_vec())).collect()),
+            merge_set_reds_hashes: block.verbose_data.as_ref().map(|v| v.merge_set_reds_hashes.iter()
+                .map(|w| Some(w.as_bytes().to_vec())).collect()),
+            selected_parent_hash: block.verbose_data.as_ref().map(|v| v.selected_parent_hash.as_bytes().to_vec()),
+            bits: block.header.bits.into(),
+            blue_score: block.header.blue_score as i64,
+            blue_work: block.header.blue_work.to_be_bytes_var(),
+            daa_score: block.header.daa_score as i64,
+            hash_merkle_root: block.header.hash_merkle_root.as_bytes().to_vec(),
+            nonce: BigDecimal::from(block.header.nonce),
+            parents: block.header.parents_by_level[0].iter().map(|v| Some(v.as_bytes().to_vec())).collect(),
+            pruning_point: block.header.pruning_point.as_bytes().to_vec(),
+            timestamp: block.header.timestamp.div(1000) as i32,
+            utxo_commitment: block.header.utxo_commitment.as_bytes().to_vec(),
+            version: block.header.version as i16,
         };
         while db_blocks_queue.is_full() {
             debug!("DB blocks queue is full, sleeping 2 seconds...");
@@ -202,7 +205,7 @@ async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<Co
                     .values(insert_queue)
                     .on_conflict_do_nothing()
                     .execute(con.unwrap().deref_mut());
-                info!("Commited {} new rows to database", inserted_rows.unwrap());
+                info!("Committed {} new rows to database", inserted_rows.unwrap());
                 insert_queue = vec![];
                 last_commit_time = SystemTime::now();
             }

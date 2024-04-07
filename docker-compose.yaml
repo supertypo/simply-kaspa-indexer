@@ -12,3 +12,14 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "55543:5432"
+
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: mthoring@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8989:80"
+
