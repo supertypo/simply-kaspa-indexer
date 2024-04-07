@@ -4,7 +4,6 @@ use diesel::prelude::*;
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::database::schema::blocks)]
 #[diesel(primary_key(hash))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Block {
     pub hash: Vec<u8>,
     pub accepted_id_merkle_root: Option<Vec<u8>>,
@@ -24,4 +23,14 @@ pub struct Block {
     pub timestamp: i32,
     pub utxo_commitment: Vec<u8>,
     pub version: i16,
+}
+
+pub const VAR_KEY_START_HASH: &str = "vspc_last_start_hash";
+
+#[derive(Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::database::schema::vars)]
+#[diesel(primary_key(key))]
+pub struct Var {
+    pub key: String,
+    pub value: String,
 }

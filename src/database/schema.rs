@@ -22,3 +22,16 @@ diesel::table! {
         version -> Int2,
     }
 }
+
+diesel::table! {
+    vars (key) {
+        #[max_length = 255]
+        key -> Varchar,
+        value -> Text,
+    }
+}
+
+diesel::allow_tables_to_appear_in_same_query!(
+    blocks,
+    vars,
+);

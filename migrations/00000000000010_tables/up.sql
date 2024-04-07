@@ -1,4 +1,9 @@
--- Your SQL goes here
+CREATE TABLE IF NOT EXISTS "vars"
+(
+    key   VARCHAR(255) PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "blocks"
 (
     hash                    BYTEA PRIMARY KEY,
@@ -8,17 +13,17 @@ CREATE TABLE IF NOT EXISTS "blocks"
     merge_set_blues_hashes  BYTEA[],
     merge_set_reds_hashes   BYTEA[],
     selected_parent_hash    BYTEA,
-    bits                    BIGINT NOT NULL,
-    blue_score              BIGINT NOT NULL,
-    blue_work               BYTEA NOT NULL,
-    daa_score               BIGINT NOT NULL,
-    hash_merkle_root        BYTEA NOT NULL,
+    bits                    BIGINT         NOT NULL,
+    blue_score              BIGINT         NOT NULL,
+    blue_work               BYTEA          NOT NULL,
+    daa_score               BIGINT         NOT NULL,
+    hash_merkle_root        BYTEA          NOT NULL,
     nonce                   NUMERIC(32, 0) NOT NULL,
-    parents                 BYTEA[] NOT NULL,
-    pruning_point           BYTEA NOT NULL,
-    "timestamp"             INTEGER NOT NULL,
-    utxo_commitment         BYTEA NOT NULL,
-    version                 SMALLINT NOT NULL
+    parents                 BYTEA[]        NOT NULL,
+    pruning_point           BYTEA          NOT NULL,
+    "timestamp"             INTEGER        NOT NULL,
+    utxo_commitment         BYTEA          NOT NULL,
+    version                 SMALLINT       NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_block_is_chain_block ON blocks (is_chain_block);

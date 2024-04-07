@@ -4,24 +4,26 @@ use std::env;
 use std::ops::{DerefMut, Div};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use bigdecimal::BigDecimal;
 
+use bigdecimal::BigDecimal;
 use crossbeam_queue::ArrayQueue;
-use diesel::{insert_into, Insertable, r2d2, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, insert_into, Insertable, r2d2, RunQueryDsl};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::result::Error;
+use diesel::upsert::excluded;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use dotenvy::dotenv;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::RpcBlock;
 use kaspa_wrpc_client::KaspaRpcClient;
-use log::{debug, error};
+use log::{debug, error, trace, warn};
 use log::info;
 use tokio::task;
 use tokio::time::sleep;
 
 use kaspa_db_filler_ng::database::models::Block;
-use kaspa_db_filler_ng::database::schema::blocks::dsl;
+use kaspa_db_filler_ng::database::schema::blocks;
 use kaspa_db_filler_ng::kaspad::client::connect;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -127,22 +129,42 @@ async fn fetch_blocks(client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<R
         .expect("Error when invoking GetBlockDagInfo");
     println!("BlockDagInfo received: pruning_point={}, first_parent={}",
              block_dag_info.pruning_point_hash, block_dag_info.virtual_parent_hashes[0]);
-    let mut lowhash = block_dag_info.virtual_parent_hashes[0];
+
+    // let start_point = block_dag_info.pruning_point_hash.to_string(); // FIXME: Use start point
+    // let start_point = block_dag_info.virtual_parent_hashes[0].to_string();
+    let start_point = "03320a16b1dcdb1cda08100290bdf790025adfc7f4b6a20d48dc02af14a5f7ff";
+    // FIXME: Use start point
+    info!("start_point={}", start_point);
+    let start_hash = kaspa_hashes::Hash::from_slice(hex::decode(start_point.as_bytes()).unwrap().as_slice());
+    let mut low_hash = start_hash;
 
     loop {
-        info!("Getting blocks with lowhash={}", lowhash);
-        let res = client.get_blocks(Some(lowhash), true, true).await
+        let start_time = SystemTime::now();
+        info!("Getting blocks with low_hash={}", low_hash);
+        let res = client.get_blocks(Some(low_hash), true, true).await
             .expect("Error when invoking GetBlocks");
-        info!("Received {} blocks", res.block_hashes.len());
+        info!("Received {} blocks", res.blocks.len());
+        trace!("Block hashes: \n{:#?}", res.block_hashes);
 
-        for b in res.blocks {
-            while rpc_blocks_queue.is_full() {
-                debug!("RPC blocks queue is full, sleeping 2 seconds...");
-                sleep(Duration::from_secs(2)).await;
+        let blocks_len = res.blocks.len();
+        if blocks_len > 1 {
+            low_hash = res.blocks.last().unwrap().header.hash;
+            for b in res.blocks {
+                let block_hash = b.header.hash;
+                if block_hash == low_hash && block_hash != start_hash {
+                    trace!("Ignoring low_hash block {}", low_hash);
+                    continue;
+                }
+                while rpc_blocks_queue.is_full() {
+                    warn!("RPC blocks queue is full, sleeping 2 seconds...");
+                    sleep(Duration::from_secs(2)).await;
+                }
+                rpc_blocks_queue.push(b).unwrap();
             }
-            rpc_blocks_queue.push(b).unwrap();
         }
-        lowhash = *res.block_hashes.last().unwrap();
+        if blocks_len < 50 && SystemTime::now().duration_since(start_time).unwrap().as_secs() < 3 {
+            sleep(Duration::from_secs(2)).await;
+        }
     }
 }
 
@@ -179,7 +201,7 @@ async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
             version: block.header.version as i16,
         };
         while db_blocks_queue.is_full() {
-            debug!("DB blocks queue is full, sleeping 2 seconds...");
+            warn!("DB blocks queue is full, sleeping 2 seconds...");
             sleep(Duration::from_secs(2)).await;
         }
         let _ = db_blocks_queue.push(db_block);
@@ -189,10 +211,10 @@ async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
 async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     loop {
         info!("Process blocks started");
-        let mut insert_queue = vec![];
+        let mut insert_queue: Vec<Block> = vec![];
         let mut last_commit_time = SystemTime::now();
         loop {
-            let con = match db_pool.get() {
+            let con_option = match db_pool.get() {
                 Ok(r) => { Some(r) }
                 Err(e) => {
                     info!("Database connection failed with {}. Sleeping for 10 seconds...", e);
@@ -201,17 +223,48 @@ async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<Co
                 }
             };
             if insert_queue.len() >= 100 || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
-                let inserted_rows = insert_into(dsl::blocks)
-                    .values(insert_queue)
-                    .on_conflict_do_nothing()
-                    .execute(con.unwrap().deref_mut());
-                info!("Committed {} new rows to database", inserted_rows.unwrap());
-                insert_queue = vec![];
-                last_commit_time = SystemTime::now();
+                debug!("Committing {} new rows to database", insert_queue.len());
+                // let mut inserted_rows = 0;
+                match con_option.unwrap().deref_mut().transaction::<_, Error, _>(|con| {
+                    let query_result = insert_into(blocks::dsl::blocks)
+                        .values(&insert_queue)
+                        .on_conflict(blocks::hash)
+                        .do_update()
+                        .set((
+                            blocks::hash.eq(excluded(blocks::hash)),
+                            blocks::accepted_id_merkle_root.eq(excluded(blocks::accepted_id_merkle_root)),
+                            blocks::difficulty.eq(excluded(blocks::difficulty)),
+                            blocks::is_chain_block.eq(excluded(blocks::is_chain_block)),
+                            blocks::merge_set_blues_hashes.eq(excluded(blocks::merge_set_blues_hashes)),
+                            blocks::merge_set_reds_hashes.eq(excluded(blocks::merge_set_reds_hashes)),
+                            blocks::selected_parent_hash.eq(excluded(blocks::selected_parent_hash)),
+                            blocks::bits.eq(excluded(blocks::bits)),
+                            blocks::blue_score.eq(excluded(blocks::blue_score)),
+                            blocks::blue_work.eq(excluded(blocks::blue_work)),
+                            blocks::daa_score.eq(excluded(blocks::daa_score)),
+                            blocks::hash_merkle_root.eq(excluded(blocks::hash_merkle_root)),
+                            blocks::nonce.eq(excluded(blocks::nonce)),
+                            blocks::parents.eq(excluded(blocks::parents)),
+                            blocks::pruning_point.eq(excluded(blocks::pruning_point)),
+                            blocks::timestamp.eq(excluded(blocks::timestamp)),
+                            blocks::utxo_commitment.eq(excluded(blocks::utxo_commitment)),
+                            blocks::version.eq(excluded(blocks::version))))
+                        .execute(con);
+                }) {
+                    Ok(inserted_rows) => {
+                        info!("Committed {} new rows to database", inserted_rows?);
+                        insert_queue = vec![];
+                        last_commit_time = SystemTime::now();
+                    }
+                    Err(_) => { error!("Commit to database failed")}
+                };
+                Ok::<_, Error>(())
             }
             let block_option = db_blocks_queue.pop();
             if block_option.is_some() {
                 insert_queue.push(block_option.unwrap());
+            } else {
+                sleep(Duration::from_secs(1)).await;
             }
         }
     }

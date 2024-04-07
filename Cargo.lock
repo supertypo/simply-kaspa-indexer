@@ -1439,6 +1439,7 @@ dependencies = [
  "dotenvy",
  "env_logger",
  "hex",
+ "kaspa-hashes",
  "kaspa-rpc-core",
  "kaspa-wrpc-client",
  "log",
