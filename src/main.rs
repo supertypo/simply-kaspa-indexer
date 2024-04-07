@@ -1,5 +1,6 @@
 extern crate diesel;
 
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ops::{DerefMut, Div};
 use std::sync::Arc;
@@ -209,25 +210,27 @@ async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
 }
 
 async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+    const INSERT_QUEUE_SIZE: usize = 500;
     loop {
         info!("Process blocks started");
-        let mut insert_queue: Vec<Block> = vec![];
+        let mut insert_queue: HashSet<Block> = HashSet::with_capacity(INSERT_QUEUE_SIZE);
         let mut last_commit_time = SystemTime::now();
         loop {
-            let con_option = match db_pool.get() {
-                Ok(r) => { Some(r) }
-                Err(e) => {
-                    info!("Database connection failed with {}. Sleeping for 10 seconds...", e);
-                    sleep(Duration::from_secs(10)).await;
+            if insert_queue.len() >= INSERT_QUEUE_SIZE || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
+                let con_option = match db_pool.get() {
+                    Ok(r) => { Some(r) }
+                    Err(e) => {
+                        info!("Database connection failed with {}. Sleeping for 10 seconds...", e);
+                        sleep(Duration::from_secs(10)).await;
+                        None
+                    }
+                };
+                if con_option.is_none() {
                     continue;
                 }
-            };
-            if insert_queue.len() >= 100 || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
-                debug!("Committing {} new rows to database", insert_queue.len());
-                // let mut inserted_rows = 0;
-                match con_option.unwrap().deref_mut().transaction::<_, Error, _>(|con| {
-                    let query_result = insert_into(blocks::dsl::blocks)
-                        .values(&insert_queue)
+                let _ = con_option.unwrap().deref_mut().transaction(|con| {
+                    match insert_into(blocks::dsl::blocks)
+                        .values(Vec::from_iter(&insert_queue))
                         .on_conflict(blocks::hash)
                         .do_update()
                         .set((
@@ -249,22 +252,28 @@ async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<Co
                             blocks::timestamp.eq(excluded(blocks::timestamp)),
                             blocks::utxo_commitment.eq(excluded(blocks::utxo_commitment)),
                             blocks::version.eq(excluded(blocks::version))))
-                        .execute(con);
-                }) {
-                    Ok(inserted_rows) => {
-                        info!("Committed {} new rows to database", inserted_rows?);
-                        insert_queue = vec![];
-                        last_commit_time = SystemTime::now();
-                    }
-                    Err(_) => { error!("Commit to database failed")}
-                };
-                Ok::<_, Error>(())
+                        .execute(con) {
+                        Ok(inserted_rows) => {
+                            info!("Committed {} new rows to database", inserted_rows);
+                            insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
+                            last_commit_time = SystemTime::now();
+                        }
+                        Err(e) => {
+                            error!("Commit to database failed: {e}");
+                        }
+                    };
+                    Ok::<_, Error>(())
+                }).unwrap();
             }
-            let block_option = db_blocks_queue.pop();
-            if block_option.is_some() {
-                insert_queue.push(block_option.unwrap());
-            } else {
+            if insert_queue.len() >= INSERT_QUEUE_SIZE { // In case db insertion failed
                 sleep(Duration::from_secs(1)).await;
+            } else {
+                let block_option = db_blocks_queue.pop();
+                if block_option.is_some() {
+                    insert_queue.insert(block_option.unwrap());
+                } else {
+                    sleep(Duration::from_secs(1)).await;
+                }
             }
         }
     }

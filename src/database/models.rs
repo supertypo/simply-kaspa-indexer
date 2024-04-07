@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use bigdecimal::BigDecimal;
 use diesel::prelude::*;
 
@@ -23,6 +24,22 @@ pub struct Block {
     pub timestamp: i32,
     pub utxo_commitment: Vec<u8>,
     pub version: i16,
+}
+
+impl Eq for Block {}
+
+impl PartialEq for Block {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.hash == other.hash
+    }
+}
+
+impl Hash for Block {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.hash.hash(state);
+    }
 }
 
 pub const VAR_KEY_START_HASH: &str = "vspc_last_start_hash";
