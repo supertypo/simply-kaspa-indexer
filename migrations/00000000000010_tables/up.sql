@@ -29,3 +29,9 @@ CREATE TABLE IF NOT EXISTS "blocks"
 CREATE INDEX IF NOT EXISTS idx_block_is_chain_block ON blocks (is_chain_block);
 CREATE INDEX IF NOT EXISTS idx_blue_score ON blocks (blue_score);
 CREATE INDEX IF NOT EXISTS idx_daa_score ON blocks (daa_score);
+
+CREATE TABLE IF NOT EXISTS "transactions"
+(
+    transaction_id BYTEA PRIMARY KEY,
+    block_hash     BYTEA[] NOT NULL
+);

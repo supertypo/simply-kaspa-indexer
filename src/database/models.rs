@@ -54,7 +54,24 @@ impl Hash for Block {
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::database::schema::transactions)]
-#[diesel(primary_key(hash))]
+#[diesel(primary_key(transaction_id))]
 pub struct Transaction {
-    pub hash: Vec<u8>,
+    pub transaction_id: Vec<u8>,
+    pub block_hash: Vec<Option<Vec<u8>>>,
+}
+
+impl Eq for Transaction {}
+
+impl PartialEq for Transaction {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.transaction_id == other.transaction_id
+    }
+}
+
+impl Hash for Transaction {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.transaction_id.hash(state);
+    }
 }

@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 
 use bigdecimal::BigDecimal;
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, ExpressionMethods, insert_into, Insertable, r2d2, RunQueryDsl};
+use diesel::{Connection, EqAll, ExpressionMethods, insert_into, Insertable, PgExpressionMethods, r2d2, RunQueryDsl};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
@@ -24,7 +24,7 @@ use tokio::task;
 use tokio::time::sleep;
 
 use kaspa_db_filler_ng::database::models::{Block, Transaction};
-use kaspa_db_filler_ng::database::schema::blocks;
+use kaspa_db_filler_ng::database::schema::{blocks, transactions};
 use kaspa_db_filler_ng::kaspad::client::connect;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -99,14 +99,15 @@ async fn run_loop(db_pool: &Pool<ConnectionManager<PgConnection>>) -> Result<(),
         let client = client_option.unwrap();
 
         let rpc_blocks_queue = Arc::new(ArrayQueue::new(1000));
-        let rpc_transactions_queue = Arc::new(ArrayQueue::new(1000));
-        let db_blocks_queue = Arc::new(ArrayQueue::new(1000));
-        let db_transactions_queue = Arc::new(ArrayQueue::new(1000));
+        let rpc_transactions_queue = Arc::new(ArrayQueue::new(rpc_blocks_queue.capacity()));
+        let db_blocks_queue = Arc::new(ArrayQueue::new(rpc_blocks_queue.capacity()));
+        let db_transactions_queue = Arc::new(ArrayQueue::new(200 * rpc_blocks_queue.capacity()));
         let mut tasks = vec![];
         tasks.push(task::spawn(fetch_blocks(client, rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
         tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
         tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone())));
         tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
+        tasks.push(task::spawn(insert_transactions(db_transactions_queue.clone(), db_pool.clone())));
 
         let mut abort = false;
         for task in tasks {
@@ -233,8 +234,10 @@ async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTran
         }
         let transactions = transactions_option.unwrap();
         for t in transactions {
+            let verbose_data = t.verbose_data.unwrap();
             let db_transaction = Transaction {
-                hash: t.verbose_data.unwrap().transaction_id.as_bytes().to_vec(),
+                transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
+                block_hash: vec![Some(verbose_data.block_hash.as_bytes().to_vec())]
             };
             while db_transactions_queue.is_full() {
                 warn!("DB transactions queue is full, sleeping 2 seconds...");
@@ -248,7 +251,7 @@ async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTran
 async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 500;
     loop {
-        info!("Process blocks started");
+        info!("Insert blocks started");
         let mut insert_queue: HashSet<Block> = HashSet::with_capacity(INSERT_QUEUE_SIZE);
         let mut last_commit_time = SystemTime::now();
         loop {
@@ -290,12 +293,12 @@ async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<Co
                             blocks::version.eq(excluded(blocks::version))))
                         .execute(con) {
                         Ok(inserted_rows) => {
-                            info!("Committed {} new rows to database", inserted_rows);
+                            info!("Committed {} new blocks to database", inserted_rows);
                             insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
                             last_commit_time = SystemTime::now();
                         }
                         Err(e) => {
-                            error!("Commit to database failed: {e}");
+                            error!("Commit blocks to database failed: {e}");
                         }
                     };
                     Ok::<_, Error>(())
@@ -307,6 +310,59 @@ async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<Co
                 let block_option = db_blocks_queue.pop();
                 if block_option.is_some() {
                     insert_queue.insert(block_option.unwrap());
+                } else {
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+}
+
+async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transaction>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+    const INSERT_QUEUE_SIZE: usize = 20_000;
+    loop {
+        info!("Insert transactions started");
+        let mut insert_queue: HashSet<Transaction> = HashSet::with_capacity(INSERT_QUEUE_SIZE); // FIXME should merge block hashes instead
+        let mut last_commit_time = SystemTime::now();
+        loop {
+            if insert_queue.len() >= INSERT_QUEUE_SIZE || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
+                let con_option = match db_pool.get() {
+                    Ok(r) => { Some(r) }
+                    Err(e) => {
+                        info!("Database connection failed with {}. Sleeping for 10 seconds...", e);
+                        sleep(Duration::from_secs(10)).await;
+                        None
+                    }
+                };
+                if con_option.is_none() {
+                    continue;
+                }
+                let _ = con_option.unwrap().deref_mut().transaction(|con| {
+                    match insert_into(transactions::dsl::transactions)
+                        .values(Vec::from_iter(&insert_queue))
+                        .on_conflict(transactions::transaction_id)
+                        // .do_update()
+                        // .set(transactions::block_hash.eq((transactions::block_hash, excluded(transactions::block_hash).is_distinct_from(transactions::block_hash))))
+                        .do_nothing() // FIXME merge block hashes
+                        .execute(con) {
+                        Ok(inserted_rows) => {
+                            info!("Committed {} new transactions to database", inserted_rows);
+                            insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
+                            last_commit_time = SystemTime::now();
+                        }
+                        Err(e) => {
+                            error!("Commit transactions to database failed: {e}");
+                        }
+                    };
+                    Ok::<_, Error>(())
+                }).unwrap();
+            }
+            if insert_queue.len() >= INSERT_QUEUE_SIZE { // In case db insertion failed
+                sleep(Duration::from_secs(1)).await;
+            } else {
+                let transaction_option = db_transactions_queue.pop();
+                if transaction_option.is_some() {
+                    insert_queue.insert(transaction_option.unwrap());
                 } else {
                     sleep(Duration::from_secs(1)).await;
                 }
