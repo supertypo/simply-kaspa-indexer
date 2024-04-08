@@ -52,28 +52,7 @@ async fn main() {
         db_con.run_pending_migrations(MIGRATIONS)
             .expect("Unable to apply pending migrations");
     }
-    //
-    // info!("Inserting test data");
-    // for i in 0..9 {
-    //     insert_into(dsl::blocks)
-    //         .values(schema::blocks::hash.eq(hex::decode(format!("aba{}", i)).expect("")))
-    //         .on_conflict_do_nothing()
-    //         .execute(db_con)
-    //         .expect("Failed to insert test data");
-    // }
-    //
-    // info!("Fetching test data");
-    // let results = dsl::blocks
-    //     .select(schema::blocks::hash)
-    //     .load::<Vec<u8>>(db_con)
-    //     .expect("Failed to retrieve test data");
-    //
-    // info!("Displaying {} blocks:", results.len());
-    // for r in results {
-    //     info!("hash: {}", hex::encode(r))
-    // }
-
-    run_loop(&db_pool).await.expect("TODO");
+    run_loop(&db_pool).await.expect("Unreachable");
 }
 
 async fn run_loop(db_pool: &Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
@@ -102,6 +81,7 @@ async fn run_loop(db_pool: &Pool<ConnectionManager<PgConnection>>) -> Result<(),
         let rpc_transactions_queue = Arc::new(ArrayQueue::new(rpc_blocks_queue.capacity()));
         let db_blocks_queue = Arc::new(ArrayQueue::new(rpc_blocks_queue.capacity()));
         let db_transactions_queue = Arc::new(ArrayQueue::new(200 * rpc_blocks_queue.capacity()));
+
         let mut tasks = vec![];
         tasks.push(task::spawn(fetch_blocks(client, rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
         tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
@@ -109,25 +89,9 @@ async fn run_loop(db_pool: &Pool<ConnectionManager<PgConnection>>) -> Result<(),
         tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
         tasks.push(task::spawn(insert_transactions(db_transactions_queue.clone(), db_pool.clone())));
 
-        let mut abort = false;
         for task in tasks {
-            if abort {
-                task.abort();
-            } else {
-                match task.await {
-                    Ok(_) => {
-                        info!("Task unexpectedly completed. Shutting down remaining tasks");
-                        abort = true;
-                    }
-                    Err(e) => {
-                        info!("Task FAILURE: {e}. Shutting down remaining tasks");
-                        abort = true;
-                    }
-                }
-            }
+            let _ = task.await.expect("Task failure");
         }
-        info!("Sleeping 10 seconds before restarting...");
-        sleep(Duration::from_secs(10)).await;
     }
 }
 
@@ -138,9 +102,9 @@ async fn fetch_blocks(client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<R
     info!("BlockDagInfo received: pruning_point={}, first_parent={}",
              block_dag_info.pruning_point_hash, block_dag_info.virtual_parent_hashes[0]);
 
-    // let start_point = block_dag_info.pruning_point_hash.to_string(); // FIXME: Use start point
+    let start_point = block_dag_info.pruning_point_hash.to_string(); // FIXME: Use start point
     // let start_point = block_dag_info.virtual_parent_hashes[0].to_string();
-    let start_point = "6abe8c84bc86555a288c9506d7c4782ea26e8a2d2f103de14df161b633e0c2ac";
+    // let start_point = "6abe8c84bc86555a288c9506d7c4782ea26e8a2d2f103de14df161b633e0c2ac";
 
     info!("start_point={}", start_point);
     let start_hash = kaspa_hashes::Hash::from_slice(hex::decode(start_point.as_bytes()).unwrap().as_slice());
@@ -259,7 +223,7 @@ async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<Co
                 let con_option = match db_pool.get() {
                     Ok(r) => { Some(r) }
                     Err(e) => {
-                        info!("Database connection failed with {}. Sleeping for 10 seconds...", e);
+                        info!("Database connection failed with: {}. Sleeping for 10 seconds...", e);
                         sleep(Duration::from_secs(10)).await;
                         None
                     }
@@ -298,7 +262,8 @@ async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<Co
                             last_commit_time = SystemTime::now();
                         }
                         Err(e) => {
-                            error!("Commit blocks to database failed: {e}");
+                            error!("Commit blocks to database failed with: {e}. Sleeping for 5 seconds...");
+                            std::thread::sleep(Duration::from_secs(5));
                         }
                     };
                     Ok::<_, Error>(())
@@ -329,7 +294,7 @@ async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transaction>>
                 let con_option = match db_pool.get() {
                     Ok(r) => { Some(r) }
                     Err(e) => {
-                        info!("Database connection failed with {}. Sleeping for 10 seconds...", e);
+                        info!("Database connection failed with: {}. Sleeping for 10 seconds...", e);
                         sleep(Duration::from_secs(10)).await;
                         None
                     }
@@ -351,7 +316,8 @@ async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transaction>>
                             last_commit_time = SystemTime::now();
                         }
                         Err(e) => {
-                            error!("Commit transactions to database failed: {e}");
+                            error!("Commit transactions to database failed with: {e}. Sleeping for 5 seconds...");
+                            std::thread::sleep(Duration::from_secs(5));
                         }
                     };
                     Ok::<_, Error>(())
@@ -370,37 +336,3 @@ async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transaction>>
         }
     }
 }
-//
-// async fn process_blocks(db_pool: Pool<ConnectionManager<PgConnection>>, blocks_queue: Arc<ArrayQueue<RpcBlock>>) -> Result<(), ()> {
-//     loop {
-//         info!("Process blocks started");
-//         let con = match db_pool.get() {
-//             Ok(r) => { Some(r) }
-//             Err(e) => {
-//                 info!("Database connetion failed with {}. Sleeping for 10 seconds...", e);
-//                 sleep(Duration::from_secs(10)).await;
-//             }
-//         };
-//         if con.is_none() {
-//             continue;
-//         }
-//         loop {
-//             let block_option = blocks_queue.pop();
-//             if block_option.is_some() {
-//                 let block = block_option.unwrap();
-//                 let b = vec![
-//                     hash.eq(block.header.hash.as_bytes().to_vec())
-//                 ];
-//                 insert_into(blocks)
-//                     .values(b)
-//                     .on_conflict_do_nothing()
-//                     .execute(con.unwrap().deref_mut())
-//                     .expect("Unable to persist block");
-//                 info!("Inserted block {}", block.header.hash);
-//             } else {
-//                 info!("Queue is empty, sleeping 2 seconds...");
-//                 sleep(Duration::from_secs(2)).await;
-//             }
-//         }
-//     }
-// }
