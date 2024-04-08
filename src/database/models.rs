@@ -2,6 +2,16 @@ use std::hash::{Hash, Hasher};
 use bigdecimal::BigDecimal;
 use diesel::prelude::*;
 
+pub const VAR_KEY_START_HASH: &str = "vspc_last_start_hash";
+
+#[derive(Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::database::schema::vars)]
+#[diesel(primary_key(key))]
+pub struct Var {
+    pub key: String,
+    pub value: String,
+}
+
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::database::schema::blocks)]
 #[diesel(primary_key(hash))]
@@ -42,12 +52,9 @@ impl Hash for Block {
     }
 }
 
-pub const VAR_KEY_START_HASH: &str = "vspc_last_start_hash";
-
 #[derive(Queryable, Selectable, Insertable)]
-#[diesel(table_name = crate::database::schema::vars)]
-#[diesel(primary_key(key))]
-pub struct Var {
-    pub key: String,
-    pub value: String,
+#[diesel(table_name = crate::database::schema::transactions)]
+#[diesel(primary_key(hash))]
+pub struct Transaction {
+    pub hash: Vec<u8>,
 }

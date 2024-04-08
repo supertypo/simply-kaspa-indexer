@@ -16,14 +16,14 @@ use diesel::upsert::excluded;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use dotenvy::dotenv;
 use kaspa_rpc_core::api::rpc::RpcApi;
-use kaspa_rpc_core::RpcBlock;
+use kaspa_rpc_core::{RpcBlock, RpcHeader, RpcTransaction};
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, error, trace, warn};
 use log::info;
 use tokio::task;
 use tokio::time::sleep;
 
-use kaspa_db_filler_ng::database::models::Block;
+use kaspa_db_filler_ng::database::models::{Block, Transaction};
 use kaspa_db_filler_ng::database::schema::blocks;
 use kaspa_db_filler_ng::kaspad::client::connect;
 
@@ -99,10 +99,13 @@ async fn run_loop(db_pool: &Pool<ConnectionManager<PgConnection>>) -> Result<(),
         let client = client_option.unwrap();
 
         let rpc_blocks_queue = Arc::new(ArrayQueue::new(1000));
+        let rpc_transactions_queue = Arc::new(ArrayQueue::new(1000));
         let db_blocks_queue = Arc::new(ArrayQueue::new(1000));
+        let db_transactions_queue = Arc::new(ArrayQueue::new(1000));
         let mut tasks = vec![];
-        tasks.push(task::spawn(fetch_blocks(client, rpc_blocks_queue.clone())));
+        tasks.push(task::spawn(fetch_blocks(client, rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
         tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
+        tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone())));
         tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
 
         let mut abort = false;
@@ -127,7 +130,8 @@ async fn run_loop(db_pool: &Pool<ConnectionManager<PgConnection>>) -> Result<(),
     }
 }
 
-async fn fetch_blocks(client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>) -> Result<(), ()> {
+async fn fetch_blocks(client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
+                      rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) -> Result<(), ()> {
     let block_dag_info = client.get_block_dag_info().await
         .expect("Error when invoking GetBlockDagInfo");
     info!("BlockDagInfo received: pruning_point={}, first_parent={}",
@@ -162,7 +166,12 @@ async fn fetch_blocks(client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<R
                     warn!("RPC blocks queue is full, sleeping 2 seconds...");
                     sleep(Duration::from_secs(2)).await;
                 }
-                rpc_blocks_queue.push(b).unwrap();
+                while rpc_transactions_queue.is_full() {
+                    warn!("RPC transactions queue is full, sleeping 2 seconds...");
+                    sleep(Duration::from_secs(2)).await;
+                }
+                rpc_blocks_queue.push(RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }).unwrap();
+                rpc_transactions_queue.push(b.transactions).unwrap();
             }
         }
         debug!("Fetch blocks BPS: {}", 1000 * blocks_len as u128
@@ -210,6 +219,29 @@ async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
             sleep(Duration::from_secs(2)).await;
         }
         let _ = db_blocks_queue.push(db_block);
+    }
+}
+
+async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
+                        db_transactions_queue: Arc<ArrayQueue<Transaction>>) -> Result<(), ()> {
+    loop {
+        let transactions_option = rpc_transactions_queue.pop();
+        if transactions_option.is_none() {
+            debug!("RPC transactions queue is empty, sleeping 2 seconds...");
+            sleep(Duration::from_secs(2)).await;
+            continue;
+        }
+        let transactions = transactions_option.unwrap();
+        for t in transactions {
+            let db_transaction = Transaction {
+                hash: t.verbose_data.unwrap().transaction_id.as_bytes().to_vec(),
+            };
+            while db_transactions_queue.is_full() {
+                warn!("DB transactions queue is full, sleeping 2 seconds...");
+                sleep(Duration::from_secs(2)).await;
+            }
+            let _ = db_transactions_queue.push(db_transaction);
+        }
     }
 }
 

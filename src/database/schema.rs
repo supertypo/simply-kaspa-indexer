@@ -1,4 +1,11 @@
 // @generated automatically by Diesel CLI.
+diesel::table! {
+    vars (key) {
+        #[max_length = 255]
+        key -> Varchar,
+        value -> Text,
+    }
+}
 
 diesel::table! {
     blocks (hash) {
@@ -24,14 +31,13 @@ diesel::table! {
 }
 
 diesel::table! {
-    vars (key) {
-        #[max_length = 255]
-        key -> Varchar,
-        value -> Text,
+    transactions (hash) {
+        hash -> Bytea,
     }
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
-    blocks,
     vars,
+    blocks,
+    transactions,
 );
