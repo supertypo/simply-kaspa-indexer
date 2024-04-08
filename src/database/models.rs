@@ -39,20 +39,18 @@ pub struct Block {
 impl Eq for Block {}
 
 impl PartialEq for Block {
-    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.hash == other.hash
     }
 }
 
 impl Hash for Block {
-    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.hash.hash(state);
     }
 }
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Queryable, Selectable, Insertable, Clone)]
 #[diesel(table_name = crate::database::schema::transactions)]
 #[diesel(primary_key(transaction_id))]
 pub struct Transaction {
@@ -63,14 +61,12 @@ pub struct Transaction {
 impl Eq for Transaction {}
 
 impl PartialEq for Transaction {
-    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.transaction_id == other.transaction_id
     }
 }
 
 impl Hash for Transaction {
-    #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.transaction_id.hash(state);
     }

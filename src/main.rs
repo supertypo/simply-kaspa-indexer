@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 
 use bigdecimal::BigDecimal;
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, EqAll, ExpressionMethods, insert_into, Insertable, PgExpressionMethods, r2d2, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, insert_into, Insertable, r2d2, RunQueryDsl};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
@@ -16,7 +16,7 @@ use diesel::upsert::excluded;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use dotenvy::dotenv;
 use kaspa_rpc_core::api::rpc::RpcApi;
-use kaspa_rpc_core::{RpcBlock, RpcHeader, RpcTransaction};
+use kaspa_rpc_core::{RpcBlock, RpcTransaction};
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, error, trace, warn};
 use log::info;
@@ -188,7 +188,7 @@ async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
 }
 
 async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
-                        db_transactions_queue: Arc<ArrayQueue<Transaction>>) -> Result<(), ()> {
+                              db_transactions_queue: Arc<ArrayQueue<Transaction>>) -> Result<(), ()> {
     loop {
         let transactions_option = rpc_transactions_queue.pop();
         if transactions_option.is_none() {
@@ -201,7 +201,7 @@ async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTran
             let verbose_data = t.verbose_data.unwrap();
             let db_transaction = Transaction {
                 transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
-                block_hash: vec![Some(verbose_data.block_hash.as_bytes().to_vec())]
+                block_hash: vec![Some(verbose_data.block_hash.as_bytes().to_vec())],
             };
             while db_transactions_queue.is_full() {
                 warn!("DB transactions queue is full, sleeping 2 seconds...");
@@ -328,7 +328,22 @@ async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transaction>>
             } else {
                 let transaction_option = db_transactions_queue.pop();
                 if transaction_option.is_some() {
-                    insert_queue.insert(transaction_option.unwrap());
+                    let transaction = transaction_option.unwrap();
+                    let existing_transaction_option = insert_queue.get(&transaction);
+                    if existing_transaction_option.is_some() {
+                        let existing_transaction = &mut existing_transaction_option.unwrap().clone();
+                        let oldSize = existing_transaction.block_hash.len();
+                        let mergeSize = transaction.block_hash.len();
+                        existing_transaction.block_hash.append(&mut transaction.block_hash.clone());
+                        existing_transaction.block_hash.sort_unstable();
+                        existing_transaction.block_hash.dedup();
+                        insert_queue.insert(existing_transaction.clone());
+                        debug!("Merged block hashes for {}. Old size: {}, merge size: {}, new size: {}",
+                            hex::encode(&existing_transaction.transaction_id),
+                            oldSize, mergeSize, existing_transaction.block_hash.len());
+                    } else {
+                        insert_queue.insert(transaction);
+                    }
                 } else {
                     sleep(Duration::from_secs(1)).await;
                 }
