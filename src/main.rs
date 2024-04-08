@@ -1,6 +1,6 @@
 extern crate diesel;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::env;
 use std::ops::{DerefMut, Div};
 use std::sync::Arc;
@@ -32,7 +32,9 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    env_logger::init();
+    env_logger::builder()
+        .format_timestamp_millis()
+        .init();
 
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db_manager = ConnectionManager::<PgConnection>::new(&db_url);
@@ -128,13 +130,13 @@ async fn run_loop(db_pool: &Pool<ConnectionManager<PgConnection>>) -> Result<(),
 async fn fetch_blocks(client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>) -> Result<(), ()> {
     let block_dag_info = client.get_block_dag_info().await
         .expect("Error when invoking GetBlockDagInfo");
-    println!("BlockDagInfo received: pruning_point={}, first_parent={}",
+    info!("BlockDagInfo received: pruning_point={}, first_parent={}",
              block_dag_info.pruning_point_hash, block_dag_info.virtual_parent_hashes[0]);
 
     // let start_point = block_dag_info.pruning_point_hash.to_string(); // FIXME: Use start point
     // let start_point = block_dag_info.virtual_parent_hashes[0].to_string();
-    let start_point = "03320a16b1dcdb1cda08100290bdf790025adfc7f4b6a20d48dc02af14a5f7ff";
-    // FIXME: Use start point
+    let start_point = "6abe8c84bc86555a288c9506d7c4782ea26e8a2d2f103de14df161b633e0c2ac";
+
     info!("start_point={}", start_point);
     let start_hash = kaspa_hashes::Hash::from_slice(hex::decode(start_point.as_bytes()).unwrap().as_slice());
     let mut low_hash = start_hash;
@@ -163,6 +165,8 @@ async fn fetch_blocks(client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<R
                 rpc_blocks_queue.push(b).unwrap();
             }
         }
+        debug!("Fetch blocks BPS: {}", 1000 * blocks_len as u128
+            / SystemTime::now().duration_since(start_time).unwrap().as_millis());
         if blocks_len < 50 && SystemTime::now().duration_since(start_time).unwrap().as_secs() < 3 {
             sleep(Duration::from_secs(2)).await;
         }
