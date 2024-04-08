@@ -8,7 +8,8 @@ use std::time::{Duration, SystemTime};
 
 use bigdecimal::BigDecimal;
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, ExpressionMethods, insert_into, Insertable, r2d2, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, insert_into, Insertable, r2d2, RunQueryDsl, select};
+use diesel::dsl::sql;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
@@ -102,9 +103,9 @@ async fn fetch_blocks(client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<R
     info!("BlockDagInfo received: pruning_point={}, first_parent={}",
              block_dag_info.pruning_point_hash, block_dag_info.virtual_parent_hashes[0]);
 
-    let start_point = block_dag_info.pruning_point_hash.to_string(); // FIXME: Use start point
+    // let start_point = block_dag_info.pruning_point_hash.to_string(); // FIXME: Use start point
     // let start_point = block_dag_info.virtual_parent_hashes[0].to_string();
-    // let start_point = "6abe8c84bc86555a288c9506d7c4782ea26e8a2d2f103de14df161b633e0c2ac";
+    let start_point = "9869c04cdbaceaaf1bff014812fd39b9d81d2586fe22f9f13b704665d06fa71b";
 
     info!("start_point={}", start_point);
     let start_hash = kaspa_hashes::Hash::from_slice(hex::decode(start_point.as_bytes()).unwrap().as_slice());
@@ -284,7 +285,7 @@ async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<Co
 }
 
 async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transaction>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
-    const INSERT_QUEUE_SIZE: usize = 20_000;
+    const INSERT_QUEUE_SIZE: usize = 10_000;
     loop {
         info!("Insert transactions started");
         let mut insert_queue: HashSet<Transaction> = HashSet::with_capacity(INSERT_QUEUE_SIZE); // FIXME should merge block hashes instead
@@ -306,12 +307,11 @@ async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transaction>>
                     match insert_into(transactions::dsl::transactions)
                         .values(Vec::from_iter(&insert_queue))
                         .on_conflict(transactions::transaction_id)
-                        // .do_update()
-                        // .set(transactions::block_hash.eq((transactions::block_hash, excluded(transactions::block_hash).is_distinct_from(transactions::block_hash))))
-                        .do_nothing() // FIXME merge block hashes
+                        .do_update()
+                        .set(transactions::block_hash.eq(sql("(select array_agg(distinct x) from unnest(transactions.block_hash||excluded.block_hash) as t(x))")))
                         .execute(con) {
                         Ok(inserted_rows) => {
-                            info!("Committed {} new transactions to database", inserted_rows);
+                            info!("Committed {} new/updated transactions to database", inserted_rows);
                             insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
                             last_commit_time = SystemTime::now();
                         }
@@ -332,15 +332,10 @@ async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transaction>>
                     let existing_transaction_option = insert_queue.get(&transaction);
                     if existing_transaction_option.is_some() {
                         let existing_transaction = &mut existing_transaction_option.unwrap().clone();
-                        let oldSize = existing_transaction.block_hash.len();
-                        let mergeSize = transaction.block_hash.len();
                         existing_transaction.block_hash.append(&mut transaction.block_hash.clone());
                         existing_transaction.block_hash.sort_unstable();
                         existing_transaction.block_hash.dedup();
                         insert_queue.insert(existing_transaction.clone());
-                        debug!("Merged block hashes for {}. Old size: {}, merge size: {}, new size: {}",
-                            hex::encode(&existing_transaction.transaction_id),
-                            oldSize, mergeSize, existing_transaction.block_hash.len());
                     } else {
                         insert_queue.insert(transaction);
                     }
