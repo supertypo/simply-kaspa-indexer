@@ -24,9 +24,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    subnetworks (id) {
+        id -> Int4,
+        #[max_length = 40]
+        subnetwork_id -> Varchar,
+    }
+}
+
+diesel::table! {
     transactions (transaction_id) {
         transaction_id -> Bytea,
-        subnetwork_id -> Bytea,
+        subnetwork -> Int4,
         hash -> Bytea,
         mass -> Int4,
         block_hash -> Array<Nullable<Bytea>>,
@@ -44,8 +52,11 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(transactions -> subnetworks (subnetwork));
+
 diesel::allow_tables_to_appear_in_same_query!(
     blocks,
+    subnetworks,
     transactions,
     vars,
 );

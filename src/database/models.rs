@@ -50,12 +50,40 @@ impl Hash for Block {
     }
 }
 
+#[derive(Insertable)]
+#[diesel(table_name = crate::database::schema::subnetworks)]
+pub struct SubnetworkInsertable {
+    pub subnetwork_id: String,
+}
+
+#[derive(Queryable, Selectable, Clone)]
+#[diesel(table_name = crate::database::schema::subnetworks)]
+#[diesel(primary_key(id))]
+pub struct Subnetwork {
+    pub id: i32,
+    pub subnetwork_id: String,
+}
+
+impl Eq for Subnetwork {}
+
+impl PartialEq for Subnetwork {
+    fn eq(&self, other: &Self) -> bool {
+        self.subnetwork_id == other.subnetwork_id
+    }
+}
+
+impl Hash for Subnetwork {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.subnetwork_id.hash(state);
+    }
+}
+
 #[derive(Queryable, Selectable, Insertable, Clone)]
 #[diesel(table_name = crate::database::schema::transactions)]
 #[diesel(primary_key(transaction_id))]
 pub struct Transaction {
     pub transaction_id: Vec<u8>,
-    pub subnetwork_id: Vec<u8>,
+    pub subnetwork: i32,
     pub hash: Vec<u8>,
     pub mass: i32,
     pub block_hash: Vec<Option<Vec<u8>>>,

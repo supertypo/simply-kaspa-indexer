@@ -30,14 +30,21 @@ CREATE INDEX IF NOT EXISTS idx_block_is_chain_block ON blocks (is_chain_block);
 CREATE INDEX IF NOT EXISTS idx_blue_score ON blocks (blue_score);
 CREATE INDEX IF NOT EXISTS idx_daa_score ON blocks (daa_score);
 
+CREATE TABLE IF NOT EXISTS "subnetworks"
+(
+    id            SERIAL PRIMARY KEY,
+    subnetwork_id VARCHAR(40) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "transactions"
 (
     transaction_id       BYTEA PRIMARY KEY,
-    subnetwork_id        BYTEA   NOT NULL,
+    subnetwork           INT     NOT NULL,
     hash                 BYTEA   NOT NULL,
     mass                 INTEGER NOT NULL,
     block_hash           BYTEA[] NOT NULL,
     block_time           INTEGER NOT NULL,
     is_accepted          BOOLEAN NOT NULL,
-    accepting_block_hash BYTEA
+    accepting_block_hash BYTEA,
+    CONSTRAINT fk_subnetwork FOREIGN KEY (subnetwork) REFERENCES subnetworks (id)
 );

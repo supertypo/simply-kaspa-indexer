@@ -1,3 +1,4 @@
-DROP TABLE IF EXISTS "blocks";
 DROP TABLE IF EXISTS "transactions";
+DROP TABLE IF EXISTS "subnetworks";
+DROP TABLE IF EXISTS "blocks";
 DROP TABLE IF EXISTS "vars";
