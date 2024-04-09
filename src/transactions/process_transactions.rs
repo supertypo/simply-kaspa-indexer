@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crossbeam_queue::ArrayQueue;
 use kaspa_rpc_core::RpcTransaction;
-use log::{debug, warn};
+use log::{trace, warn};
 use tokio::time::sleep;
 
 use crate::database::models::Transaction;
@@ -15,8 +15,8 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
     loop {
         let transactions_option = rpc_transactions_queue.pop();
         if transactions_option.is_none() {
-            debug!("RPC transactions queue is empty, sleeping 2 seconds...");
-            sleep(Duration::from_secs(2)).await;
+            trace!("RPC transactions queue is empty");
+            sleep(Duration::from_secs(1)).await;
             continue;
         }
         let transactions = transactions_option.unwrap();

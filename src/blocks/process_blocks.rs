@@ -4,7 +4,7 @@ use std::time::Duration;
 use bigdecimal::BigDecimal;
 use crossbeam_queue::ArrayQueue;
 use kaspa_rpc_core::RpcBlock;
-use log::{debug, warn};
+use log::{trace, warn};
 use tokio::time::sleep;
 
 use crate::database::models::Block;
@@ -14,8 +14,8 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
     loop {
         let block_option = rpc_blocks_queue.pop();
         if block_option.is_none() {
-            debug!("RPC blocks queue is empty, sleeping 2 seconds...");
-            sleep(Duration::from_secs(2)).await;
+            trace!("RPC blocks queue is empty");
+            sleep(Duration::from_secs(1)).await;
             continue;
         }
         let block = block_option.unwrap();

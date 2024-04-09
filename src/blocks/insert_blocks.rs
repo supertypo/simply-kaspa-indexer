@@ -1,7 +1,6 @@
 extern crate diesel;
 
 use std::collections::HashSet;
-use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -11,7 +10,6 @@ use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
 use diesel::upsert::excluded;
-use log::error;
 use log::info;
 use tokio::time::sleep;
 
@@ -19,26 +17,17 @@ use crate::database::models::Block;
 use crate::database::schema::blocks;
 
 pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
-    const INSERT_QUEUE_SIZE: usize = 1000;
+    const INSERT_QUEUE_SIZE: usize = 1800;
     loop {
         info!("Insert blocks started");
         let mut insert_queue: HashSet<Block> = HashSet::with_capacity(INSERT_QUEUE_SIZE);
         let mut last_commit_time = SystemTime::now();
+        let mut rows_affected = 0;
         loop {
             if insert_queue.len() >= INSERT_QUEUE_SIZE || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
-                let con_option = match db_pool.get() {
-                    Ok(r) => { Some(r) }
-                    Err(e) => {
-                        info!("Database connection failed with: {}. Sleeping for 10 seconds...", e);
-                        sleep(Duration::from_secs(10)).await;
-                        None
-                    }
-                };
-                if con_option.is_none() {
-                    continue;
-                }
-                let _ = con_option.unwrap().deref_mut().transaction(|con| {
-                    match insert_into(blocks::dsl::blocks)
+                let con = &mut db_pool.get().expect("Database connection FAILED");
+                con.transaction(|con| {
+                    rows_affected = insert_into(blocks::dsl::blocks)
                         .values(Vec::from_iter(&insert_queue))
                         .on_conflict(blocks::hash)
                         .do_update()
@@ -61,29 +50,19 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Poo
                             blocks::timestamp.eq(excluded(blocks::timestamp)),
                             blocks::utxo_commitment.eq(excluded(blocks::utxo_commitment)),
                             blocks::version.eq(excluded(blocks::version))))
-                        .execute(con) {
-                        Ok(inserted_rows) => {
-                            info!("Committed {} new blocks to database", inserted_rows);
-                            insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
-                            last_commit_time = SystemTime::now();
-                        }
-                        Err(e) => {
-                            error!("Commit blocks to database failed with: {e}. Sleeping for 5 seconds...");
-                            std::thread::sleep(Duration::from_secs(5));
-                        }
-                    };
+                        .execute(con)
+                        .expect("Commit blocks to database FAILED");
                     Ok::<_, Error>(())
-                }).unwrap();
+                }).expect("Commit blocks to database FAILED");
+                info!("Committed {} blocks to database", rows_affected);
+                insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
+                last_commit_time = SystemTime::now();
             }
-            if insert_queue.len() >= INSERT_QUEUE_SIZE { // In case db insertion failed
-                sleep(Duration::from_secs(1)).await;
+            let block_option = db_blocks_queue.pop();
+            if block_option.is_some() {
+                insert_queue.insert(block_option.unwrap());
             } else {
-                let block_option = db_blocks_queue.pop();
-                if block_option.is_some() {
-                    insert_queue.insert(block_option.unwrap());
-                } else {
-                    sleep(Duration::from_secs(1)).await;
-                }
+                sleep(Duration::from_secs(1)).await;
             }
         }
     }
