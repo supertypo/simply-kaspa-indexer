@@ -3,7 +3,7 @@ use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspa_wrpc_client::client::ConnectOptions;
 use kaspa_wrpc_client::error::Error;
 
-pub async fn connect(url: &String, force_network: &Option<String>) -> Result<KaspaRpcClient, Error> {
+pub async fn connect_kaspad(url: &String, force_network: &Option<String>) -> Result<KaspaRpcClient, Error> {
     println!("Connecting to kaspad {}", url);
     let client = KaspaRpcClient::new(WrpcEncoding::Borsh, &url)?;
     client.connect(ConnectOptions::default()).await?;
