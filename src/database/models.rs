@@ -55,7 +55,13 @@ impl Hash for Block {
 #[diesel(primary_key(transaction_id))]
 pub struct Transaction {
     pub transaction_id: Vec<u8>,
+    pub subnetwork_id: Vec<u8>,
+    pub hash: Vec<u8>,
+    pub mass: i32,
     pub block_hash: Vec<Option<Vec<u8>>>,
+    pub block_time: i32,
+    pub is_accepted: bool,
+    pub accepting_block_hash: Option<Vec<u8>>,
 }
 
 impl Eq for Transaction {}

@@ -103,9 +103,9 @@ async fn fetch_blocks(client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<R
     info!("BlockDagInfo received: pruning_point={}, first_parent={}",
              block_dag_info.pruning_point_hash, block_dag_info.virtual_parent_hashes[0]);
 
-    // let start_point = block_dag_info.pruning_point_hash.to_string(); // FIXME: Use start point
+    let start_point = block_dag_info.pruning_point_hash.to_string(); // FIXME: Use start point
     // let start_point = block_dag_info.virtual_parent_hashes[0].to_string();
-    let start_point = "9869c04cdbaceaaf1bff014812fd39b9d81d2586fe22f9f13b704665d06fa71b";
+    // let start_point = "9869c04cdbaceaaf1bff014812fd39b9d81d2586fe22f9f13b704665d06fa71b";
 
     info!("start_point={}", start_point);
     let start_hash = kaspa_hashes::Hash::from_slice(hex::decode(start_point.as_bytes()).unwrap().as_slice());
@@ -202,7 +202,13 @@ async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTran
             let verbose_data = t.verbose_data.unwrap();
             let db_transaction = Transaction {
                 transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
+                subnetwork_id: t.subnetwork_id.to_string().as_bytes().to_vec(),
+                hash: verbose_data.hash.as_bytes().to_vec(),
+                mass: verbose_data.mass as i32,
                 block_hash: vec![Some(verbose_data.block_hash.as_bytes().to_vec())],
+                block_time: (verbose_data.block_time / 1000) as i32,
+                is_accepted: false,
+                accepting_block_hash: None
             };
             while db_transactions_queue.is_full() {
                 warn!("DB transactions queue is full, sleeping 2 seconds...");

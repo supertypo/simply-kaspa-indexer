@@ -32,6 +32,12 @@ CREATE INDEX IF NOT EXISTS idx_daa_score ON blocks (daa_score);
 
 CREATE TABLE IF NOT EXISTS "transactions"
 (
-    transaction_id BYTEA PRIMARY KEY,
-    block_hash     BYTEA[] NOT NULL
+    transaction_id       BYTEA PRIMARY KEY,
+    subnetwork_id        BYTEA   NOT NULL,
+    hash                 BYTEA   NOT NULL,
+    mass                 INTEGER NOT NULL,
+    block_hash           BYTEA[] NOT NULL,
+    block_time           INTEGER NOT NULL,
+    is_accepted          BOOLEAN NOT NULL,
+    accepting_block_hash BYTEA
 );
