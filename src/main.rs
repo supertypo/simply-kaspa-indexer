@@ -19,6 +19,7 @@ use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
 use kaspa_db_filler_ng::transactions::insert_transactions::insert_transactions;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
+use kaspa_db_filler_ng::virtual_chain::fetch_virtual_chains::fetch_virtual_chains;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -58,11 +59,12 @@ async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad
     let db_transactions_queue = Arc::new(ArrayQueue::new(200 * rpc_blocks_queue.capacity()));
 
     let mut tasks = vec![];
-    tasks.push(task::spawn(fetch_blocks(kaspad_client, rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
+    tasks.push(task::spawn(fetch_blocks(kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
     tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
     tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_transactions(db_transactions_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(fetch_virtual_chains(kaspad_client.clone(), db_pool.clone())));
 
     for task in tasks {
         let _ = task.await.expect("Task failure");
