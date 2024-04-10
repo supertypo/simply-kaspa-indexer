@@ -11,19 +11,11 @@ use log::{debug, trace, warn};
 use log::info;
 use tokio::time::sleep;
 
-pub async fn fetch_blocks(kaspad_client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
+pub async fn fetch_blocks(start_block_hash: String,
+                          kaspad_client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
                           rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) -> Result<(), ()> {
-    let block_dag_info = kaspad_client.get_block_dag_info().await
-        .expect("Error when invoking GetBlockDagInfo");
-    info!("BlockDagInfo received: pruning_point={}, first_parent={}",
-             block_dag_info.pruning_point_hash, block_dag_info.virtual_parent_hashes[0]);
-
-    let start_point = block_dag_info.pruning_point_hash.to_string(); // FIXME: Use start point
-    // let start_point = block_dag_info.virtual_parent_hashes[0].to_string();
-    // let start_point = "9869c04cdbaceaaf1bff014812fd39b9d81d2586fe22f9f13b704665d06fa71b";
-
-    info!("start_point={}", start_point);
-    let start_hash = kaspa_hashes::Hash::from_slice(hex::decode(start_point.as_bytes()).unwrap().as_slice());
+    info!("start_block_hash={}", start_block_hash);
+    let start_hash = kaspa_hashes::Hash::from_slice(hex::decode(start_block_hash.as_bytes()).unwrap().as_slice());
     let mut low_hash = start_hash;
 
     loop {

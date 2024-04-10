@@ -3,15 +3,15 @@ use diesel::expression_methods::ExpressionMethods;
 use diesel::r2d2::{ConnectionManager, Pool};
 use log::{debug, warn};
 
-use crate::database::models::{Var, VAR_KEY_START_HASH};
+use crate::database::models::{Var, VAR_KEY_START_BLOCK_HASH};
 use crate::database::schema::vars;
 
-pub async fn load_start_point(db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
-    load(String::from(VAR_KEY_START_HASH), db_pool)
+pub fn load_start_block_hash(db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
+    load(String::from(VAR_KEY_START_BLOCK_HASH), db_pool)
 }
 
-pub async fn save_start_point(start_point: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
-    save(String::from(VAR_KEY_START_HASH), start_point, db_pool)
+pub fn save_start_block_hash(start_point: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
+    save(String::from(VAR_KEY_START_BLOCK_HASH), start_point, db_pool)
 }
 
 pub fn load(key: String, db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
@@ -21,7 +21,7 @@ pub fn load(key: String, db_pool: Pool<ConnectionManager<PgConnection>>) -> Opti
         .filter(vars::key.eq(key.clone()))
         .first::<String>(con)
         .optional()
-        .expect("Loading var from database FAILED");
+        .expect(format!("Loading var '{}' from database FAILED", key).as_str());
     if option.is_some() {
         let value = option.unwrap();
         debug!("Database var with key '{}' loaded: {}", key, value);

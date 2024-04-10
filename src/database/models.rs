@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 use bigdecimal::BigDecimal;
 use diesel::prelude::*;
 
-pub const VAR_KEY_START_HASH: &str = "vspc_last_start_hash";
+pub const VAR_KEY_START_BLOCK_HASH: &str = "vspc_last_start_hash";
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::database::schema::vars)]
