@@ -19,6 +19,6 @@ use crate::vars::vars::load_start_point;
 pub async fn fetch_virtual_chains(kaspad_client: KaspaRpcClient,
                                   db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
 
-    load_start_point(db_pool).await.unwrap();
+//    load_start_point(db_pool).await.unwrap();
     Ok(())
 }

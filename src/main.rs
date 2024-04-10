@@ -19,7 +19,7 @@ use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
 use kaspa_db_filler_ng::transactions::insert_transactions::insert_transactions;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
-use kaspa_db_filler_ng::virtual_chain::fetch_virtual_chains::fetch_virtual_chains;
+use kaspa_db_filler_ng::virtual_chain::fetch_virtual_chain::fetch_virtual_chains;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -53,10 +53,10 @@ async fn main() {
 }
 
 async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad_client: KaspaRpcClient) -> Result<(), ()> {
-    let rpc_blocks_queue = Arc::new(ArrayQueue::new(1000));
-    let rpc_transactions_queue = Arc::new(ArrayQueue::new(rpc_blocks_queue.capacity()));
-    let db_blocks_queue = Arc::new(ArrayQueue::new(rpc_blocks_queue.capacity()));
-    let db_transactions_queue = Arc::new(ArrayQueue::new(200 * rpc_blocks_queue.capacity()));
+    let rpc_blocks_queue = Arc::new(ArrayQueue::new(5_000));
+    let rpc_transactions_queue = Arc::new(ArrayQueue::new(200_000));
+    let db_blocks_queue = Arc::new(ArrayQueue::new(5_000));
+    let db_transactions_queue = Arc::new(ArrayQueue::new(200_000));
 
     let mut tasks = vec![];
     tasks.push(task::spawn(fetch_blocks(kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));

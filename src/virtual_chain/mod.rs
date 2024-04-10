@@ -1,1 +1,1 @@
-pub mod fetch_virtual_chains;
+pub mod fetch_virtual_chain;

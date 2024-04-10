@@ -15,7 +15,7 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
         let block_option = rpc_blocks_queue.pop();
         if block_option.is_none() {
             trace!("RPC blocks queue is empty");
-            sleep(Duration::from_secs(1)).await;
+            sleep(Duration::from_millis(100)).await;
             continue;
         }
         let block = block_option.unwrap();

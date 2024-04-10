@@ -66,7 +66,7 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Poo
                 last_block_timestamp = block.timestamp;
                 insert_queue.insert(block);
             } else {
-                sleep(Duration::from_secs(1)).await;
+                sleep(Duration::from_millis(100)).await;
             }
         }
     }

@@ -68,7 +68,7 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transacti
                     insert_queue.insert(transaction);
                 }
             } else {
-                sleep(Duration::from_secs(1)).await;
+                sleep(Duration::from_millis(100)).await;
             }
         }
     }
