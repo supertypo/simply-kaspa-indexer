@@ -10,6 +10,7 @@ use diesel::dsl::sql;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
+use diesel::upsert::excluded;
 use log::info;
 use tokio::time::sleep;
 
@@ -32,7 +33,17 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transacti
                         .values(Vec::from_iter(&insert_queue))
                         .on_conflict(transactions::transaction_id)
                         .do_update()
-                        .set(transactions::block_hash.eq(sql("(select array_agg(distinct x) from unnest(transactions.block_hash||excluded.block_hash) as t(x))")))
+                        .set((
+                            // Transaction id is already correct as it's the primary key
+                            transactions::subnetwork.eq(excluded(transactions::subnetwork)),
+                            transactions::hash.eq(excluded(transactions::hash)),
+                            transactions::mass.eq(excluded(transactions::mass)),
+                            // Combine block_hashes with existing row:
+                            transactions::block_hash.eq(sql("(select array_agg(distinct x) from unnest(transactions.block_hash||excluded.block_hash) as t(x))")),
+                            transactions::block_time.eq(excluded(transactions::block_time)),
+                            // Keep is_accepted, as it might already be touched by the virtual chain processor
+                            transactions::accepting_block_hash.eq(excluded(transactions::accepting_block_hash)),
+                        ))
                         .execute(con)
                         .expect("Commit transactions to database FAILED");
                     Ok::<_, Error>(())
