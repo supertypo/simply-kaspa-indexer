@@ -30,7 +30,7 @@ async fn main() {
         .format_timestamp_millis()
         .init();
 
-    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let db_url = env::var("DATABASE_URL").unwrap_or(String::from("postgres://postgres:postgres@localhost:5432/postgres"));
     let db_pool = Pool::builder()
         .test_on_check_out(true)
         .connection_timeout(Duration::from_secs(10))
@@ -40,9 +40,9 @@ async fn main() {
         .expect("Database connection FAILED");
     info!("Connection to the database established!");
 
-    let url = env::var("KASPAD_RPC_URL").expect("KASPAD_RPC_URL must be set");
-    let network = env::var("KASPAD_NETWORK").map(|n| Some(n)).unwrap_or_default();
-    let kaspad_client = connect_kaspad(&url, &network).await.expect("Kaspad connection FAILED");
+    let url = env::var("KASPAD_RPC_URL").unwrap_or(String::from("ws://localhost:17110"));
+    let network = env::var("KASPAD_NETWORK").unwrap_or(String::from("mainnet"));
+    let kaspad_client = connect_kaspad(url, network).await.expect("Kaspad connection FAILED");
 
     if env::var("DEVELOPMENT").unwrap().eq_ignore_ascii_case("true") {
         info!("Applying pending migrations");
