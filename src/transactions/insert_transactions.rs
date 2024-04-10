@@ -21,6 +21,7 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transacti
     loop {
         info!("Insert transactions started");
         let mut insert_queue: HashSet<Transaction> = HashSet::with_capacity(INSERT_QUEUE_SIZE);
+        let mut last_block_timestamp = 0;
         let mut last_commit_time = SystemTime::now();
         let mut rows_affected = 0;
         loop {
@@ -36,13 +37,15 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transacti
                         .expect("Commit transactions to database FAILED");
                     Ok::<_, Error>(())
                 }).expect("Commit transactions to database FAILED");
-                info!("Committed {} new/updated transactions to database", rows_affected);
+                info!("Committed {} new/updated transactions to database. Last block timestamp: {}", rows_affected, 
+                    chrono::DateTime::from_timestamp_millis(last_block_timestamp as i64 * 1000).unwrap());
                 insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
                 last_commit_time = SystemTime::now();
             }
             let transaction_option = db_transactions_queue.pop();
             if transaction_option.is_some() {
                 let transaction = transaction_option.unwrap();
+                last_block_timestamp = transaction.block_time;
                 let existing_transaction_option = insert_queue.get(&transaction);
                 if existing_transaction_option.is_some() {
                     let existing_transaction = &mut existing_transaction_option.unwrap().clone();

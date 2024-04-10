@@ -38,7 +38,6 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
             let subnetwork_id = t.subnetwork_id.to_string();
             let subnetwork_option = subnetwork_map.get(&subnetwork_id);
             if subnetwork_option.is_none() {
-                debug!("Inserting new subnetwork_id: {}", subnetwork_id);
                 let id = insert_into(subnetworks::dsl::subnetworks)
                     .values(SubnetworkInsertable { subnetwork_id: subnetwork_id.clone() })
                     .returning(subnetworks::id)

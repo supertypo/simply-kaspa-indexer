@@ -21,6 +21,7 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Poo
     loop {
         info!("Insert blocks started");
         let mut insert_queue: HashSet<Block> = HashSet::with_capacity(INSERT_QUEUE_SIZE);
+        let mut last_block_timestamp = 0;
         let mut last_commit_time = SystemTime::now();
         let mut rows_affected = 0;
         loop {
@@ -54,13 +55,16 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Poo
                         .expect("Commit blocks to database FAILED");
                     Ok::<_, Error>(())
                 }).expect("Commit blocks to database FAILED");
-                info!("Committed {} blocks to database", rows_affected);
+                info!("Committed {} blocks to database. Last timestamp: {}", rows_affected, 
+                    chrono::DateTime::from_timestamp_millis(last_block_timestamp as i64 * 1000).unwrap());
                 insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
                 last_commit_time = SystemTime::now();
             }
             let block_option = db_blocks_queue.pop();
             if block_option.is_some() {
-                insert_queue.insert(block_option.unwrap());
+                let block = block_option.unwrap();
+                last_block_timestamp = block.timestamp;
+                insert_queue.insert(block);
             } else {
                 sleep(Duration::from_secs(1)).await;
             }
