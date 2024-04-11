@@ -65,14 +65,15 @@ async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad
     let rpc_transactions_queue = Arc::new(ArrayQueue::new(200_000));
     let db_blocks_queue = Arc::new(ArrayQueue::new(5_000));
     let db_transactions_queue = Arc::new(ArrayQueue::new(200_000));
+    let synced_queue = Arc::new(ArrayQueue::new(10));
 
     let mut tasks = vec![];
-    tasks.push(task::spawn(fetch_blocks(start_block_hash.clone(), kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
+    tasks.push(task::spawn(fetch_blocks(start_block_hash.clone(), kaspad_client.clone(), synced_queue.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
     tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
     tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_transactions(db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(fetch_virtual_chains(start_block_hash.clone(), kaspad_client.clone(), db_pool.clone())));
+    tasks.push(task::spawn(fetch_virtual_chains(start_block_hash.clone(), synced_queue.clone(), kaspad_client.clone(), db_pool.clone())));
 
     for task in tasks {
         let _ = task.await.expect("Should not happen");

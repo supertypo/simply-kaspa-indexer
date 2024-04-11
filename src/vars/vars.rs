@@ -1,11 +1,11 @@
-use diesel::{insert_into, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{insert_into, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use diesel::expression_methods::ExpressionMethods;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::upsert::excluded;
 use log::{debug, warn};
 
 use crate::database::models::{Var, VAR_KEY_START_BLOCK_HASH};
-use crate::database::schema::{transactions, vars};
+use crate::database::schema::vars;
 
 pub fn load_start_block_hash(db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
     load(String::from(VAR_KEY_START_BLOCK_HASH), db_pool)
