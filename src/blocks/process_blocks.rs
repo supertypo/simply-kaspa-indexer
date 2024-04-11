@@ -42,7 +42,7 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
             version: block.header.version as i16,
         };
         while db_blocks_queue.is_full() {
-            warn!("DB blocks queue is full, sleeping 2 seconds...");
+            warn!("DB blocks queue is full");
             sleep(Duration::from_secs(2)).await;
         }
         let _ = db_blocks_queue.push(db_block);

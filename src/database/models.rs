@@ -1,4 +1,6 @@
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
+
 use bigdecimal::BigDecimal;
 use diesel::prelude::*;
 
@@ -90,6 +92,19 @@ pub struct Transaction {
     pub block_time: Option<i32>,
     pub is_accepted: bool,
     pub accepting_block_hash: Option<Vec<u8>>,
+}
+
+impl Transaction {
+    pub fn is_equal_to(&self, other: &Transaction) -> bool {
+        return self.transaction_id == other.transaction_id &&
+            self.subnetwork == other.subnetwork &&
+            self.hash == other.hash &&
+            self.mass == other.mass &&
+            self.block_hash.iter().collect::<HashSet<_>>() == other.block_hash.iter().collect::<HashSet<_>>() &&
+            self.block_time == other.block_time &&
+            self.is_accepted == other.is_accepted &&
+            self.accepting_block_hash == other.accepting_block_hash;
+    }
 }
 
 impl Eq for Transaction {}

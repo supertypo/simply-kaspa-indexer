@@ -7,15 +7,13 @@ use std::time::{Duration, SystemTime};
 use crossbeam_queue::ArrayQueue;
 use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
 use diesel::pg::PgConnection;
-use diesel::query_dsl::methods::LockingDsl;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
-use diesel::upsert::excluded;
 use log::info;
 use tokio::time::sleep;
 
-use crate::database::models::{Block, Subnetwork};
-use crate::database::schema::{blocks, subnetworks};
+use crate::database::models::Block;
+use crate::database::schema::blocks;
 
 pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 1800;
@@ -41,7 +39,7 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Poo
                     .expect("Commit blocks to database FAILED");
                 Ok::<_, Error>(())
             }).expect("Commit blocks to database FAILED");
-            info!("Committed {} blocks to database. Last timestamp: {}", rows_affected,
+            info!("Committed {} new dblocks to database. Last timestamp: {}", rows_affected,
                 chrono::DateTime::from_timestamp_millis(last_block_timestamp as i64 * 1000).unwrap());
             insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
             last_commit_time = SystemTime::now();

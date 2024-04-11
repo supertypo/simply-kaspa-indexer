@@ -57,8 +57,8 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 accepting_block_hash: None,
             };
             while db_transactions_queue.is_full() {
-                warn!("DB transactions queue is full, sleeping 2 seconds...");
-                sleep(Duration::from_millis(100)).await;
+                warn!("DB transactions queue is full");
+                sleep(Duration::from_secs(2)).await;
             }
             let _ = db_transactions_queue.push(db_transaction);
         }

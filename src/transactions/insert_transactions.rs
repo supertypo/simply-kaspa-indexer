@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, ExpressionMethods, insert_into, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
 use diesel::dsl::sql;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -28,6 +28,17 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transacti
         if insert_queue.len() >= INSERT_QUEUE_SIZE || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
             let con = &mut db_pool.get().expect("Database connection FAILED");
             con.transaction(|con| {
+                let existing_transactions = transactions::dsl::transactions
+                    .filter(transactions::transaction_id.eq_any(insert_queue.iter()
+                        .map(|t| t.transaction_id.clone()).collect::<Vec<Vec<u8>>>()))
+                    .load::<Transaction>(con)
+                    .unwrap();
+                for existing_transaction in existing_transactions {
+                    let enqueued_transaction = insert_queue.get(&existing_transaction).unwrap().clone();
+                    if existing_transaction.is_equal_to(&enqueued_transaction) {
+                        insert_queue.remove(&enqueued_transaction);
+                    }
+                }
                 rows_affected = insert_into(transactions::dsl::transactions)
                     .values(Vec::from_iter(&insert_queue))
                     .on_conflict(transactions::transaction_id)
