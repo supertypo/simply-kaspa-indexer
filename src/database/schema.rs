@@ -45,6 +45,44 @@ diesel::table! {
 }
 
 diesel::table! {
+    transactions_inputs (id) {
+        id -> Int8,
+        transaction_id -> Nullable<Bytea>,
+        index -> Nullable<Int2>,
+        previous_outpoint_hash -> Array<Nullable<Bytea>>,
+        previous_outpoint_index -> Nullable<Int2>,
+        signature_script -> Nullable<Bytea>,
+        sig_op_count -> Nullable<Int2>,
+    }
+}
+
+diesel::table! {
+    transactions_outputs (id) {
+        id -> Int8,
+        transaction_id -> Nullable<Bytea>,
+        index -> Nullable<Int2>,
+        amount -> Nullable<Int8>,
+        script_public_key -> Array<Nullable<Bytea>>,
+        #[max_length = 128]
+        script_public_key_address -> Nullable<Varchar>,
+        #[max_length = 32]
+        script_public_key_type -> Nullable<Varchar>,
+        accepting_block_hash -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
+    tx_id_address_mapping (id) {
+        id -> Int8,
+        transaction_id -> Bytea,
+        #[max_length = 128]
+        address -> Varchar,
+        block_time -> Int4,
+        is_accepted -> Bool,
+    }
+}
+
+diesel::table! {
     vars (key) {
         #[max_length = 255]
         key -> Varchar,
@@ -58,5 +96,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     blocks,
     subnetworks,
     transactions,
+    transactions_inputs,
+    transactions_outputs,
+    tx_id_address_mapping,
     vars,
 );
