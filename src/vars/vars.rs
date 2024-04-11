@@ -4,15 +4,25 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::upsert::excluded;
 use log::{debug, warn};
 
-use crate::database::models::{Var, VAR_KEY_START_BLOCK_HASH};
+use crate::database::models::{Var, VAR_KEY_BLOCK_START_HASH, VAR_KEY_LEGACY_START_HASH, VAR_KEY_VIRTUAL_START_HASH};
 use crate::database::schema::vars;
 
-pub fn load_start_block_hash(db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
-    load(String::from(VAR_KEY_START_BLOCK_HASH), db_pool)
+pub fn load_block_start_hash(db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
+    load(String::from(VAR_KEY_BLOCK_START_HASH), db_pool.clone())
+        .or_else(|| load(String::from(VAR_KEY_LEGACY_START_HASH), db_pool))
 }
 
-pub fn save_start_block_hash(start_point: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
-    save(String::from(VAR_KEY_START_BLOCK_HASH), start_point, db_pool)
+pub fn load_virtual_start_hash(db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
+    load(String::from(VAR_KEY_VIRTUAL_START_HASH), db_pool.clone())
+        .or_else(|| load(String::from(VAR_KEY_LEGACY_START_HASH), db_pool))
+}
+
+pub fn save_block_start_hash(start_point: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
+    save(String::from(VAR_KEY_BLOCK_START_HASH), start_point, db_pool)
+}
+
+pub fn save_virtual_start_hash(start_point: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
+    save(String::from(VAR_KEY_VIRTUAL_START_HASH), start_point, db_pool)
 }
 
 pub fn load(key: String, db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {

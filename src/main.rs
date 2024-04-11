@@ -11,7 +11,7 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use dotenvy::dotenv;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
-use log::info;
+use log::{info, warn};
 use tokio::task;
 
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
@@ -20,7 +20,7 @@ use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
 use kaspa_db_filler_ng::transactions::insert_transactions::insert_transactions;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
-use kaspa_db_filler_ng::vars::vars::load_start_block_hash;
+use kaspa_db_filler_ng::vars::vars::{load_block_start_hash, load_virtual_start_hash};
 use kaspa_db_filler_ng::virtual_chain::fetch_virtual_chain::fetch_virtual_chains;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -59,7 +59,15 @@ async fn main() {
 async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad_client: KaspaRpcClient) -> Result<(), ()> {
     let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
     info!("BlockDagInfo received: pruning_point={}",block_dag_info.pruning_point_hash);
-    let start_block_hash = load_start_block_hash(db_pool.clone()).unwrap_or(block_dag_info.pruning_point_hash.to_string());
+    
+    let block_start_hash = load_block_start_hash(db_pool.clone()).unwrap_or_else(|| {
+        warn!("block_start_hash not found, using pruning_point_hash");
+        block_dag_info.pruning_point_hash.to_string()
+    });
+    let virtual_start_hash = load_virtual_start_hash(db_pool.clone()).unwrap_or_else(|| {
+        warn!("virtual_start_hash not found, using pruning_point_hash");
+        block_dag_info.pruning_point_hash.to_string()
+    });
 
     let rpc_blocks_queue = Arc::new(ArrayQueue::new(5_000));
     let rpc_transactions_queue = Arc::new(ArrayQueue::new(200_000));
@@ -68,12 +76,12 @@ async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad
     let synced_queue = Arc::new(ArrayQueue::new(10));
 
     let mut tasks = vec![];
-    tasks.push(task::spawn(fetch_blocks(start_block_hash.clone(), kaspad_client.clone(), synced_queue.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
+    tasks.push(task::spawn(fetch_blocks(block_start_hash, kaspad_client.clone(), synced_queue.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
     tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
     tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_transactions(db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(fetch_virtual_chains(start_block_hash.clone(), synced_queue.clone(), kaspad_client.clone(), db_pool.clone())));
+    tasks.push(task::spawn(fetch_virtual_chains(virtual_start_hash, synced_queue.clone(), kaspad_client.clone(), db_pool.clone())));
 
     for task in tasks {
         let _ = task.await.expect("Should not happen");

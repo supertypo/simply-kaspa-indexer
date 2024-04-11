@@ -16,17 +16,17 @@ use tokio::time::sleep;
 
 use crate::database::models::Transaction;
 use crate::database::schema::{blocks, transactions};
-use crate::vars::vars::save_start_block_hash;
+use crate::vars::vars::save_virtual_start_hash;
 
-pub async fn fetch_virtual_chains(start_block_hash: String,
+pub async fn fetch_virtual_chains(start_hash: String,
                                   synced_queue: Arc<ArrayQueue<bool>>,
                                   kaspad_client: KaspaRpcClient,
                                   db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 7500;
-    info!("start_block_hash={}", start_block_hash);
-    let mut start_hash = hex::decode(start_block_hash.as_bytes()).unwrap();
+    info!("start_block_hash={}", start_hash);
+    let mut start_hash = hex::decode(start_hash.as_bytes()).unwrap();
     let mut rows_affected = 0;
-    let mut start_hash_last_saved = SystemTime::UNIX_EPOCH;
+    let mut start_hash_last_saved = SystemTime::now();
 
     while synced_queue.is_empty() || !synced_queue.pop().unwrap() {
         warn!("Not synced yet, sleeping for 5 seconds...");
@@ -90,7 +90,7 @@ pub async fn fetch_virtual_chains(start_block_hash: String,
             }
             start_hash = accepted_queue.last().unwrap().accepting_block_hash.clone().unwrap();
             if SystemTime::now().duration_since(start_hash_last_saved).unwrap().as_secs() > 60 {
-                save_start_block_hash(hex::encode(start_hash.clone()), db_pool.clone());
+                save_virtual_start_hash(hex::encode(start_hash.clone()), db_pool.clone());
                 start_hash_last_saved = SystemTime::now();
             }
         }

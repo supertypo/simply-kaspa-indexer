@@ -14,6 +14,7 @@ use tokio::time::sleep;
 
 use crate::database::models::Block;
 use crate::database::schema::blocks;
+use crate::vars::vars::{save_block_start_hash, save_virtual_start_hash};
 
 pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 1800;
@@ -22,6 +23,8 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Poo
     let mut last_block_timestamp = 0;
     let mut last_commit_time = SystemTime::now();
     let mut rows_affected = 0;
+    let mut last_block_hash = String::new();
+    let mut start_hash_last_saved = SystemTime::now();
     loop {
         if insert_queue.len() >= INSERT_QUEUE_SIZE || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
             let con = &mut db_pool.get().expect("Database connection FAILED");
@@ -39,15 +42,20 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, db_pool: Poo
                     .expect("Commit blocks to database FAILED");
                 Ok::<_, Error>(())
             }).expect("Commit blocks to database FAILED");
-            info!("Committed {} new dblocks to database. Last timestamp: {}", rows_affected,
+            info!("Committed {} new blocks to database. Last timestamp: {}", rows_affected,
                 chrono::DateTime::from_timestamp_millis(last_block_timestamp as i64 * 1000).unwrap());
             insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
             last_commit_time = SystemTime::now();
+            if SystemTime::now().duration_since(start_hash_last_saved).unwrap().as_secs() > 60 {
+                save_block_start_hash(hex::encode(last_block_hash.clone()), db_pool.clone());
+                start_hash_last_saved = SystemTime::now();
+            }
         }
         let block_option = db_blocks_queue.pop();
         if block_option.is_some() {
             let block = block_option.unwrap();
             last_block_timestamp = block.timestamp;
+            last_block_hash = hex::encode(block.hash.clone());
             insert_queue.insert(block);
         } else {
             sleep(Duration::from_millis(100)).await;

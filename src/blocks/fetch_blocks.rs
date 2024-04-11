@@ -13,26 +13,25 @@ use log::{debug, trace, warn};
 use log::info;
 use tokio::time::sleep;
 
-pub async fn fetch_blocks(start_block_hash: String,
-                          kaspad_client: KaspaRpcClient, 
+pub async fn fetch_blocks(start_hash: String,
+                          kaspad_client: KaspaRpcClient,
                           synced_queue: Arc<ArrayQueue<bool>>,
                           rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
                           rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) -> Result<(), ()> {
     const INITIAL_SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(15);
-    
-    info!("start_block_hash={}", start_block_hash);
-    let start_hash = Hash::from_slice(hex::decode(start_block_hash.as_bytes()).unwrap().as_slice());
-    let mut low_hash = start_hash;
+    info!("start_block_hash={}", start_hash);
+    let start_hash = hex::decode(start_hash.as_bytes()).unwrap();
+    let mut low_hash = start_hash.clone();
     let mut last_sync_check = SystemTime::now();
     let mut synced = false;
-    let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap() ;
+    let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
     loop {
         let last_fetch_time = SystemTime::now();
-        info!("Getting blocks with low_hash={}", low_hash);
-        let response = kaspad_client.get_blocks(Some(low_hash), true, true).await.expect("Error when invoking GetBlocks");
+        info!("Getting blocks with low_hash={}", hex::encode(low_hash.clone()));
+        let response = kaspad_client.get_blocks(Some(Hash::from_slice(low_hash.as_slice())), true, true).await.expect("Error when invoking GetBlocks");
         info!("Received {} blocks", response.blocks.len());
         trace!("Block hashes: \n{:#?}", response.block_hashes);
-        
+
         if !synced {
             if SystemTime::now().duration_since(last_sync_check).unwrap() >= INITIAL_SYNC_CHECK_INTERVAL {
                 let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
@@ -44,7 +43,7 @@ pub async fn fetch_blocks(start_block_hash: String,
 
         let blocks_len = response.blocks.len();
         if blocks_len > 1 {
-            low_hash = response.blocks.last().unwrap().header.hash;
+            low_hash = response.blocks.last().unwrap().header.hash.as_bytes().to_vec();
             for b in response.blocks {
                 let block_hash = b.header.hash;
                 if !synced && block_hash == tip_hash {
@@ -52,8 +51,8 @@ pub async fn fetch_blocks(start_block_hash: String,
                     synced = true;
                     synced_queue.push(true).unwrap();
                 }
-                if block_hash == low_hash && block_hash != start_hash {
-                    trace!("Ignoring low_hash block {}", low_hash);
+                if block_hash.as_bytes().to_vec() == low_hash && block_hash.as_bytes().to_vec() != start_hash {
+                    trace!("Ignoring low_hash block {}", hex::encode(low_hash.clone()));
                     continue;
                 }
                 while rpc_blocks_queue.is_full() {
