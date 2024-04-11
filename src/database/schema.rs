@@ -49,7 +49,7 @@ diesel::table! {
         id -> Int8,
         transaction_id -> Nullable<Bytea>,
         index -> Nullable<Int2>,
-        previous_outpoint_hash -> Array<Nullable<Bytea>>,
+        previous_outpoint_hash -> Nullable<Array<Nullable<Bytea>>>,
         previous_outpoint_index -> Nullable<Int2>,
         signature_script -> Nullable<Bytea>,
         sig_op_count -> Nullable<Int2>,
@@ -62,7 +62,7 @@ diesel::table! {
         transaction_id -> Nullable<Bytea>,
         index -> Nullable<Int2>,
         amount -> Nullable<Int8>,
-        script_public_key -> Array<Nullable<Bytea>>,
+        script_public_key -> Nullable<Array<Nullable<Bytea>>>,
         #[max_length = 128]
         script_public_key_address -> Nullable<Varchar>,
         #[max_length = 32]

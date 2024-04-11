@@ -59,7 +59,7 @@ CREATE INDEX IF NOT EXISTS idx_block_hash ON transactions (block_hash);
 
 CREATE TABLE IF NOT EXISTS "transactions_outputs"
 (
-    id                        SERIAL PRIMARY KEY,
+    id                        BIGSERIAL PRIMARY KEY,
     transaction_id            BYTEA,
     index                     SMALLINT,
     amount                    BIGINT,
@@ -76,7 +76,7 @@ CREATE INDEX IF NOT EXISTS tx_id_and_index ON transactions_outputs (transaction_
 
 CREATE TABLE IF NOT EXISTS "transactions_inputs"
 (
-    id                      SERIAL PRIMARY KEY,
+    id                      BIGSERIAL PRIMARY KEY,
     transaction_id          BYTEA,
     index                   SMALLINT,
     previous_outpoint_hash  BYTEA[],
@@ -91,7 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_txin ON transactions_inputs (transaction_id);
 
 CREATE TABLE IF NOT EXISTS "tx_id_address_mapping"
 (
-    id             SERIAL PRIMARY KEY,
+    id             BIGSERIAL PRIMARY KEY,
     transaction_id BYTEA        NOT NULL,
     address        VARCHAR(128) NOT NULL,
     block_time     INTEGER      NOT NULL,
