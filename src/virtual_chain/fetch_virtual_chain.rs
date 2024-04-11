@@ -33,7 +33,7 @@ pub async fn fetch_virtual_chains(start_hash: String,
         sleep(Duration::from_secs(5)).await;
     }
     loop {
-        info!("Getting virtual chain from block={}", hex::encode(start_hash.clone()));
+        info!("Getting virtual chain from start_hash={}", hex::encode(start_hash.clone()));
         let response = kaspad_client.get_virtual_chain_from_block(kaspa_hashes::Hash::from_slice(start_hash.as_slice()), true).await
             .expect("Error when invoking GetBlocks");
         info!("Received {} accepted transactions", response.accepted_transaction_ids.len());

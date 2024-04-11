@@ -2,7 +2,7 @@ use diesel::{insert_into, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl
 use diesel::expression_methods::ExpressionMethods;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::upsert::excluded;
-use log::{debug, warn};
+use log::debug;
 
 use crate::database::models::{Var, VAR_KEY_BLOCK_START_HASH, VAR_KEY_LEGACY_START_HASH, VAR_KEY_VIRTUAL_START_HASH};
 use crate::database::schema::vars;
@@ -38,7 +38,7 @@ pub fn load(key: String, db_pool: Pool<ConnectionManager<PgConnection>>) -> Opti
         debug!("Database var with key '{}' loaded: {}", key, value);
         Some(value)
     } else {
-        warn!("Database var with key '{}' not found", key);
+        debug!("Database var with key '{}' not found", key);
         None
     }
 }
