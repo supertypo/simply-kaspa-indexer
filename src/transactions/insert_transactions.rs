@@ -33,7 +33,6 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transacti
                     .on_conflict(transactions::transaction_id)
                     .do_update()
                     .set((
-                        // transaction_id is already correct on conflict, as it's the primary key
                         transactions::subnetwork.eq(excluded(transactions::subnetwork)),
                         transactions::hash.eq(excluded(transactions::hash)),
                         transactions::mass.eq(excluded(transactions::mass)),
@@ -41,7 +40,7 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transacti
                         transactions::block_hash.eq(sql("(select array_agg(distinct x) from unnest(transactions.block_hash||excluded.block_hash) as t(x))")),
                         transactions::block_time.eq(excluded(transactions::block_time)),
                         // Keep is_accepted, as it might already be touched by the virtual chain processor
-                        transactions::accepting_block_hash.eq(excluded(transactions::accepting_block_hash)),
+                        // Keep accepting_block_hash, as it might already be touched by the virtual chain processor
                     ))
                     .execute(con)
                     .expect("Commit transactions to database FAILED");
@@ -55,7 +54,7 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transacti
         let transaction_option = db_transactions_queue.pop();
         if transaction_option.is_some() {
             let transaction = transaction_option.unwrap();
-            last_block_timestamp = transaction.block_time;
+            last_block_timestamp = transaction.block_time.unwrap();
             let existing_transaction_option = insert_queue.get(&transaction);
             if existing_transaction_option.is_some() {
                 let existing_transaction = &mut existing_transaction_option.unwrap().clone();

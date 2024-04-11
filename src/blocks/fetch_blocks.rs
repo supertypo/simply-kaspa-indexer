@@ -14,6 +14,7 @@ use tokio::time::sleep;
 pub async fn fetch_blocks(start_block_hash: String,
                           kaspad_client: KaspaRpcClient, rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
                           rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) -> Result<(), ()> {
+
     info!("start_block_hash={}", start_block_hash);
     let start_hash = kaspa_hashes::Hash::from_slice(hex::decode(start_block_hash.as_bytes()).unwrap().as_slice());
     let mut low_hash = start_hash;
@@ -21,15 +22,15 @@ pub async fn fetch_blocks(start_block_hash: String,
     loop {
         let start_time = SystemTime::now();
         info!("Getting blocks with low_hash={}", low_hash);
-        let res = kaspad_client.get_blocks(Some(low_hash), true, true).await
+        let response = kaspad_client.get_blocks(Some(low_hash), true, true).await
             .expect("Error when invoking GetBlocks");
-        info!("Received {} blocks", res.blocks.len());
-        trace!("Block hashes: \n{:#?}", res.block_hashes);
+        info!("Received {} blocks", response.blocks.len());
+        trace!("Block hashes: \n{:#?}", response.block_hashes);
 
-        let blocks_len = res.blocks.len();
+        let blocks_len = response.blocks.len();
         if blocks_len > 1 {
-            low_hash = res.blocks.last().unwrap().header.hash;
-            for b in res.blocks {
+            low_hash = response.blocks.last().unwrap().header.hash;
+            for b in response.blocks {
                 let block_hash = b.header.hash;
                 if block_hash == low_hash && block_hash != start_hash {
                     trace!("Ignoring low_hash block {}", low_hash);
@@ -47,10 +48,10 @@ pub async fn fetch_blocks(start_block_hash: String,
                 rpc_transactions_queue.push(b.transactions).unwrap();
             }
         }
-        debug!("Fetch blocks BPS: {}", 1000 * blocks_len as u128
-            / SystemTime::now().duration_since(start_time).unwrap().as_millis());
-        if blocks_len < 50 && SystemTime::now().duration_since(start_time).unwrap().as_secs() < 3 {
+        if blocks_len < 50 {
             sleep(Duration::from_secs(2)).await;
         }
+        debug!("Fetch blocks BPS: {}", 1000 * blocks_len as u128
+            / SystemTime::now().duration_since(start_time).unwrap().as_millis());
     }
 }

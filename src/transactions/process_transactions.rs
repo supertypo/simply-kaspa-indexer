@@ -48,11 +48,11 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
             }
             let db_transaction = Transaction {
                 transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
-                subnetwork: subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone(),
-                hash: verbose_data.hash.as_bytes().to_vec(),
-                mass: verbose_data.mass as i32,
+                subnetwork: Some(subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone()),
+                hash: Some(verbose_data.hash.as_bytes().to_vec()),
+                mass: Some(verbose_data.mass as i32),
                 block_hash: vec![Some(verbose_data.block_hash.as_bytes().to_vec())],
-                block_time: (verbose_data.block_time / 1000) as i32,
+                block_time: Some((verbose_data.block_time / 1000) as i32),
                 is_accepted: false,
                 accepting_block_hash: None,
             };

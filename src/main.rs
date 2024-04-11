@@ -36,6 +36,7 @@ async fn main() {
     let db_pool = Pool::builder()
         .test_on_check_out(true)
         .connection_timeout(Duration::from_secs(10))
+        .max_size(20)
         .build(ConnectionManager::<PgConnection>::new(&db_url))
         .expect("Database pool FAILED");
     let db_con = &mut db_pool.get()

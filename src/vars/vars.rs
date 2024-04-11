@@ -1,10 +1,11 @@
 use diesel::{insert_into, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use diesel::expression_methods::ExpressionMethods;
 use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::upsert::excluded;
 use log::{debug, warn};
 
 use crate::database::models::{Var, VAR_KEY_START_BLOCK_HASH};
-use crate::database::schema::vars;
+use crate::database::schema::{transactions, vars};
 
 pub fn load_start_block_hash(db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
     load(String::from(VAR_KEY_START_BLOCK_HASH), db_pool)
@@ -34,8 +35,12 @@ pub fn load(key: String, db_pool: Pool<ConnectionManager<PgConnection>>) -> Opti
 
 pub fn save(key: String, value: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
     let con = &mut db_pool.get().expect("Database connection FAILED");
+    debug!("Saving database var with key '{}' value: {}", key, value);
     insert_into(vars::dsl::vars)
         .values(Var { key, value })
+        .on_conflict(vars::key)
+        .do_update()
+        .set(vars::value.eq(excluded(vars::value)))
         .execute(con)
         .expect("Saving var to database FAILED");
 }

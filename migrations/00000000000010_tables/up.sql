@@ -39,11 +39,11 @@ CREATE TABLE IF NOT EXISTS "subnetworks"
 CREATE TABLE IF NOT EXISTS "transactions"
 (
     transaction_id       BYTEA PRIMARY KEY,
-    subnetwork           INT     NOT NULL,
-    hash                 BYTEA   NOT NULL,
-    mass                 INTEGER NOT NULL,
+    subnetwork           INT,
+    hash                 BYTEA,
+    mass                 INTEGER,
     block_hash           BYTEA[] NOT NULL,
-    block_time           INTEGER NOT NULL,
+    block_time           INTEGER,
     is_accepted          BOOLEAN NOT NULL,
     accepting_block_hash BYTEA,
     CONSTRAINT fk_subnetwork FOREIGN KEY (subnetwork) REFERENCES subnetworks (id)

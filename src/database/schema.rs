@@ -34,11 +34,11 @@ diesel::table! {
 diesel::table! {
     transactions (transaction_id) {
         transaction_id -> Bytea,
-        subnetwork -> Int4,
-        hash -> Bytea,
-        mass -> Int4,
+        subnetwork -> Nullable<Int4>,
+        hash -> Nullable<Bytea>,
+        mass -> Nullable<Int4>,
         block_hash -> Array<Nullable<Bytea>>,
-        block_time -> Int4,
+        block_time -> Nullable<Int4>,
         is_accepted -> Bool,
         accepting_block_hash -> Nullable<Bytea>,
     }
