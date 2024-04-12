@@ -65,7 +65,6 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
                     if checkpoint_hash_tx_count as i64 == checkpoint_hash_tx_commited_count {
                         save_block_checkpoint(hex::encode(checkpoint_hash.clone()), db_pool.clone());
                         checkpoint_hash = vec![];
-                        checkpoint_hash_tx_count = 0;
                         checkpoint_last_saved = SystemTime::now();
                     } else if checkpoint_hash_tx_count as i64 > checkpoint_hash_tx_commited_count {
                         panic!("Expected {}, but found {} transactions on block {}!", checkpoint_hash_tx_count, checkpoint_hash_tx_commited_count, hex::encode(&checkpoint_hash))
