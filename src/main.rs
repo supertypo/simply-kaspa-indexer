@@ -21,7 +21,7 @@ use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
 use kaspa_db_filler_ng::transactions::insert_transactions::insert_transactions;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
 use kaspa_db_filler_ng::vars::vars::{load_block_checkpoint, load_virtual_checkpoint};
-use kaspa_db_filler_ng::virtual_chain::fetch_virtual_chain::fetch_virtual_chains;
+use kaspa_db_filler_ng::virtual_chain::process_virtual_chain::process_virtual_chain;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -83,7 +83,7 @@ async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad
     tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_transactions_inputs_queue.clone(), db_transactions_outputs_queue, db_pool.clone())));
     tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_transactions(db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(fetch_virtual_chains(virtual_checkpoint_hash, synced_queue.clone(), kaspad_client.clone(), db_pool.clone())));
+    tasks.push(task::spawn(process_virtual_chain(virtual_checkpoint_hash, synced_queue.clone(), kaspad_client.clone(), db_pool.clone())));
 
     for task in tasks {
         let _ = task.await.expect("Should not happen");

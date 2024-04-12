@@ -18,10 +18,10 @@ use crate::database::models::Transaction;
 use crate::database::schema::transactions;
 use crate::vars::vars::save_virtual_checkpoint;
 
-pub async fn fetch_virtual_chains(checkpoint_hash: String,
-                                  synced_queue: Arc<ArrayQueue<bool>>,
-                                  kaspad_client: KaspaRpcClient,
-                                  db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+pub async fn process_virtual_chain(checkpoint_hash: String,
+                                   synced_queue: Arc<ArrayQueue<bool>>,
+                                   kaspad_client: KaspaRpcClient,
+                                   db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 7500;
     info!("virtual checkpoint_hash={}", checkpoint_hash);
     let mut checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
