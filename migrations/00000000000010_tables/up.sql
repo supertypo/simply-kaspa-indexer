@@ -45,16 +45,23 @@ CREATE TABLE IF NOT EXISTS "transactions"
     subnetwork           INT,
     hash                 BYTEA,
     mass                 INTEGER,
-    block_hash           BYTEA[] NOT NULL,
-    block_time           INTEGER,
     is_accepted          BOOLEAN NOT NULL,
     accepting_block_hash BYTEA,
     CONSTRAINT fk_subnetwork FOREIGN KEY (subnetwork) REFERENCES subnetworks (id)
 );
 
-CREATE INDEX IF NOT EXISTS block_time_idx ON transactions (block_time);
 CREATE INDEX IF NOT EXISTS idx_accepting_block ON transactions (accepting_block_hash);
-CREATE INDEX IF NOT EXISTS idx_block_hash ON transactions (block_hash);
+
+
+CREATE TABLE IF NOT EXISTS "blocks_transactions"
+(
+    block_hash BYTEA NOT NULL,
+    transaction_id BYTEA NOT NULL,
+    PRIMARY KEY (block_hash, transaction_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_block_hash ON blocks_transactions (block_hash);
+CREATE INDEX IF NOT EXISTS idx_transaction_id ON blocks_transactions (transaction_id);
 
 
 CREATE TABLE IF NOT EXISTS "transactions_outputs"
