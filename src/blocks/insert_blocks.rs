@@ -6,7 +6,6 @@ use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
 use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
-use diesel::dsl::any;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
@@ -15,17 +14,17 @@ use tokio::time::sleep;
 
 use crate::database::models::Block;
 use crate::database::schema::blocks;
-use crate::database::schema::transactions;
 use crate::vars::vars::save_block_start_hash;
 
-pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>, 
+pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<Block>>, 
                            db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 1800;
     info!("Insert blocks started");
     let mut insert_queue: HashSet<Block> = HashSet::with_capacity(INSERT_QUEUE_SIZE);
-    let mut last_block_timestamp = 0; // FIXME: Continue implementing save-point for block with all transactions committed
+    let mut last_block_timestamp = 0;
     let mut last_commit_time = SystemTime::now();
     let mut rows_affected = 0;
+    let mut last_block_hash = vec![];
     let mut start_hash_last_saved = SystemTime::now();
     loop {
         if insert_queue.len() >= INSERT_QUEUE_SIZE || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
@@ -46,24 +45,18 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
             }).expect("Commit blocks to database FAILED");
             info!("Committed {} new blocks to database. Last timestamp: {}", rows_affected,
                 chrono::DateTime::from_timestamp_millis(last_block_timestamp as i64 * 1000).unwrap());
+            insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
             last_commit_time = SystemTime::now();
             if SystemTime::now().duration_since(start_hash_last_saved).unwrap().as_secs() > 60 {
-                let saved_block = insert_queue.iter().next().unwrap();
-                transactions::dsl::transactions
-                    .distinct()
-                    .filter(saved_block.hash.eq_any)
-                    .filter(transactions::block_hash.)
-                    .count()
-                save_block_start_hash(hex::encode(last_block_hash.clone()), db_pool.clone());
+                save_block_start_hash(hex::encode(last_block_hash.clone()), db_pool.clone()); // FIXME: Verify that all transactions have been committed first
                 start_hash_last_saved = SystemTime::now();
             }
-            insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
         }
         let block_option = db_blocks_queue.pop();
         if block_option.is_some() {
-            let block_tuple = block_option.unwrap();
-            let block = block_tuple.0;
+            let block = block_option.unwrap();
             last_block_timestamp = block.timestamp;
+            last_block_hash = block.hash.clone();
             insert_queue.insert(block);
         } else {
             sleep(Duration::from_millis(100)).await;

@@ -24,6 +24,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    blocks_transactions (block_hash, transaction_id) {
+        block_hash -> Bytea,
+        transaction_id -> Bytea,
+    }
+}
+
+diesel::table! {
     subnetworks (id) {
         id -> Int4,
         #[max_length = 40]
@@ -37,7 +44,6 @@ diesel::table! {
         subnetwork -> Nullable<Int4>,
         hash -> Nullable<Bytea>,
         mass -> Nullable<Int4>,
-        block_hash -> Array<Nullable<Bytea>>,
         block_time -> Nullable<Int4>,
         is_accepted -> Bool,
         accepting_block_hash -> Nullable<Bytea>,
@@ -90,10 +96,12 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(blocks_transactions -> transactions (transaction_id));
 diesel::joinable!(transactions -> subnetworks (subnetwork));
 
 diesel::allow_tables_to_appear_in_same_query!(
     blocks,
+    blocks_transactions,
     subnetworks,
     transactions,
     transactions_inputs,

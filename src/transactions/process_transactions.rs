@@ -11,11 +11,11 @@ use kaspa_rpc_core::RpcTransaction;
 use log::{debug, info, trace, warn};
 use tokio::time::sleep;
 
-use crate::database::models::{Subnetwork, SubnetworkInsertable, Transaction};
+use crate::database::models::{BlockTransaction, Subnetwork, SubnetworkInsertable, Transaction};
 use crate::database::schema::subnetworks;
 
 pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
-                                  db_transactions_queue: Arc<ArrayQueue<Transaction>>,
+                                  db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction)>>,
                                   db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     let mut subnetwork_map: HashMap<String, i32> = HashMap::new();
     let con = &mut db_pool.get().expect("Database connection FAILED");
@@ -51,16 +51,20 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 subnetwork: Some(subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone()),
                 hash: Some(verbose_data.hash.as_bytes().to_vec()),
                 mass: Some(verbose_data.mass as i32),
-                block_hash: vec![Some(verbose_data.block_hash.as_bytes().to_vec())],
                 block_time: Some((verbose_data.block_time / 1000) as i32),
                 is_accepted: false,
                 accepting_block_hash: None,
             };
+            let db_block_transaction = BlockTransaction {
+                block_hash: verbose_data.block_hash.as_bytes().to_vec(),
+                transaction_id: verbose_data.transaction_id.as_bytes().to_vec()
+            };
+            
             while db_transactions_queue.is_full() {
                 warn!("DB transactions queue is full");
                 sleep(Duration::from_secs(2)).await;
             }
-            let _ = db_transactions_queue.push(db_transaction);
+            let _ = db_transactions_queue.push((db_transaction, db_block_transaction));
         }
     }
 }

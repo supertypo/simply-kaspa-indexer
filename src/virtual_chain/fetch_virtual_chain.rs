@@ -65,7 +65,6 @@ pub async fn fetch_virtual_chains(start_hash: String,
                     hash: None,
                     mass: None,
                     block_time: None,
-                    block_hash: vec![],
                     is_accepted: true,
                     accepting_block_hash: Some(accepting_block_hash.clone()),
                 })

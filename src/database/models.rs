@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 use bigdecimal::BigDecimal;
@@ -90,7 +89,6 @@ pub struct Transaction {
     pub subnetwork: Option<i32>,
     pub hash: Option<Vec<u8>>,
     pub mass: Option<i32>,
-    pub block_hash: Vec<Option<Vec<u8>>>,
     pub block_time: Option<i32>,
     pub is_accepted: bool,
     pub accepting_block_hash: Option<Vec<u8>>,
@@ -102,7 +100,6 @@ impl Transaction {
             self.subnetwork == other.subnetwork &&
             self.hash == other.hash &&
             self.mass == other.mass &&
-            self.block_hash.iter().collect::<HashSet<_>>() == other.block_hash.iter().collect::<HashSet<_>>() &&
             self.block_time == other.block_time &&
             self.is_accepted == other.is_accepted &&
             self.accepting_block_hash == other.accepting_block_hash;
@@ -121,4 +118,12 @@ impl Hash for Transaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.transaction_id.hash(state);
     }
+}
+
+#[derive(Queryable, Selectable, Insertable, Clone, Eq, PartialEq, Hash)]
+#[diesel(table_name = crate::database::schema::blocks_transactions)]
+#[diesel(primary_key(transaction_id))]
+pub struct BlockTransaction {
+    pub block_hash: Vec<u8>,
+    pub transaction_id: Vec<u8>,
 }
