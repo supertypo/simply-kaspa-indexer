@@ -27,7 +27,7 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
     let mut last_block_tx_count = 0;
     let mut last_block_timestamp = 0;
     let mut checkpoint_hash = vec![];
-    let mut checkpoint_hash_tx_count = 0;
+    let mut checkpoint_hash_tx_expected_count = 0;
     let mut checkpoint_last_saved = SystemTime::now();
     let mut last_commit_time = SystemTime::now();
     loop {
@@ -49,25 +49,25 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
                 Ok::<_, Error>(())
             }).expect("Commit blocks to database FAILED");
 
-            info!("Committed {} new blocks to database. Last timestamp: {}", rows_affected,
+            info!("Committed {} new blocks to database. Last block timestamp: {}", rows_affected,
                 chrono::DateTime::from_timestamp_millis(last_block_timestamp as i64 * 1000).unwrap());
             last_commit_time = SystemTime::now();
 
             if insert_queue.len() >= 1 && SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > 60 {
                 if checkpoint_hash.is_empty() {
                     checkpoint_hash = last_block_hash.clone();
-                    checkpoint_hash_tx_count = last_block_tx_count;
+                    checkpoint_hash_tx_expected_count = last_block_tx_count;
                 } else { // Save the previously picked block hash as checkpoint if all its transactions are present
                     let checkpoint_hash_tx_commited_count = blocks_transactions::dsl::blocks_transactions
                         .filter(blocks_transactions::block_hash.eq(&checkpoint_hash))
                         .count()
                         .get_result::<i64>(con).unwrap();
-                    if checkpoint_hash_tx_count as i64 == checkpoint_hash_tx_commited_count {
+                    if checkpoint_hash_tx_commited_count == checkpoint_hash_tx_expected_count {
                         save_block_checkpoint(hex::encode(checkpoint_hash.clone()), db_pool.clone());
                         checkpoint_hash = vec![];
                         checkpoint_last_saved = SystemTime::now();
-                    } else if checkpoint_hash_tx_count as i64 > checkpoint_hash_tx_commited_count {
-                        panic!("Expected {}, but found {} transactions on block {}!", checkpoint_hash_tx_count, checkpoint_hash_tx_commited_count, hex::encode(&checkpoint_hash))
+                    } else if checkpoint_hash_tx_commited_count > checkpoint_hash_tx_expected_count {
+                        panic!("Expected {}, but found {} transactions on block {}!", checkpoint_hash_tx_expected_count, checkpoint_hash_tx_commited_count, hex::encode(&checkpoint_hash))
                     } else if SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > 600 {
                         error!("Still unable to save start point due to missing transactions")
                     }
@@ -81,7 +81,7 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
             let block = block_tuple.0;
             let transactions = block_tuple.1;
             last_block_hash = block.hash.clone();
-            last_block_tx_count = transactions.len();
+            last_block_tx_count = transactions.len() as i64;
             last_block_timestamp = block.timestamp.clone();
             insert_queue.insert(block);
         } else {

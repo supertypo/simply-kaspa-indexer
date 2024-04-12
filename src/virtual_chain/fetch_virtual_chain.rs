@@ -15,7 +15,7 @@ use log::{info, trace, warn};
 use tokio::time::sleep;
 
 use crate::database::models::Transaction;
-use crate::database::schema::{blocks, transactions};
+use crate::database::schema::transactions;
 use crate::vars::vars::save_virtual_checkpoint;
 
 pub async fn fetch_virtual_chains(checkpoint_hash: String,
@@ -39,25 +39,8 @@ pub async fn fetch_virtual_chains(checkpoint_hash: String,
         info!("Received {} accepted transactions", response.accepted_transaction_ids.len());
         trace!("Accepted transactions: \n{:#?}", response.accepted_transaction_ids);
 
-        let chain_blocks = response.accepted_transaction_ids.iter()
-            .map(|cb| cb.accepting_block_hash.as_bytes().to_vec())
-            .collect::<Vec<_>>();
-        trace!("Chain blocks: \n{:#?}", &chain_blocks);
-
-        let con = &mut db_pool.get().expect("Database connection FAILED");
-        let chain_blocks_in_db: HashSet<Vec<u8>> = HashSet::from_iter(blocks::dsl::blocks
-            .select(blocks::hash)
-            .filter(blocks::hash.eq_any(chain_blocks))
-            .load::<Vec<u8>>(con).unwrap());
-        info!("Found {} chain blocks in database", chain_blocks_in_db.len());
-        trace!("Chain blocks in database: \n{:#?}", &chain_blocks_in_db);
-
         let mut accepted_queue = vec![];
         for accepted_transaction in response.accepted_transaction_ids {
-            let accepting_block_hash = accepted_transaction.accepting_block_hash.as_bytes().to_vec();
-            if !chain_blocks_in_db.contains(&accepting_block_hash) {
-                break;
-            }
             for accepted_transaction_id in accepted_transaction.accepted_transaction_ids {
                 accepted_queue.push(Transaction {
                     transaction_id: accepted_transaction_id.as_bytes().to_vec(),
@@ -66,15 +49,32 @@ pub async fn fetch_virtual_chains(checkpoint_hash: String,
                     mass: None,
                     block_time: None,
                     is_accepted: true,
-                    accepting_block_hash: Some(accepting_block_hash.clone()),
+                    accepting_block_hash: Some(accepted_transaction.accepting_block_hash.as_bytes().to_vec()),
                 })
             }
         }
         if !accepted_queue.is_empty() {
+            let con = &mut db_pool.get().expect("Database connection FAILED");
             for accepted_chunk in accepted_queue.chunks(INSERT_QUEUE_SIZE) {
                 con.transaction(|con| {
+                    let mut accepted_set: HashSet<&Transaction> = HashSet::from_iter(accepted_chunk.iter());
+                    // Find existing identical transactions and remove them from the insert queue
+                    transactions::dsl::transactions
+                        .filter(transactions::transaction_id.eq_any(accepted_set.iter()
+                            .map(|t| t.transaction_id.clone()).collect::<Vec<Vec<u8>>>()))
+                        .for_update()
+                        .load::<Transaction>(con)
+                        .unwrap().iter()
+                        .for_each(|t| {
+                            let new_tx = accepted_set.get(t).unwrap();
+                            if new_tx.is_accepted == t.is_accepted &&
+                                new_tx.accepting_block_hash == t.accepting_block_hash {
+                                accepted_set.remove(t);
+                            }
+                        });
+                    //Upsert transactions in case a conflicting tx was persisted
                     rows_affected = insert_into(transactions::dsl::transactions)
-                        .values(Vec::from_iter(accepted_chunk))
+                        .values(Vec::from_iter(accepted_set))
                         .on_conflict(transactions::transaction_id)
                         .do_update()
                         .set((

@@ -17,7 +17,7 @@ use crate::database::models::{BlockTransaction, Transaction};
 use crate::database::schema::blocks_transactions;
 use crate::database::schema::transactions;
 
-pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction)>>, 
+pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction)>>,
                                  db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 7500;
     info!("Insert transactions started");
@@ -38,19 +38,23 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<(Transact
                     .load::<Transaction>(con)
                     .unwrap().iter()
                     .for_each(|t| {
-                        if insert_tx_queue.get(t).unwrap().clone().is_equal_to(t) {
+                        let new_tx = insert_tx_queue.get(t).unwrap().clone();
+                        if new_tx.subnetwork == t.subnetwork &&
+                            new_tx.hash == t.hash &&
+                            new_tx.mass == t.mass &&
+                            new_tx.block_time == t.block_time {
                             insert_tx_queue.remove(t);
                         }
                     });
-
                 // Find existing identical block to transaction mappings and remove them from the insert queue
                 blocks_transactions::dsl::blocks_transactions
                     .filter(blocks_transactions::block_hash.eq_any(insert_block_tx_queue.iter().map(|bt| bt.block_hash.clone()).collect::<Vec<Vec<u8>>>())
                         .and(blocks_transactions::transaction_id.eq_any(insert_block_tx_queue.iter().map(|bt| bt.transaction_id.clone()).collect::<Vec<Vec<u8>>>())))
                     .load::<BlockTransaction>(con)
                     .unwrap().iter()
-                    .for_each(|bt| {insert_block_tx_queue.remove(bt);});
-                
+                    .for_each(|bt| { insert_block_tx_queue.remove(bt); });
+
+                //Upsert transactions in case a conflicting tx was persisted
                 rows_affected_tx = insert_into(transactions::dsl::transactions)
                     .values(Vec::from_iter(&insert_tx_queue))
                     .on_conflict(transactions::transaction_id)
@@ -65,7 +69,8 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<(Transact
                     ))
                     .execute(con)
                     .expect("Commit transactions to database FAILED");
-                
+
+                //Ignore conflicts as any conflicting rows will be identical
                 rows_affected_block_tx = insert_into(blocks_transactions::dsl::blocks_transactions)
                     .values(Vec::from_iter(&insert_block_tx_queue))
                     .on_conflict(on_constraint("pk_blocks_transactions"))
