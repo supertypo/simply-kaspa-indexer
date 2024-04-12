@@ -7,10 +7,10 @@ use kaspa_rpc_core::RpcBlock;
 use log::{trace, warn};
 use tokio::time::sleep;
 
-use crate::database::models::{Block, BlockTransaction};
+use crate::database::models::Block;
 
 pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
-                            db_blocks_queue: Arc<ArrayQueue<(Block, Vec<BlockTransaction>)>>) -> Result<(), ()> {
+                            db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>) -> Result<(), ()> {
     loop {
         let block_option = rpc_blocks_queue.pop();
         if block_option.is_none() {
@@ -47,10 +47,7 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
         }
         let _ = db_blocks_queue.push((db_block, block.verbose_data.as_ref()
             .map(|vd| vd.transaction_ids.iter()
-                .map(|t| BlockTransaction {
-                    block_hash: block.header.hash.as_bytes().to_vec(),
-                    transaction_id: t.as_bytes().to_vec()
-                })
+                .map(|t| t.as_bytes().to_vec())
                 .collect()).unwrap()));
     }
 }
