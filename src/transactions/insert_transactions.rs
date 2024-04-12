@@ -17,7 +17,8 @@ use tokio::time::sleep;
 use crate::database::models::Transaction;
 use crate::database::schema::transactions;
 
-pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transaction>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<Transaction>>, 
+                                 db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 7500;
     info!("Insert transactions started");
     let mut insert_queue: HashSet<Transaction> = HashSet::with_capacity(INSERT_QUEUE_SIZE);

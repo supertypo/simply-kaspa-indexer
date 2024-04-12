@@ -10,7 +10,7 @@ use tokio::time::sleep;
 use crate::database::models::Block;
 
 pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
-                        db_blocks_queue: Arc<ArrayQueue<Block>>) -> Result<(), ()> {
+                            db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>) -> Result<(), ()> {
     loop {
         let block_option = rpc_blocks_queue.pop();
         if block_option.is_none() {
@@ -45,6 +45,8 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
             warn!("DB blocks queue is full");
             sleep(Duration::from_secs(2)).await;
         }
-        let _ = db_blocks_queue.push(db_block);
+        let _ = db_blocks_queue.push((db_block, block.verbose_data.as_ref()
+            .map(|v| v.transaction_ids.iter()
+                .map(|v| v.as_bytes().to_vec()).collect()).unwrap()));
     }
 }
