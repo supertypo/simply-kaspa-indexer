@@ -73,12 +73,14 @@ async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad
     let rpc_transactions_queue = Arc::new(ArrayQueue::new(200_000));
     let db_blocks_queue = Arc::new(ArrayQueue::new(5_000));
     let db_transactions_queue = Arc::new(ArrayQueue::new(200_000));
+    let db_transactions_inputs_queue = Arc::new(ArrayQueue::new(400_000));
+    let db_transactions_outputs_queue = Arc::new(ArrayQueue::new(400_000));
     let synced_queue = Arc::new(ArrayQueue::new(10));
 
     let mut tasks = vec![];
     tasks.push(task::spawn(fetch_blocks(block_checkpoint_hash, kaspad_client.clone(), synced_queue.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
     tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
-    tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_transactions_inputs_queue.clone(), db_transactions_outputs_queue, db_pool.clone())));
     tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_transactions(db_transactions_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(fetch_virtual_chains(virtual_checkpoint_hash, synced_queue.clone(), kaspad_client.clone(), db_pool.clone())));

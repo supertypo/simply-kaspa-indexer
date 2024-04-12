@@ -51,29 +51,26 @@ diesel::table! {
 }
 
 diesel::table! {
-    transactions_inputs (id) {
-        id -> Int8,
-        transaction_id -> Nullable<Bytea>,
-        index -> Nullable<Int2>,
-        previous_outpoint_hash -> Nullable<Array<Nullable<Bytea>>>,
-        previous_outpoint_index -> Nullable<Int2>,
-        signature_script -> Nullable<Bytea>,
-        sig_op_count -> Nullable<Int2>,
+    transactions_inputs (transaction_id, index) {
+        transaction_id -> Bytea,
+        index -> Int2,
+        previous_outpoint_hash -> Bytea,
+        previous_outpoint_index -> Int2,
+        signature_script -> Bytea,
+        sig_op_count -> Int2,
     }
 }
 
 diesel::table! {
-    transactions_outputs (id) {
-        id -> Int8,
-        transaction_id -> Nullable<Bytea>,
-        index -> Nullable<Int2>,
-        amount -> Nullable<Int8>,
-        script_public_key -> Nullable<Array<Nullable<Bytea>>>,
+    transactions_outputs (transaction_id, index) {
+        transaction_id -> Bytea,
+        index -> Int2,
+        amount -> Int8,
+        script_public_key -> Bytea,
         #[max_length = 128]
-        script_public_key_address -> Nullable<Varchar>,
+        script_public_key_address -> Varchar,
         #[max_length = 32]
-        script_public_key_type -> Nullable<Varchar>,
-        accepting_block_hash -> Nullable<Bytea>,
+        script_public_key_type -> Varchar,
     }
 }
 

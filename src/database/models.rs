@@ -122,8 +122,32 @@ impl Hash for Transaction {
 
 #[derive(Queryable, Selectable, Insertable, Clone, Eq, PartialEq, Hash)]
 #[diesel(table_name = crate::database::schema::blocks_transactions)]
-#[diesel(primary_key(transaction_id))]
+#[diesel(primary_key(block_hash, transaction_id))]
 pub struct BlockTransaction {
     pub block_hash: Vec<u8>,
     pub transaction_id: Vec<u8>,
+}
+
+#[derive(Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::database::schema::transactions_inputs)]
+#[diesel(primary_key(transaction_id, index))]
+pub struct TransactionInput {
+    pub transaction_id: Vec<u8>,
+    pub index: i16,
+    pub previous_outpoint_hash: Vec<u8>,
+    pub previous_outpoint_index: i16,
+    pub signature_script: Vec<u8>,
+    pub sig_op_count: i16,
+}
+
+#[derive(Queryable, Selectable, Insertable)]
+#[diesel(table_name = crate::database::schema::transactions_outputs)]
+// #[diesel(primary_key(transaction_id, index))]
+pub struct TransactionOutput {
+    pub transaction_id: Vec<u8>,
+    pub index: i16,
+    pub amount: i64,
+    pub script_public_key: Vec<u8>,
+    pub script_public_key_address: String,
+    pub script_public_key_type: String,
 }

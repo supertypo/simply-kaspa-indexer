@@ -66,36 +66,34 @@ CREATE INDEX IF NOT EXISTS idx_block_hash ON blocks_transactions (block_hash);
 CREATE INDEX IF NOT EXISTS idx_transaction_id ON blocks_transactions (transaction_id);
 
 
-CREATE TABLE IF NOT EXISTS "transactions_outputs"
-(
-    id                        BIGSERIAL PRIMARY KEY,
-    transaction_id            BYTEA,
-    index                     SMALLINT,
-    amount                    BIGINT,
-    script_public_key         BYTEA[],
-    script_public_key_address VARCHAR(128),
-    script_public_key_type    VARCHAR(32),
-    accepting_block_hash      BYTEA
-);
-
-CREATE INDEX IF NOT EXISTS idx_txouts ON transactions_outputs (transaction_id);
-CREATE INDEX IF NOT EXISTS idx_txouts_addr ON transactions_outputs (script_public_key_address);
-CREATE INDEX IF NOT EXISTS tx_id_and_index ON transactions_outputs (transaction_id, index);
-
-
 CREATE TABLE IF NOT EXISTS "transactions_inputs"
 (
-    id                      BIGSERIAL PRIMARY KEY,
-    transaction_id          BYTEA,
-    index                   SMALLINT,
-    previous_outpoint_hash  BYTEA[],
-    previous_outpoint_index SMALLINT,
-    signature_script        BYTEA,
-    sig_op_count            SMALLINT
+    transaction_id          BYTEA NOT NULL,
+    index                   SMALLINT NOT NULL,
+    previous_outpoint_hash  BYTEA NOT NULL,
+    previous_outpoint_index SMALLINT NOT NULL,
+    signature_script        BYTEA NOT NULL,
+    sig_op_count            SMALLINT NOT NULL,
+    CONSTRAINT pk_transactions_inputs PRIMARY KEY (transaction_id, index)
 );
 
 CREATE INDEX IF NOT EXISTS idx_txin_prev ON transactions_inputs (previous_outpoint_hash);
 CREATE INDEX IF NOT EXISTS idx_txin ON transactions_inputs (transaction_id);
+
+
+CREATE TABLE IF NOT EXISTS "transactions_outputs"
+(
+    transaction_id            BYTEA NOT NULL,
+    index                     SMALLINT NOT NULL,
+    amount                    BIGINT NOT NULL,
+    script_public_key         BYTEA NOT NULL,
+    script_public_key_address VARCHAR(128) NOT NULL,
+    script_public_key_type    VARCHAR(32) NOT NULL,
+    CONSTRAINT pk_transactions_outputs PRIMARY KEY (transaction_id, index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_txouts ON transactions_outputs (transaction_id);
+CREATE INDEX IF NOT EXISTS idx_txouts_addr ON transactions_outputs (script_public_key_address);
 
 
 CREATE TABLE IF NOT EXISTS "tx_id_address_mapping"
