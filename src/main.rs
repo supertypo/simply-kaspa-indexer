@@ -20,7 +20,7 @@ use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
 use kaspa_db_filler_ng::transactions::insert_transactions::insert_transactions;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
-use kaspa_db_filler_ng::vars::vars::{load_block_start_hash, load_virtual_start_hash};
+use kaspa_db_filler_ng::vars::vars::{load_block_checkpoint, load_virtual_checkpoint};
 use kaspa_db_filler_ng::virtual_chain::fetch_virtual_chain::fetch_virtual_chains;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -60,12 +60,12 @@ async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad
     let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
     info!("BlockDagInfo received: pruning_point={}",block_dag_info.pruning_point_hash);
     
-    let block_start_hash = load_block_start_hash(db_pool.clone()).unwrap_or_else(|| {
-        warn!("block_start_hash not found, using pruning_point_hash");
+    let block_checkpoint_hash = load_block_checkpoint(db_pool.clone()).unwrap_or_else(|| {
+        warn!("block_checkpoint_hash not found, using pruning_point_hash");
         block_dag_info.pruning_point_hash.to_string()
     });
-    let virtual_start_hash = load_virtual_start_hash(db_pool.clone()).unwrap_or_else(|| {
-        warn!("virtual_start_hash not found, using pruning_point_hash");
+    let virtual_checkpoint_hash = load_virtual_checkpoint(db_pool.clone()).unwrap_or_else(|| {
+        warn!("virtual_checkpoint_hash not found, using pruning_point_hash");
         block_dag_info.pruning_point_hash.to_string()
     });
 
@@ -76,12 +76,12 @@ async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad
     let synced_queue = Arc::new(ArrayQueue::new(10));
 
     let mut tasks = vec![];
-    tasks.push(task::spawn(fetch_blocks(block_start_hash, kaspad_client.clone(), synced_queue.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
+    tasks.push(task::spawn(fetch_blocks(block_checkpoint_hash, kaspad_client.clone(), synced_queue.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
     tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
     tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_transactions(db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(fetch_virtual_chains(virtual_start_hash, synced_queue.clone(), kaspad_client.clone(), db_pool.clone())));
+    tasks.push(task::spawn(fetch_virtual_chains(virtual_checkpoint_hash, synced_queue.clone(), kaspad_client.clone(), db_pool.clone())));
 
     for task in tasks {
         let _ = task.await.expect("Should not happen");

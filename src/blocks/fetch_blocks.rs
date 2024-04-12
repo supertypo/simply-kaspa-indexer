@@ -13,15 +13,15 @@ use log::{debug, trace, warn};
 use log::info;
 use tokio::time::sleep;
 
-pub async fn fetch_blocks(start_hash: String,
+pub async fn fetch_blocks(checkpoint_hash: String,
                           kaspad_client: KaspaRpcClient,
                           synced_queue: Arc<ArrayQueue<bool>>,
                           rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
                           rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) -> Result<(), ()> {
     const INITIAL_SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(15);
-    info!("start_block_hash={}", start_hash);
-    let start_hash = hex::decode(start_hash.as_bytes()).unwrap();
-    let mut low_hash = start_hash.clone();
+    info!("block checkpoint_hash={}", checkpoint_hash);
+    let checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
+    let mut low_hash = checkpoint_hash.clone();
     let mut last_sync_check = SystemTime::now();
     let mut synced = false;
     let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
@@ -51,7 +51,7 @@ pub async fn fetch_blocks(start_hash: String,
                     synced = true;
                     synced_queue.push(true).unwrap();
                 }
-                if block_hash.as_bytes().to_vec() == low_hash && block_hash.as_bytes().to_vec() != start_hash {
+                if block_hash.as_bytes().to_vec() == low_hash && block_hash.as_bytes().to_vec() != checkpoint_hash {
                     trace!("Ignoring low_hash block {}", hex::encode(low_hash.clone()));
                     continue;
                 }

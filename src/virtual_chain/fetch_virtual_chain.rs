@@ -16,25 +16,25 @@ use tokio::time::sleep;
 
 use crate::database::models::Transaction;
 use crate::database::schema::{blocks, transactions};
-use crate::vars::vars::save_virtual_start_hash;
+use crate::vars::vars::save_virtual_checkpoint;
 
-pub async fn fetch_virtual_chains(start_hash: String,
+pub async fn fetch_virtual_chains(checkpoint_hash: String,
                                   synced_queue: Arc<ArrayQueue<bool>>,
                                   kaspad_client: KaspaRpcClient,
                                   db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 7500;
-    info!("start_block_hash={}", start_hash);
-    let mut start_hash = hex::decode(start_hash.as_bytes()).unwrap();
+    info!("virtual checkpoint_hash={}", checkpoint_hash);
+    let mut checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
+    let mut checkpoint_hash_last_saved = SystemTime::now();
     let mut rows_affected = 0;
-    let mut start_hash_last_saved = SystemTime::now();
 
     while synced_queue.is_empty() || !synced_queue.pop().unwrap() {
         warn!("Not synced yet, sleeping for 5 seconds...");
         sleep(Duration::from_secs(5)).await;
     }
     loop {
-        info!("Getting virtual chain from start_hash={}", hex::encode(start_hash.clone()));
-        let response = kaspad_client.get_virtual_chain_from_block(kaspa_hashes::Hash::from_slice(start_hash.as_slice()), true).await
+        info!("Getting virtual chain from start_hash={}", hex::encode(checkpoint_hash.clone()));
+        let response = kaspad_client.get_virtual_chain_from_block(kaspa_hashes::Hash::from_slice(checkpoint_hash.as_slice()), true).await
             .expect("Error when invoking GetBlocks");
         info!("Received {} accepted transactions", response.accepted_transaction_ids.len());
         trace!("Accepted transactions: \n{:#?}", response.accepted_transaction_ids);
@@ -87,10 +87,10 @@ pub async fn fetch_virtual_chains(start_hash: String,
                 }).expect("Commit transactions to database FAILED");
                 info!("Committed {} accepted transactions to database", rows_affected);
             }
-            start_hash = accepted_queue.last().unwrap().accepting_block_hash.clone().unwrap();
-            if SystemTime::now().duration_since(start_hash_last_saved).unwrap().as_secs() > 60 {
-                save_virtual_start_hash(hex::encode(start_hash.clone()), db_pool.clone());
-                start_hash_last_saved = SystemTime::now();
+            checkpoint_hash = accepted_queue.last().unwrap().accepting_block_hash.clone().unwrap();
+            if SystemTime::now().duration_since(checkpoint_hash_last_saved).unwrap().as_secs() > 60 {
+                save_virtual_checkpoint(hex::encode(checkpoint_hash.clone()), db_pool.clone());
+                checkpoint_hash_last_saved = SystemTime::now();
             }
         }
         sleep(Duration::from_secs(5)).await;
