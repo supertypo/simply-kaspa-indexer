@@ -57,18 +57,18 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
                     checkpoint_hash = last_block_hash.clone();
                     checkpoint_hash_tx_expected_count = last_block_tx_count;
                 } else { // Save the previously picked block hash as checkpoint if all its transactions are present
-                    let checkpoint_hash_tx_commited_count = blocks_transactions::dsl::blocks_transactions
+                    let checkpoint_hash_tx_committed_count = blocks_transactions::dsl::blocks_transactions
                         .filter(blocks_transactions::block_hash.eq(&checkpoint_hash))
                         .count()
                         .get_result::<i64>(con).unwrap();
-                    if checkpoint_hash_tx_commited_count == checkpoint_hash_tx_expected_count {
+                    if checkpoint_hash_tx_committed_count == checkpoint_hash_tx_expected_count {
                         save_block_checkpoint(hex::encode(checkpoint_hash.clone()), db_pool.clone());
                         checkpoint_hash = vec![];
                         checkpoint_last_saved = SystemTime::now();
-                    } else if checkpoint_hash_tx_commited_count > checkpoint_hash_tx_expected_count {
-                        panic!("Expected {}, but found {} transactions on block {}!", checkpoint_hash_tx_expected_count, checkpoint_hash_tx_commited_count, hex::encode(&checkpoint_hash))
-                    } else if SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > 600 {
-                        error!("Still unable to save start point due to missing transactions")
+                    } else if checkpoint_hash_tx_committed_count > checkpoint_hash_tx_expected_count {
+                        panic!("Expected {}, but found {} transactions on block {}!", checkpoint_hash_tx_expected_count, checkpoint_hash_tx_committed_count, hex::encode(&checkpoint_hash))
+                    } else if SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > 120 {
+                        error!("Still unable to save block_checkpoint={}. Expected {} txs, committed {}", hex::encode(&checkpoint_hash), checkpoint_hash_tx_expected_count, checkpoint_hash_tx_committed_count)
                     }
                 }
             }

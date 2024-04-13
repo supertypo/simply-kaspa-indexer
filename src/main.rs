@@ -71,12 +71,12 @@ async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad
         block_dag_info.pruning_point_hash.to_string()
     });
 
-    let rpc_blocks_queue = Arc::new(ArrayQueue::new(5_000));
-    let rpc_transactions_queue = Arc::new(ArrayQueue::new(5_000));
-    let db_blocks_queue = Arc::new(ArrayQueue::new(5_000));
-    let db_transactions_queue = Arc::new(ArrayQueue::new(50_000));
-    let db_transactions_inputs_queue = Arc::new(ArrayQueue::new(100_000));
-    let db_transactions_outputs_queue = Arc::new(ArrayQueue::new(100_000));
+    let rpc_blocks_queue = Arc::new(ArrayQueue::new(3_000));
+    let rpc_transactions_queue = Arc::new(ArrayQueue::new(3_000));
+    let db_blocks_queue = Arc::new(ArrayQueue::new(3_000));
+    let db_transactions_queue = Arc::new(ArrayQueue::new(30_000));
+    let db_transactions_inputs_queue = Arc::new(ArrayQueue::new(60_000));
+    let db_transactions_outputs_queue = Arc::new(ArrayQueue::new(60_000));
     let synced_queue = Arc::new(ArrayQueue::new(10));
 
     let mut tasks = vec![];
