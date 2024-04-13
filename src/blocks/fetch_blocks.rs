@@ -42,6 +42,7 @@ pub async fn fetch_blocks(checkpoint_hash: String,
         }
 
         let blocks_len = response.blocks.len();
+        let txs_len: usize = response.blocks.iter().map(|b| b.transactions.len()).sum();
         if blocks_len > 1 {
             low_hash = response.blocks.last().unwrap().header.hash.as_bytes().to_vec();
             for b in response.blocks {
@@ -70,7 +71,8 @@ pub async fn fetch_blocks(checkpoint_hash: String,
         if blocks_len < 50 {
             sleep(Duration::from_secs(2)).await;
         }
-        debug!("Fetch blocks BPS: {}", ((10000 * blocks_len as u128
-            / SystemTime::now().duration_since(last_fetch_time).unwrap().as_millis()) as f64) / 10f64);
+        
+        let dv = (10000 / SystemTime::now().duration_since(last_fetch_time).unwrap().as_millis()) as f64 / 10f64;
+        debug!("Fetch blocks BPS: {:.1}, TPS: {:.1} ({:.1} txs/block)", blocks_len as f64 * dv, txs_len as f64 * dv, txs_len as f64 / blocks_len as f64);
     }
 }
