@@ -75,7 +75,7 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<(Transact
                     .on_conflict(on_constraint("pk_blocks_transactions"))
                     .do_nothing()
                     .execute(con)
-                    .expect("Commit transactions to database FAILED");
+                    .expect("Commit block/transaction mappings to database FAILED");
 
                 Ok::<_, Error>(())
             }).expect("Commit transactions to database FAILED");

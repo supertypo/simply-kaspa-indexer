@@ -36,10 +36,10 @@ pub async fn insert_tx_inputs(db_transactions_inputs_queue: Arc<ArrayQueue<Trans
                 rows_affected = insert_into(transactions_inputs::dsl::transactions_inputs)
                     .values(Vec::from_iter(insert_queue.iter()))
                     .execute(con)
-                    .expect("Commit blocks to database FAILED");
+                    .expect("Commit transaction inputs to database FAILED");
 
                 Ok::<_, Error>(())
-            }).expect("Commit transactions to database FAILED");
+            }).expect("Commit transaction inputs to database FAILED");
 
             info!("Committed {} new transaction inputs to database.", rows_affected);
             insert_queue = HashSet::with_capacity(INSERT_QUEUE_SIZE);
