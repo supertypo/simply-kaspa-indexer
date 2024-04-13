@@ -20,7 +20,6 @@ use crate::vars::vars::save_block_checkpoint;
 pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
                            db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 1800;
-    info!("Insert blocks started");
     let mut insert_queue: HashSet<Block> = HashSet::with_capacity(INSERT_QUEUE_SIZE);
     let mut rows_affected = 0;
     let mut last_block_hash = vec![];

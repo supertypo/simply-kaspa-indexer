@@ -20,7 +20,6 @@ use crate::database::schema::transactions;
 pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction)>>,
                                  db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     const INSERT_QUEUE_SIZE: usize = 7500;
-    info!("Insert transactions started");
     let mut insert_tx_queue: HashSet<Transaction> = HashSet::with_capacity(INSERT_QUEUE_SIZE);
     let mut insert_block_tx_queue: HashSet<BlockTransaction> = HashSet::with_capacity(INSERT_QUEUE_SIZE);
     let mut last_block_timestamp = 0;

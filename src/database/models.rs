@@ -128,7 +128,7 @@ pub struct BlockTransaction {
     pub transaction_id: Vec<u8>,
 }
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Queryable, Selectable, Insertable, Clone, Eq, PartialEq, Hash)]
 #[diesel(table_name = crate::database::schema::transactions_inputs)]
 #[diesel(primary_key(transaction_id, index))]
 pub struct TransactionInput {
@@ -140,9 +140,9 @@ pub struct TransactionInput {
     pub sig_op_count: i16,
 }
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Queryable, Selectable, Insertable, Clone, Eq, PartialEq, Hash)]
 #[diesel(table_name = crate::database::schema::transactions_outputs)]
-// #[diesel(primary_key(transaction_id, index))]
+#[diesel(primary_key(transaction_id, index))]
 pub struct TransactionOutput {
     pub transaction_id: Vec<u8>,
     pub index: i16,

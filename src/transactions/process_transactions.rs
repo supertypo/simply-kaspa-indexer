@@ -87,7 +87,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                     script_public_key_type: output.verbose_data.clone().unwrap().script_public_key_type.to_string()
                 };
                 while db_transactions_outputs_queue.is_full() {
-                    warn!("DB transactions_inputs queue is full");
+                    warn!("DB transactions_outputs queue is full");
                     sleep(Duration::from_secs(2)).await;
                 }
                 let _ = db_transactions_outputs_queue.push(db_transaction_output);
