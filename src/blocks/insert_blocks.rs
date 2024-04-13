@@ -5,10 +5,11 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
+use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
+use diesel::upsert::excluded;
 use log::{error, info};
 use tokio::time::sleep;
 
@@ -35,13 +36,35 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
             con.transaction(|con| {
                 // Find existing blocks and remove them from the insert queue
                 blocks::dsl::blocks
-                    .filter(blocks::hash.eq_any(insert_queue.iter().map(|b| b.hash.clone()).collect::<Vec<Vec<u8>>>()))
+                    .filter(blocks::hash.eq_any(insert_queue.iter().map(|b| b.hash.clone()).collect::<Vec<Vec<u8>>>())
+                        .and(blocks::accepted_id_merkle_root.is_not_null())) // VCP only writes is_chain_block
                     .load::<Block>(con)
                     .unwrap().iter()
                     .for_each(|b| { insert_queue.remove(b); });
 
                 rows_affected = insert_into(blocks::dsl::blocks)
                     .values(Vec::from_iter(insert_queue.iter()))
+                    .on_conflict(blocks::hash)
+                    .do_update()
+                    .set((
+                        blocks::accepted_id_merkle_root.eq(excluded(blocks::accepted_id_merkle_root)),
+                        blocks::difficulty.eq(excluded(blocks::difficulty)),
+                        // Keep is_chain_block, as it might already be touched by the virtual chain processor
+                        blocks::merge_set_blues_hashes.eq(excluded(blocks::merge_set_blues_hashes)),
+                        blocks::merge_set_reds_hashes.eq(excluded(blocks::merge_set_reds_hashes)),
+                        blocks::selected_parent_hash.eq(excluded(blocks::selected_parent_hash)),
+                        blocks::bits.eq(excluded(blocks::bits)),
+                        blocks::blue_score.eq(excluded(blocks::blue_score)),
+                        blocks::blue_work.eq(excluded(blocks::blue_work)),
+                        blocks::daa_score.eq(excluded(blocks::daa_score)),
+                        blocks::hash_merkle_root.eq(excluded(blocks::hash_merkle_root)),
+                        blocks::nonce.eq(excluded(blocks::nonce)),
+                        blocks::parents.eq(excluded(blocks::parents)),
+                        blocks::pruning_point.eq(excluded(blocks::pruning_point)),
+                        blocks::timestamp.eq(excluded(blocks::timestamp)),
+                        blocks::utxo_commitment.eq(excluded(blocks::utxo_commitment)),
+                        blocks::version.eq(excluded(blocks::version)),
+                    ))
                     .execute(con)
                     .expect("Commit blocks to database FAILED");
 
@@ -81,7 +104,7 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
             let transactions = block_tuple.1;
             last_block_hash = block.hash.clone();
             last_block_tx_count = transactions.len() as i64;
-            last_block_timestamp = block.timestamp.clone();
+            last_block_timestamp = block.timestamp.unwrap();
             insert_queue.insert(block);
         } else {
             sleep(Duration::from_millis(100)).await;

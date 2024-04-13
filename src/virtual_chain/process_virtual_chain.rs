@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, ExpressionMethods, insert_into, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, insert_into, PgConnection, QueryDsl, RunQueryDsl};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
 use diesel::upsert::excluded;
@@ -14,8 +14,8 @@ use kaspa_wrpc_client::KaspaRpcClient;
 use log::{info, trace, warn};
 use tokio::time::sleep;
 
-use crate::database::models::Transaction;
-use crate::database::schema::transactions;
+use crate::database::models::{Block, Transaction};
+use crate::database::schema::{transactions, blocks};
 use crate::vars::vars::save_virtual_checkpoint;
 
 pub async fn process_virtual_chain(checkpoint_hash: String,
@@ -53,8 +53,8 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
                 })
             }
         }
+        let con = &mut db_pool.get().expect("Database connection FAILED");
         if !accepted_queue.is_empty() {
-            let con = &mut db_pool.get().expect("Database connection FAILED");
             for accepted_chunk in accepted_queue.chunks(INSERT_QUEUE_SIZE) {
                 con.transaction(|con| {
                     let mut accepted_set: HashSet<&Transaction> = HashSet::from_iter(accepted_chunk.iter());
@@ -62,7 +62,6 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
                     transactions::dsl::transactions
                         .filter(transactions::transaction_id.eq_any(accepted_set.iter()
                             .map(|t| t.transaction_id.clone()).collect::<Vec<Vec<u8>>>()))
-                        .for_update()
                         .load::<Transaction>(con)
                         .unwrap().iter()
                         .for_each(|t| {
@@ -87,12 +86,42 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
                 }).expect("Commit transactions to database FAILED");
                 info!("Committed {} accepted transactions to database", rows_affected);
             }
-            checkpoint_hash = accepted_queue.last().unwrap().accepting_block_hash.clone().unwrap();
-            if SystemTime::now().duration_since(checkpoint_hash_last_saved).unwrap().as_secs() > 60 {
-                save_virtual_checkpoint(hex::encode(checkpoint_hash.clone()), db_pool.clone());
-                checkpoint_hash_last_saved = SystemTime::now();
-            }
         }
-        sleep(Duration::from_secs(5)).await;
+
+        if !response.added_chain_block_hashes.is_empty() {
+            info!("Received {} added chain blocks", response.added_chain_block_hashes.len());
+            trace!("Added chain blocks: \n{:#?}", response.added_chain_block_hashes);
+            let mut chain_hashes = response.added_chain_block_hashes.iter().map(|b| b.as_bytes().to_vec()).collect::<HashSet<Vec<u8>>>();
+            con.transaction(|con| {
+                // Find existing chain blocks and remove them from the insert queue
+                blocks::dsl::blocks
+                    .select(blocks::hash)
+                    .filter(blocks::hash.eq_any(&chain_hashes)
+                        .and(blocks::is_chain_block.eq(true)))
+                    .load::<Vec<u8>>(con)
+                    .expect("Commit transactions to database FAILED").iter()
+                    .for_each(|b| {
+                        chain_hashes.remove(b);
+                    });
+                //Upsert blocks in case a conflicting block was persisted
+                rows_affected = insert_into(blocks::dsl::blocks)
+                    .values(chain_hashes.iter().map(|h| Block::new(h.clone(), true)).collect::<Vec<Block>>())
+                    .on_conflict(blocks::hash)
+                    .do_update()
+                    .set(blocks::is_chain_block.eq(true))
+                    .execute(con)
+                    .expect("Commit added chain blocks to database FAILED");
+                Ok::<_, Error>(())
+            }).expect("Commit added chain blocks to database FAILED");
+            info!("Committed {} added chain blocks to database", rows_affected);
+        }
+
+        // Save checkpoint as the last accepting_block_hash
+        if !accepted_queue.is_empty() && SystemTime::now().duration_since(checkpoint_hash_last_saved).unwrap().as_secs() > 60 {
+            checkpoint_hash = accepted_queue.last().unwrap().accepting_block_hash.clone().unwrap();
+            save_virtual_checkpoint(hex::encode(checkpoint_hash.clone()), db_pool.clone());
+            checkpoint_hash_last_saved = SystemTime::now();
+        }
+        sleep(Duration::from_secs(1)).await;
     }
 }

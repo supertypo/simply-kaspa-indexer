@@ -22,21 +22,46 @@ pub struct Block {
     pub hash: Vec<u8>,
     pub accepted_id_merkle_root: Option<Vec<u8>>,
     pub difficulty: Option<f64>,
-    pub is_chain_block: Option<bool>,
+    pub is_chain_block: bool,
     pub merge_set_blues_hashes: Option<Vec<Option<Vec<u8>>>>,
     pub merge_set_reds_hashes: Option<Vec<Option<Vec<u8>>>>,
     pub selected_parent_hash: Option<Vec<u8>>,
-    pub bits: i64,
-    pub blue_score: i64,
-    pub blue_work: Vec<u8>,
-    pub daa_score: i64,
-    pub hash_merkle_root: Vec<u8>,
-    pub nonce: BigDecimal,
-    pub parents: Vec<Option<Vec<u8>>>,
-    pub pruning_point: Vec<u8>,
-    pub timestamp: i32,
-    pub utxo_commitment: Vec<u8>,
-    pub version: i16,
+    pub bits: Option<i64>,
+    pub blue_score: Option<i64>,
+    pub blue_work: Option<Vec<u8>>,
+    pub daa_score: Option<i64>,
+    pub hash_merkle_root: Option<Vec<u8>>,
+    pub nonce: Option<BigDecimal>,
+    pub parents: Option<Vec<Option<Vec<u8>>>>,
+    pub pruning_point: Option<Vec<u8>>,
+    pub timestamp: Option<i32>,
+    pub utxo_commitment: Option<Vec<u8>>,
+    pub version: Option<i16>,
+}
+
+impl Block {
+    pub fn new(hash: Vec<u8>, is_chain_block: bool) -> Block {
+        return Block {
+            hash,
+            accepted_id_merkle_root: None,
+            difficulty: None,
+            is_chain_block,
+            merge_set_blues_hashes: None,
+            merge_set_reds_hashes: None,
+            selected_parent_hash: None,
+            bits: None,
+            blue_score: None,
+            blue_work: None,
+            daa_score: None,
+            hash_merkle_root: None,
+            nonce: None,
+            parents: None,
+            pruning_point: None,
+            timestamp: None,
+            utxo_commitment: None,
+            version: None,
+        };
+    }
 }
 
 impl Eq for Block {}
@@ -92,18 +117,6 @@ pub struct Transaction {
     pub block_time: Option<i32>,
     pub is_accepted: bool,
     pub accepting_block_hash: Option<Vec<u8>>,
-}
-
-impl Transaction {
-    pub fn is_equal_to(&self, other: &Transaction) -> bool {
-        return self.transaction_id == other.transaction_id &&
-            self.subnetwork == other.subnetwork &&
-            self.hash == other.hash &&
-            self.mass == other.mass &&
-            self.block_time == other.block_time &&
-            self.is_accepted == other.is_accepted &&
-            self.accepting_block_hash == other.accepting_block_hash;
-    }
 }
 
 impl Eq for Transaction {}

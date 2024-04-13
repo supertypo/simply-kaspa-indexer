@@ -10,21 +10,21 @@ CREATE TABLE IF NOT EXISTS "blocks"
     hash                    BYTEA PRIMARY KEY,
     accepted_id_merkle_root BYTEA,
     difficulty              DOUBLE PRECISION,
-    is_chain_block          BOOLEAN,
+    is_chain_block          BOOLEAN NOT NULL DEFAULT false,
     merge_set_blues_hashes  BYTEA[],
     merge_set_reds_hashes   BYTEA[],
     selected_parent_hash    BYTEA,
-    bits                    BIGINT         NOT NULL,
-    blue_score              BIGINT         NOT NULL,
-    blue_work               BYTEA          NOT NULL,
-    daa_score               BIGINT         NOT NULL,
-    hash_merkle_root        BYTEA          NOT NULL,
-    nonce                   NUMERIC(32, 0) NOT NULL,
-    parents                 BYTEA[]        NOT NULL,
-    pruning_point           BYTEA          NOT NULL,
-    "timestamp"             INTEGER        NOT NULL,
-    utxo_commitment         BYTEA          NOT NULL,
-    version                 SMALLINT       NOT NULL
+    bits                    BIGINT         ,
+    blue_score              BIGINT         ,
+    blue_work               BYTEA          ,
+    daa_score               BIGINT         ,
+    hash_merkle_root        BYTEA          ,
+    nonce                   NUMERIC(32, 0) ,
+    parents                 BYTEA[]        ,
+    pruning_point           BYTEA          ,
+    "timestamp"             INTEGER        ,
+    utxo_commitment         BYTEA          ,
+    version                 SMALLINT
 );
 
 CREATE INDEX IF NOT EXISTS idx_block_is_chain_block ON blocks (is_chain_block);
