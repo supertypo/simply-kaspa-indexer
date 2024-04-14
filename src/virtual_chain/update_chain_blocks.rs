@@ -28,6 +28,7 @@ pub fn update_chain_blocks(added_hashes: Vec<RpcHash>, removed_hashes: Vec<RpcHa
             con.transaction(|con| {
                 let mut update_chain_blocks_set: HashSet<&Block> = HashSet::from_iter(updated_chain_blocks_chunk.iter());
                 debug!("Processing {} updated chain blocks", update_chain_blocks_set.len());
+                // Find existing identical blocks and remove them from the insert queue
                 blocks::dsl::blocks
                     .filter(blocks::hash.eq_any(update_chain_blocks_set.iter().map(|&b| b.hash.clone()).collect::<Vec<Vec<u8>>>()))
                     .load::<Block>(con)

@@ -14,7 +14,7 @@ use tokio::time::sleep;
 
 use crate::vars::vars::save_virtual_checkpoint;
 use crate::virtual_chain::update_chain_blocks::update_chain_blocks;
-use crate::virtual_chain::update_transactions::accept_transactions;
+use crate::virtual_chain::update_transactions::update_transactions;
 
 pub async fn process_virtual_chain(checkpoint_hash: String,
                                    synced_queue: Arc<ArrayQueue<bool>>,
@@ -33,7 +33,7 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
         let response = kaspad_client.get_virtual_chain_from_block(kaspa_hashes::Hash::from_slice(checkpoint_hash.as_slice()), true).await
             .expect("Error when invoking GetBlocks");
 
-        checkpoint_hash = accept_transactions(response.accepted_transaction_ids, db_pool.clone()).unwrap_or(checkpoint_hash.clone());
+        checkpoint_hash = update_transactions(response.removed_chain_block_hashes.clone(), response.accepted_transaction_ids, db_pool.clone()).unwrap_or(checkpoint_hash.clone());
         update_chain_blocks(response.added_chain_block_hashes, response.removed_chain_block_hashes, db_pool.clone());
 
         if SystemTime::now().duration_since(checkpoint_hash_last_saved).unwrap().as_secs() > 60 {

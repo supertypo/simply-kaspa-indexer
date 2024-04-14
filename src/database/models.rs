@@ -119,6 +119,20 @@ pub struct Transaction {
     pub accepting_block_hash: Option<Vec<u8>>,
 }
 
+impl Transaction {
+    pub fn new(transaction_id: Vec<u8>, is_accepted: bool, accepting_block_hash: Option<Vec<u8>>) -> Transaction {
+        return Transaction {
+            transaction_id,
+            subnetwork: None,
+            hash: None,
+            mass: None,
+            block_time: None,
+            is_accepted,
+            accepting_block_hash,
+        };
+    }
+}
+
 impl Eq for Transaction {}
 
 impl PartialEq for Transaction {
