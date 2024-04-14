@@ -19,7 +19,6 @@ pub async fn fetch_blocks(checkpoint_hash: String,
                           rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
                           rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) -> Result<(), ()> {
     const INITIAL_SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(15);
-    info!("block checkpoint_hash={}", checkpoint_hash);
     let checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
     let mut low_hash = checkpoint_hash.clone();
     let mut last_sync_check = SystemTime::now();
