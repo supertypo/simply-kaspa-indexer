@@ -49,7 +49,7 @@ pub async fn fetch_blocks(checkpoint_hash: String,
                 let block_hash = b.header.hash;
                 if !synced && block_hash == tip_hash {
                     let time_to_sync = SystemTime::now().duration_since(start_time).unwrap();
-                    info!("Found tip. Successfully synced! (in {}H {:0>2}M {:0>2}S)", time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
+                    info!("Found tip. Block fetcher synced! (in {}:{:0>2}:{:0>2}s)", time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
                     synced = true;
                     synced_queue.push(true).unwrap();
                 }

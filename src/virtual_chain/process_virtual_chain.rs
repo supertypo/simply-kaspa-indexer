@@ -20,7 +20,8 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
                                    synced_queue: Arc<ArrayQueue<bool>>,
                                    kaspad_client: KaspaRpcClient,
                                    db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
-    info!("virtual checkpoint_hash={}", checkpoint_hash);
+    let start_time = SystemTime::now();
+    let mut synced = false;
     let mut checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
     let mut checkpoint_hash_last_saved = SystemTime::now();
 
@@ -40,6 +41,12 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
             save_virtual_checkpoint(hex::encode(checkpoint_hash.clone()), db_pool.clone());
             checkpoint_hash_last_saved = SystemTime::now();
         }
+        if !synced {
+            let time_to_sync = SystemTime::now().duration_since(start_time).unwrap();
+            info!("Virtual chain processor synced! (in {}:{:0>2}:{:0>2}s)", time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
+            synced = true;
+        }
+
         sleep(Duration::from_secs(3)).await;
     }
 }
