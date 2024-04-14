@@ -19,6 +19,7 @@ pub async fn fetch_blocks(checkpoint_hash: String,
                           rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
                           rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) -> Result<(), ()> {
     const INITIAL_SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(15);
+    let start_time = SystemTime::now();
     let checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
     let mut low_hash = checkpoint_hash.clone();
     let mut last_sync_check = SystemTime::now();
@@ -47,7 +48,8 @@ pub async fn fetch_blocks(checkpoint_hash: String,
             for b in response.blocks {
                 let block_hash = b.header.hash;
                 if !synced && block_hash == tip_hash {
-                    info!("Found tip. Successfully synced!");
+                    let time_to_sync = SystemTime::now().duration_since(start_time).unwrap();
+                    info!("Found tip. Successfully synced! (in {}H {:0>2}M {:0>2}S)", time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
                     synced = true;
                     synced_queue.push(true).unwrap();
                 }
