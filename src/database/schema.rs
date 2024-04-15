@@ -56,6 +56,8 @@ diesel::table! {
         index -> Int2,
         previous_outpoint_hash -> Bytea,
         previous_outpoint_index -> Int2,
+        #[max_length = 128]
+        script_public_key_address -> Nullable<Varchar>,
         signature_script -> Bytea,
         sig_op_count -> Int2,
     }
@@ -71,17 +73,6 @@ diesel::table! {
         script_public_key_address -> Varchar,
         #[max_length = 32]
         script_public_key_type -> Varchar,
-    }
-}
-
-diesel::table! {
-    tx_id_address_mapping (id) {
-        id -> Int8,
-        transaction_id -> Bytea,
-        #[max_length = 128]
-        address -> Varchar,
-        block_time -> Int4,
-        is_accepted -> Bool,
     }
 }
 
@@ -103,6 +94,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     transactions,
     transactions_inputs,
     transactions_outputs,
-    tx_id_address_mapping,
     vars,
 );

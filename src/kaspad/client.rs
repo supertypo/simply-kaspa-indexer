@@ -1,5 +1,6 @@
 use std::time::Duration;
 use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_rpc_core::RpcNetworkType;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspa_wrpc_client::client::ConnectOptions;
 use kaspa_wrpc_client::error::Error;
@@ -17,8 +18,9 @@ pub async fn connect_kaspad(url: String, force_network: String) -> Result<KaspaR
 
     if network != force_network {
         return Err(Error::Custom(format!("Network mismatch, expected '{}', actual '{}'", force_network, network)));
-    }
-    if !server_info.is_synced {
+    } else if server_info.network_id.network_type == RpcNetworkType::Mainnet && server_info.virtual_daa_score < 76902846 {
+        return Err(Error::Custom("Invalid network".to_string()));
+    } else if !server_info.is_synced {
         while !client.get_server_info().await?.is_synced {
             warn!("Kaspad {} is NOT synced, retrying in 10 seconds...", server_info.server_version);
             sleep(Duration::from_secs(10)).await;
