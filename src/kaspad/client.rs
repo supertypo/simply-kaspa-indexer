@@ -29,6 +29,9 @@ pub async fn with_retry<F, Fut, T, E>(mut f: F) -> Result<T, E>
             }
             return rpc_result;
         } else {
+            if let Err(ref err) = rpc_result {
+                warn!("{:?}", err);
+            }
             tokio::time::sleep(Duration::from_millis(RETRY_INTERVAL)).await;
         }
     }

@@ -84,7 +84,6 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
                         .filter(blocks_transactions::block_hash.eq(&checkpoint_hash))
                         .count()
                         .get_result::<i64>(con).unwrap();
-                    // FIXME: Also need to wait until all tx inputs and outputs are committed
                     if checkpoint_hash_tx_committed_count == checkpoint_hash_tx_expected_count {
                         save_block_checkpoint(hex::encode(checkpoint_hash.clone()), db_pool.clone());
                         checkpoint_hash = vec![];
