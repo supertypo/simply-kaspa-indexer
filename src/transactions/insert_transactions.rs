@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl, sql_query};
+use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl, sql_query};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
@@ -41,6 +41,7 @@ pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transact
         insert_tx_inputs_queue.extend(transaction_tuple.2.into_iter());
         insert_tx_outputs_queue.extend(transaction_tuple.3.into_iter());
 
+        // insert_block_tx_queue will be larger than insert_tx_queue as multiple blocks can reference the same tx
         if insert_block_tx_queue.len() >= INSERT_QUEUE_SIZE || (insert_block_tx_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
             // Ordered to make sure all items pertaining to a transaction is inserted before linking to blocks, to avoid an incomplete checkpoint
             let rows_affected_tx_outputs = insert_transaction_outputs(insert_tx_outputs_queue, db_pool.clone());
@@ -127,10 +128,13 @@ fn insert_transactions(insert_tx_queue: &mut HashSet<Transaction>, db_pool: Pool
     let con = &mut db_pool.get().expect("Database connection FAILED");
     con.transaction(|con| {
         let start_time = SystemTime::now();
+        sql_query("LOCK TABLE transactions IN EXCLUSIVE MODE").execute(con).expect("Locking table before commit transactions to database FAILED");
+
         debug!("Size before filtering existing transactions: {}", insert_tx_queue.len());
         transactions::dsl::transactions
             .filter(transactions::transaction_id.eq_any(insert_tx_queue.iter()
-                .map(|t| t.transaction_id.clone()).collect::<Vec<Vec<u8>>>()))
+                .map(|t| t.transaction_id.clone()).collect::<Vec<Vec<u8>>>())
+                .and(transactions::subnetwork.is_not_null())) // VCP only writes acceptance data
             .load::<Transaction>(con)
             .unwrap().iter()
             .for_each(|t| { insert_tx_queue.remove(t); });

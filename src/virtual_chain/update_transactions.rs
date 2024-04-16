@@ -2,7 +2,7 @@ extern crate diesel;
 
 use std::collections::HashSet;
 
-use diesel::{Connection, ExpressionMethods, insert_into, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, insert_into, PgConnection, QueryDsl, RunQueryDsl, sql_query};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
 use diesel::upsert::excluded;
@@ -49,6 +49,9 @@ pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_id
             con.transaction(|con| {
                 let mut is_accepted_set: HashSet<&Transaction> = HashSet::from_iter(accepted_chunk.iter());
                 debug!("Processing {} is_accepted transactions", is_accepted_set.len());
+
+                sql_query("LOCK TABLE transactions IN EXCLUSIVE MODE").execute(con).expect("Locking table before commit transactions to database FAILED");
+
                 // Find existing identical transactions and remove them from the insert queue
                 transactions::dsl::transactions
                     .filter(transactions::transaction_id.eq_any(is_accepted_set.iter()
@@ -56,12 +59,14 @@ pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_id
                     .load::<Transaction>(con)
                     .expect("Select transactions from database FAILED").iter()
                     .for_each(|t| {
+                        // Do not consider transactions only committed by the block processor as similar
                         let new_tx = is_accepted_set.get(t).unwrap();
                         if new_tx.is_accepted == t.is_accepted &&
                             new_tx.accepting_block_hash == t.accepting_block_hash {
                             is_accepted_set.remove(t);
                         }
                     });
+
                 //Upsert transactions in case a conflicting tx was persisted
                 rows_affected = insert_into(transactions::dsl::transactions)
                     .values(Vec::from_iter(is_accepted_set))

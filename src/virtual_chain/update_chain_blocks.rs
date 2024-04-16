@@ -2,7 +2,7 @@ extern crate diesel;
 
 use std::collections::HashSet;
 
-use diesel::{Connection, ExpressionMethods, insert_into, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, insert_into, PgConnection, QueryDsl, RunQueryDsl, sql_query};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
 use diesel::upsert::excluded;
@@ -26,6 +26,8 @@ pub fn update_chain_blocks(added_hashes: Vec<RpcHash>, removed_hashes: Vec<RpcHa
         for updated_chain_blocks_chunk in updated_chain_blocks.chunks(INSERT_QUEUE_SIZE) {
             let mut rows_affected = 0;
             con.transaction(|con| {
+                sql_query("LOCK TABLE blocks IN EXCLUSIVE MODE").execute(con).expect("Locking table before commit transactions to database FAILED");
+
                 let mut update_chain_blocks_set: HashSet<&Block> = HashSet::from_iter(updated_chain_blocks_chunk.iter());
                 debug!("Processing {} updated chain blocks", update_chain_blocks_set.len());
                 // Find existing identical blocks and remove them from the insert queue
