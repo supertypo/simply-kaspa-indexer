@@ -22,12 +22,16 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
                                    kaspad_client: KaspaRpcClient,
                                    db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     let start_time = SystemTime::now();
+    let mut last_unsynced_warning = SystemTime::now();
     let mut synced = false;
     let mut checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
     let mut checkpoint_hash_last_saved = SystemTime::now();
 
     while synced_queue.is_empty() || !synced_queue.pop().unwrap() {
-        warn!("Not synced yet, sleeping for 5 seconds...");
+        if SystemTime::now().duration_since(last_unsynced_warning).unwrap().as_secs() > 30 {
+            warn!("Not synced yet, sleeping for 5 seconds...");
+            last_unsynced_warning = SystemTime::now();
+        }
         sleep(Duration::from_secs(5)).await;
     }
     loop {

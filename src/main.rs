@@ -4,11 +4,11 @@ use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
+use clap::{Arg, Command};
 use crossbeam_queue::ArrayQueue;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use dotenvy::dotenv;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{info, warn};
@@ -27,47 +27,109 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 #[tokio::main]
 async fn main() {
-    dotenv().ok();
+    let matches = Command::new("My Application")
+        .version("1.0")
+        .author("Your Name")
+        .about("Connects to a kaspad instance and manages a database")
+        .arg(Arg::new("rpc-url")
+            .short('s')
+            .long("rpc-url")
+            .help("The url to the kaspad instance")
+            .default_value("ws://127.0.0.1:17110")
+            .action(clap::ArgAction::Set))
+        .arg(Arg::new("network")
+            .short('n')
+            .long("network")
+            .help("The network type and suffix, e.g. 'testnet-11'")
+            .default_value("mainnet")
+            .action(clap::ArgAction::Set))
+        .arg(Arg::new("database-url")
+            .short('d')
+            .long("database-url")
+            .help("The url to a PostgreSQL instance")
+            .default_value("postgres://postgres:postgres@localhost:5432/postgres")
+            .action(clap::ArgAction::Set))
+        .arg(Arg::new("log-level")
+            .short('l')
+            .long("log-level")
+            .help("error, warn, info, debug, trace, off")
+            .default_value("info")
+            .action(clap::ArgAction::Set))
+        .arg(Arg::new("from-pruning-point")
+            .short('p')
+            .long("from-pruning-point")
+            .help("Start from the pruning point instead of a virtual parent")
+            .action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("ignore-checkpoint")
+            .short('i')
+            .long("ignore-checkpoint")
+            .help("Start from the pruning point or virtual parent instead of the saved checkpoint")
+            .action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("ddl-auto")
+            .short('c')
+            .long("ddl-auto")
+            .help("Enables automatic creation of database tables (always on for testnet)")
+            .action(clap::ArgAction::SetTrue))
+        .get_matches();
+
+    let rpc_url = matches.get_one::<String>("rpc-url").unwrap().to_string();
+    let network = matches.get_one::<String>("network").unwrap().to_lowercase();
+    let database_url = matches.get_one::<String>("database-url").unwrap();
+    let log_level = matches.get_one::<String>("log-level").unwrap();
+    let from_pruning_point = matches.get_flag("from-pruning-point");
+    let ignore_checkpoint = matches.get_flag("ignore-checkpoint");
+    let ddl_auto = matches.get_flag("ddl-auto");
+
+    env::set_var("RUST_LOG", log_level);
     env_logger::builder()
         .format_timestamp_millis()
         .init();
 
-    let db_url = env::var("DATABASE_URL").unwrap_or(String::from("postgres://postgres:postgres@localhost:5432/postgres"));
     let db_pool = Pool::builder()
-        .test_on_check_out(true)
         .connection_timeout(Duration::from_secs(10))
         .max_size(20)
-        .build(ConnectionManager::<PgConnection>::new(&db_url))
+        .build(ConnectionManager::<PgConnection>::new(database_url))
         .expect("Database pool FAILED");
     let db_con = &mut db_pool.get()
         .expect("Database connection FAILED");
     info!("Connection to database established");
 
-    if env::var("DEVELOPMENT").unwrap().eq_ignore_ascii_case("true") {
-        info!("Applying pending migrations");
+    if ddl_auto || network != "mainnet" {
+        info!("Applying pending diesel migrations");
         db_con.run_pending_migrations(MIGRATIONS)
-            .expect("Unable to apply pending migrations");
+            .expect("Unable to apply pending diesel migrations");
     }
 
-    let url = env::var("KASPAD_RPC_URL").unwrap_or(String::from("ws://localhost:17110"));
-    let network = env::var("KASPAD_NETWORK").unwrap_or(String::from("mainnet"));
-    let kaspad_client = connect_kaspad(url, network).await.expect("Kaspad connection FAILED");
+    let kaspad_client = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
 
-    start_processing(db_pool, kaspad_client).await.expect("Unreachable");
+    start_processing(ignore_checkpoint, from_pruning_point, db_pool, kaspad_client).await.expect("Unreachable");
 }
 
-async fn start_processing(db_pool: Pool<ConnectionManager<PgConnection>>, kaspad_client: KaspaRpcClient) -> Result<(), ()> {
+async fn start_processing(ignore_checkpoint: bool,
+                          from_pruning_point: bool,
+                          db_pool: Pool<ConnectionManager<PgConnection>>,
+                          kaspad_client: KaspaRpcClient) -> Result<(), ()> {
     let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
-    info!("BlockDagInfo received: pruning_point={}",block_dag_info.pruning_point_hash);
-
-    let block_checkpoint_hash = load_block_checkpoint(db_pool.clone()).unwrap_or_else(|| {
-        warn!("block_checkpoint_hash not found, using pruning_point_hash");
-        block_dag_info.pruning_point_hash.to_string()
-    });
-    let virtual_checkpoint_hash = load_virtual_checkpoint(db_pool.clone()).unwrap_or_else(|| {
-        warn!("virtual_checkpoint_hash not found, using pruning_point_hash");
-        block_dag_info.pruning_point_hash.to_string()
-    });
+    let checkpoint_hash;
+    if from_pruning_point {
+        checkpoint_hash = block_dag_info.pruning_point_hash.to_string();
+        info!("BlockDagInfo received: pruning_point={}", checkpoint_hash);
+    } else {
+        checkpoint_hash = block_dag_info.virtual_parent_hashes.get(0).unwrap().to_string();
+        info!("BlockDagInfo received: virtual_parent_hash={}", checkpoint_hash);
+    }
+    let mut block_checkpoint_hash = checkpoint_hash.clone();
+    let mut virtual_checkpoint_hash = checkpoint_hash.clone();
+    if !ignore_checkpoint {
+        block_checkpoint_hash = load_block_checkpoint(db_pool.clone()).unwrap_or_else(|| {
+            warn!("block_checkpoint_hash not found");
+            block_checkpoint_hash.clone()
+        });
+        virtual_checkpoint_hash = load_virtual_checkpoint(db_pool.clone()).unwrap_or_else(|| {
+            warn!("virtual_checkpoint_hash not found");
+            block_checkpoint_hash.clone()
+        });
+    }
 
     let rpc_blocks_queue = Arc::new(ArrayQueue::new(3_000));
     let rpc_transactions_queue = Arc::new(ArrayQueue::new(3_000));
