@@ -18,7 +18,8 @@ use crate::database::schema::{subnetworks};
 
 pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
                                   db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction)>>,
-                                  db_transactions_inputs_outputs_queue: Arc<ArrayQueue<(Vec<TransactionInput>, Vec<TransactionOutput>)>>,
+                                  db_transactions_inputs_queue: Arc<ArrayQueue<TransactionInput>>,
+                                  db_transactions_outputs_queue: Arc<ArrayQueue<TransactionOutput>>,
                                   db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     let mut subnetwork_map: HashMap<String, i32> = HashMap::new();
     let con = &mut db_pool.get().expect("Database connection FAILED");
@@ -67,36 +68,45 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
             };
 
-            let db_transaction_inputs = t.inputs.into_iter().enumerate().map(|(i, input)| TransactionInput {
-                transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
-                index: i as i16,
-                previous_outpoint_hash: input.previous_outpoint.transaction_id.as_bytes().to_vec(),
-                previous_outpoint_index: input.previous_outpoint.index.to_i16().unwrap(),
-                script_public_key_address: None,
-                signature_script: input.signature_script.clone(),
-                sig_op_count: input.sig_op_count.to_i16().unwrap(),
-            }).collect::<Vec<TransactionInput>>();
+            // Process transactions inputs
+            for (i, input) in t.inputs.iter().enumerate() {
+                let db_transaction_input = TransactionInput {
+                    transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
+                    index: i as i16,
+                    previous_outpoint_hash: input.previous_outpoint.transaction_id.as_bytes().to_vec(),
+                    previous_outpoint_index: input.previous_outpoint.index.to_i16().unwrap(),
+                    script_public_key_address: None,
+                    signature_script: input.signature_script.clone(),
+                    sig_op_count: input.sig_op_count.to_i16().unwrap(),
+                };
+                while db_transactions_inputs_queue.is_full() {
+                    warn!("DB transactions_inputs queue is full");
+                    sleep(Duration::from_secs(2)).await;
+                }
+                let _ = db_transactions_inputs_queue.push(db_transaction_input);
+            }
 
-            let db_transaction_outputs = t.outputs.into_iter().enumerate().map(|(i, output)| TransactionOutput {
-                transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
-                index: i as i16,
-                amount: output.value as i64,
-                script_public_key: output.script_public_key.script().to_vec(),
-                script_public_key_address: output.verbose_data.clone().unwrap().script_public_key_address.to_string(),
-                script_public_key_type: output.verbose_data.clone().unwrap().script_public_key_type.to_string(),
-            }).collect::<Vec<TransactionOutput>>();
-
+            // Process transactions outputs
+            for (i, output) in t.outputs.iter().enumerate() {
+                let db_transaction_output = TransactionOutput {
+                    transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
+                    index: i as i16,
+                    amount: output.value as i64,
+                    script_public_key: output.script_public_key.script().to_vec(),
+                    script_public_key_address: output.verbose_data.clone().unwrap().script_public_key_address.to_string(),
+                    script_public_key_type: output.verbose_data.clone().unwrap().script_public_key_type.to_string()
+                };
+                while db_transactions_outputs_queue.is_full() {
+                    warn!("DB transactions_outputs queue is full");
+                    sleep(Duration::from_secs(2)).await;
+                }
+                let _ = db_transactions_outputs_queue.push(db_transaction_output);
+            }
             while db_transactions_queue.is_full() {
                 warn!("DB transactions queue is full");
                 sleep(Duration::from_secs(2)).await;
             }
             let _ = db_transactions_queue.push((db_transaction, db_block_transaction));
-
-            while db_transactions_inputs_outputs_queue.is_full() {
-                warn!("DB transactions queue is full");
-                sleep(Duration::from_secs(2)).await;
-            }
-            let _ = db_transactions_inputs_outputs_queue.push((db_transaction_inputs, db_transaction_outputs));
         }
     }
 }
