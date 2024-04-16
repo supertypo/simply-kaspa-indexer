@@ -51,7 +51,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 subnetwork_map.insert(subnetwork_id.clone(), id);
                 debug!("Inserted new subnetwork, id: {} subnetwork_id: {}", id, subnetwork_id)
             }
-            // TODO: Should possibly filter existing transactions here to avoid doing unneccessary and more expensive input/output processing later
+
             let db_transaction = Transaction {
                 transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
                 subnetwork: Some(subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone()),

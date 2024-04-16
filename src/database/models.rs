@@ -153,7 +153,7 @@ impl Hash for Transaction {
     }
 }
 
-#[derive(Queryable, Selectable, Insertable, Clone, Eq, PartialEq, Hash)]
+#[derive(Queryable, Selectable, Insertable, QueryableByName, Clone, Eq, PartialEq, Hash)]
 #[diesel(table_name = crate::database::schema::blocks_transactions)]
 #[diesel(primary_key(block_hash, transaction_id))]
 pub struct BlockTransaction {

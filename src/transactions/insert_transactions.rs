@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl, sql_query};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
@@ -30,6 +30,7 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<(Transact
         if insert_block_tx_queue.len() >= INSERT_QUEUE_SIZE || (insert_block_tx_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
             let con = &mut db_pool.get().expect("Database connection FAILED");
             con.transaction(|con| {
+
                 // Find existing identical transactions and remove them from the insert queue
                 transactions::dsl::transactions
                     .filter(transactions::transaction_id.eq_any(insert_tx_queue.iter()
@@ -45,10 +46,10 @@ pub async fn insert_transactions(db_transactions_queue: Arc<ArrayQueue<(Transact
                             insert_tx_queue.remove(t);
                         }
                     });
+
                 // Find existing identical block to transaction mappings and remove them from the insert queue
-                blocks_transactions::dsl::blocks_transactions
-                    .filter(blocks_transactions::block_hash.eq_any(insert_block_tx_queue.iter().map(|bt| bt.block_hash.clone()).collect::<Vec<Vec<u8>>>())
-                        .and(blocks_transactions::transaction_id.eq_any(insert_block_tx_queue.iter().map(|bt| bt.transaction_id.clone()).collect::<Vec<Vec<u8>>>())))
+                sql_query(format!("SELECT * FROM blocks_transactions WHERE (block_hash, transaction_id) IN ({})",
+                                  insert_block_tx_queue.iter().map(|bt| format!("('\\x{}', '\\x{}')", hex::encode(bt.block_hash.clone()), hex::encode(bt.transaction_id.clone()))).collect::<Vec<String>>().join(", ")))
                     .load::<BlockTransaction>(con)
                     .unwrap().iter()
                     .for_each(|bt| { insert_block_tx_queue.remove(bt); });
