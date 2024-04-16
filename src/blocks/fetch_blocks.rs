@@ -12,6 +12,7 @@ use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, trace, warn};
 use log::info;
 use tokio::time::sleep;
+use crate::kaspad::client::with_retry;
 
 pub async fn fetch_blocks(checkpoint_hash: String,
                           kaspad_client: KaspaRpcClient,
@@ -28,7 +29,7 @@ pub async fn fetch_blocks(checkpoint_hash: String,
     loop {
         let last_fetch_time = SystemTime::now();
         info!("Getting blocks with low_hash={}", hex::encode(low_hash.clone()));
-        let response = kaspad_client.get_blocks(Some(Hash::from_slice(low_hash.as_slice())), true, true).await.expect("Error when invoking GetBlocks");
+        let response = with_retry(|| kaspad_client.get_blocks(Some(Hash::from_slice(low_hash.as_slice())), true, true)).await.expect("Error when invoking GetBlocks");
         info!("Received {} blocks", response.blocks.len());
         trace!("Block hashes: \n{:#?}", response.block_hashes);
 

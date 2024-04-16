@@ -1,11 +1,39 @@
+use std::fmt::Debug;
+use std::future::Future;
 use std::time::Duration;
+
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::RpcNetworkType;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspa_wrpc_client::client::ConnectOptions;
 use kaspa_wrpc_client::error::Error;
-use log::{info, warn};
+use log::{error, info, warn};
 use tokio::time::sleep;
+
+pub async fn with_retry<F, Fut, T, E>(mut f: F) -> Result<T, E>
+    where
+        F: FnMut() -> Fut + Send,
+        Fut: Future<Output=Result<T, E>> + Send,
+        T: Send,
+        E: Debug,
+{
+    const MAX_RETRIES: usize = 10;
+    const RETRY_INTERVAL: u64 = 3000;
+    for i in 0..MAX_RETRIES {
+        let rpc_result = f().await;
+        if rpc_result.is_ok() {
+            return rpc_result;
+        } else if i == MAX_RETRIES - 1 {
+            if let Err(ref err) = rpc_result {
+                error!("Function still failing after {} retries: {:?}", MAX_RETRIES, err);
+            }
+            return rpc_result;
+        } else {
+            tokio::time::sleep(Duration::from_millis(RETRY_INTERVAL)).await;
+        }
+    }
+    unreachable!();
+}
 
 pub async fn connect_kaspad(url: String, force_network: String) -> Result<KaspaRpcClient, Error> {
     info!("Connecting to kaspad {}", url);

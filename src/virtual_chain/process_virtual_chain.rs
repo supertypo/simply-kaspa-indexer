@@ -11,6 +11,7 @@ use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{info, warn};
 use tokio::time::sleep;
+use crate::kaspad::client::with_retry;
 
 use crate::vars::vars::save_virtual_checkpoint;
 use crate::virtual_chain::update_chain_blocks::update_chain_blocks;
@@ -31,7 +32,7 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
     }
     loop {
         info!("Getting virtual chain from start_hash={}", hex::encode(checkpoint_hash.clone()));
-        let response = kaspad_client.get_virtual_chain_from_block(kaspa_hashes::Hash::from_slice(checkpoint_hash.as_slice()), true).await
+        let response = with_retry(|| kaspad_client.get_virtual_chain_from_block(kaspa_hashes::Hash::from_slice(checkpoint_hash.as_slice()), true)).await
             .expect("Error when invoking GetBlocks");
 
         checkpoint_hash = update_transactions(response.removed_chain_block_hashes.clone(), response.accepted_transaction_ids, db_pool.clone()).unwrap_or(checkpoint_hash.clone());
