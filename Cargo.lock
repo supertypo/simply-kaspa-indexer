@@ -1325,6 +1325,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1364,7 +1373,7 @@ dependencies = [
  "faster-hex 0.6.1",
  "futures-util",
  "getrandom",
- "itertools",
+ "itertools 0.11.0",
  "js-sys",
  "kaspa-addresses",
  "kaspa-core",
@@ -1461,6 +1470,7 @@ dependencies = [
  "diesel_migrations",
  "env_logger",
  "hex",
+ "itertools 0.12.1",
  "kaspa-hashes",
  "kaspa-rpc-core",
  "kaspa-wrpc-client",
@@ -1567,7 +1577,7 @@ dependencies = [
  "derive_more",
  "futures",
  "futures-util",
- "itertools",
+ "itertools 0.11.0",
  "kaspa-addresses",
  "kaspa-consensus-core",
  "kaspa-core",
@@ -1641,7 +1651,7 @@ dependencies = [
  "blake2b_simd",
  "borsh",
  "indexmap",
- "itertools",
+ "itertools 0.11.0",
  "kaspa-addresses",
  "kaspa-consensus-core",
  "kaspa-hashes",
@@ -1677,7 +1687,7 @@ dependencies = [
  "event-listener 2.5.3",
  "faster-hex 0.6.1",
  "ipnet",
- "itertools",
+ "itertools 0.11.0",
  "log",
  "parking_lot",
  "rlimit",
@@ -1859,7 +1869,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e960ee0e7e1b8eec9229f5b20d6b191762574225144ea638eb961d065c97b55d"
 dependencies = [
  "hashbrown 0.14.3",
- "itertools",
+ "itertools 0.11.0",
  "libm",
  "ryu",
 ]
@@ -1870,7 +1880,7 @@ version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "770aaf1a4d59a82ed3d8644eb66aff7492a6dd7476def275a922d04d77ca8e57"
 dependencies = [
- "itertools",
+ "itertools 0.11.0",
  "libm",
  "malachite-base",
 ]

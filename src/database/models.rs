@@ -169,9 +169,16 @@ pub struct TransactionInput {
     pub index: i16,
     pub previous_outpoint_hash: Vec<u8>,
     pub previous_outpoint_index: i16,
-    pub script_public_key_address: Option<String>,
     pub signature_script: Vec<u8>,
     pub sig_op_count: i16,
+}
+
+#[derive(Selectable, QueryableByName, Clone, Eq, PartialEq, Hash)]
+#[diesel(table_name = crate::database::schema::transactions_inputs)]
+#[diesel(primary_key(transaction_id, index))]
+pub struct TransactionInputKey {
+    pub transaction_id: Vec<u8>,
+    pub index: i16,
 }
 
 impl Debug for TransactionInput {
@@ -181,7 +188,6 @@ impl Debug for TransactionInput {
         output.push(format!("  index: {}", &self.index));
         output.push(format!("  previous_outpoint_hash: {}", hex::encode(&self.previous_outpoint_hash)));
         output.push(format!("  previous_outpoint_index: {}", &self.previous_outpoint_index));
-        output.push(format!("  script_public_key_address: {}", &self.script_public_key_address.clone().unwrap_or_default()));
         output.push(format!("  sig_op_count: {}", &self.sig_op_count));
         output.push("}".to_string());
         write!(f, "{}", output.join("\n"))
@@ -194,7 +200,6 @@ impl Similar for TransactionInput {
             && self.index == other.index
             && self.previous_outpoint_hash == other.previous_outpoint_hash
             && self.previous_outpoint_index == other.previous_outpoint_index
-            // Ignores script_public_key_address as that is newer present when doing the exists check
             && self.signature_script == other.signature_script
             && self.sig_op_count == other.sig_op_count;
     }
@@ -226,6 +231,14 @@ pub struct TransactionOutput {
     pub script_public_key: Vec<u8>,
     pub script_public_key_address: String,
     pub script_public_key_type: String,
+}
+
+#[derive(Selectable, QueryableByName, Clone, Eq, PartialEq, Hash)]
+#[diesel(table_name = crate::database::schema::transactions_outputs)]
+#[diesel(primary_key(transaction_id, index))]
+pub struct TransactionOutputKey {
+    pub transaction_id: Vec<u8>,
+    pub index: i16,
 }
 
 impl Similar for TransactionOutput {

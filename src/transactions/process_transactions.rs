@@ -74,7 +74,6 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 index: i as i16,
                 previous_outpoint_hash: input.previous_outpoint.transaction_id.as_bytes().to_vec(),
                 previous_outpoint_index: input.previous_outpoint.index.to_i16().unwrap(),
-                script_public_key_address: None,
                 signature_script: input.signature_script.clone(),
                 sig_op_count: input.sig_op_count.to_i16().unwrap(),
             }).collect::<Vec<TransactionInput>>();

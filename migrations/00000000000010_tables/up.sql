@@ -47,8 +47,7 @@ CREATE TABLE IF NOT EXISTS "transactions"
     mass                 INTEGER,
     block_time           INTEGER,
     is_accepted          BOOLEAN NOT NULL,
-    accepting_block_hash BYTEA,
-    CONSTRAINT fk_subnetwork FOREIGN KEY (subnetwork) REFERENCES subnetworks (id)
+    accepting_block_hash BYTEA
 );
 
 CREATE INDEX IF NOT EXISTS block_time_idx ON transactions (block_time);
@@ -59,8 +58,7 @@ CREATE TABLE IF NOT EXISTS "blocks_transactions"
 (
     block_hash     BYTEA NOT NULL,
     transaction_id BYTEA NOT NULL,
-    CONSTRAINT pk_blocks_transactions PRIMARY KEY (block_hash, transaction_id),
-    CONSTRAINT fk_transaction_id FOREIGN KEY (transaction_id) REFERENCES transactions (transaction_id)
+    CONSTRAINT pk_blocks_transactions PRIMARY KEY (block_hash, transaction_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_block_hash ON blocks_transactions (block_hash);
@@ -73,7 +71,6 @@ CREATE TABLE IF NOT EXISTS "transactions_inputs"
     index                     SMALLINT     NOT NULL,
     previous_outpoint_hash    BYTEA        NOT NULL,
     previous_outpoint_index   SMALLINT     NOT NULL,
-    script_public_key_address VARCHAR(128),
     signature_script          BYTEA        NOT NULL,
     sig_op_count              SMALLINT     NOT NULL,
     CONSTRAINT pk_transactions_inputs PRIMARY KEY (transaction_id, index)

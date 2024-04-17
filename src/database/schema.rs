@@ -56,8 +56,6 @@ diesel::table! {
         index -> Int2,
         previous_outpoint_hash -> Bytea,
         previous_outpoint_index -> Int2,
-        #[max_length = 128]
-        script_public_key_address -> Nullable<Varchar>,
         signature_script -> Bytea,
         sig_op_count -> Int2,
     }
@@ -83,9 +81,6 @@ diesel::table! {
         value -> Text,
     }
 }
-
-diesel::joinable!(blocks_transactions -> transactions (transaction_id));
-diesel::joinable!(transactions -> subnetworks (subnetwork));
 
 diesel::allow_tables_to_appear_in_same_query!(
     blocks,
