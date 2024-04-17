@@ -165,23 +165,11 @@ fn insert_block_transaction(insert_block_tx_queue: &mut HashSet<BlockTransaction
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
     con.transaction(|con| {
-        let start_time = SystemTime::now();
-        debug!("Size before filtering existing block_transactions: {}", insert_block_tx_queue.len());
-        sql_query(format!("SELECT * FROM blocks_transactions WHERE (block_hash, transaction_id) IN ({})",
-                          insert_block_tx_queue.iter().map(|bt| format!("('\\x{}', '\\x{}')", hex::encode(bt.block_hash.clone()), hex::encode(bt.transaction_id.clone()))).collect::<Vec<String>>().join(", ")))
-            .load::<BlockTransaction>(con)
-            .unwrap().iter()
-            .for_each(|bt| { insert_block_tx_queue.remove(bt); });
-        debug!("Size after filtering existing block_transactions: {}, took {}ms", insert_block_tx_queue.len(), SystemTime::now().duration_since(start_time).unwrap().as_millis());
-
-        //Ignore conflicts as any conflicting rows will be identical
         rows_affected = insert_into(blocks_transactions::dsl::blocks_transactions)
             .values(Vec::from_iter(insert_block_tx_queue.iter()))
-            .on_conflict(on_constraint("pk_blocks_transactions"))
-            .do_nothing()
+            .on_conflict_do_nothing() //Ignore conflicts as any conflicting rows will be identical
             .execute(con)
             .expect("Commit block/transaction mappings to database FAILED");
-
         Ok::<_, Error>(())
     }).expect("Commit transactions to database FAILED");
     return rows_affected;
