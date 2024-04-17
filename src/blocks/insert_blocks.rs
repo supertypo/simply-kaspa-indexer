@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl, sql_query};
+use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl, sql_query};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
@@ -38,11 +38,10 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
 
                 // Find existing blocks and remove them from the insert queue
                 blocks::dsl::blocks
-                    .filter(blocks::hash.eq_any(insert_queue.iter().map(|b| b.hash.clone()).collect::<Vec<Vec<u8>>>())
-                        .and(blocks::accepted_id_merkle_root.is_not_null())) // VCP only writes is_chain_block
+                    .filter(blocks::hash.eq_any(insert_queue.iter().map(|b| b.hash.clone()).collect::<Vec<Vec<u8>>>()))
                     .load::<Block>(con)
                     .unwrap().iter()
-                    .for_each(|b| { insert_queue.remove(b); });
+                    .for_each(|b| if b.accepted_id_merkle_root.is_some() { insert_queue.remove(b); }); // VCP only writes is_chain_block
 
                 rows_affected = insert_into(blocks::dsl::blocks)
                     .values(Vec::from_iter(insert_queue.iter()))

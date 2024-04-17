@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl, sql_query};
+use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl, sql_query};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
@@ -136,12 +136,10 @@ fn insert_transactions(transactions: &mut HashSet<Transaction>, db_pool: Pool<Co
         let before_filter_len = transactions.len();
         debug!("Size before filtering existing transactions: {}", transactions.len());
         transactions::dsl::transactions
-            .filter(transactions::transaction_id.eq_any(transactions.iter()
-                .map(|t| t.transaction_id.clone()).collect::<Vec<Vec<u8>>>())
-                .and(transactions::subnetwork.is_not_null())) // VCP only writes acceptance data
+            .filter(transactions::transaction_id.eq_any(transactions.iter().map(|t| t.transaction_id.clone()).collect::<Vec<Vec<u8>>>()))
             .load::<Transaction>(con)
             .unwrap().iter()
-            .for_each(|t| { transactions.remove(t); });
+            .for_each(|t| if t.subnetwork.is_some() { transactions.remove(t); }); // VCP only writes acceptance data
         debug!("Filtered {} existing transactions in {}ms", before_filter_len - transactions.len(), SystemTime::now().duration_since(start_time).unwrap().as_millis());
 
         let start_time = SystemTime::now();
