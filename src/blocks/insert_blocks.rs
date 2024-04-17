@@ -5,11 +5,10 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl, sql_query};
+use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
-use diesel::upsert::excluded;
 use log::{error, info};
 use tokio::time::sleep;
 
@@ -34,41 +33,11 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
         if insert_queue.len() >= INSERT_QUEUE_SIZE || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
             let con = &mut db_pool.get().expect("Database connection FAILED");
             con.transaction(|con| {
-                sql_query("LOCK TABLE blocks IN EXCLUSIVE MODE").execute(con).expect("Locking table before commit transactions to database FAILED");
-
-                // Find existing blocks and remove them from the insert queue
-                blocks::dsl::blocks
-                    .filter(blocks::hash.eq_any(insert_queue.iter().map(|b| b.hash.clone()).collect::<Vec<Vec<u8>>>()))
-                    .load::<Block>(con)
-                    .unwrap().iter()
-                    .for_each(|b| if b.accepted_id_merkle_root.is_some() { insert_queue.remove(b); }); // VCP only writes is_chain_block
-
                 rows_affected = insert_into(blocks::dsl::blocks)
                     .values(Vec::from_iter(insert_queue.iter()))
-                    .on_conflict(blocks::hash)
-                    .do_update()
-                    .set((
-                        blocks::accepted_id_merkle_root.eq(excluded(blocks::accepted_id_merkle_root)),
-                        blocks::difficulty.eq(excluded(blocks::difficulty)),
-                        // Keep is_chain_block, as it might already be touched by the virtual chain processor
-                        blocks::merge_set_blues_hashes.eq(excluded(blocks::merge_set_blues_hashes)),
-                        blocks::merge_set_reds_hashes.eq(excluded(blocks::merge_set_reds_hashes)),
-                        blocks::selected_parent_hash.eq(excluded(blocks::selected_parent_hash)),
-                        blocks::bits.eq(excluded(blocks::bits)),
-                        blocks::blue_score.eq(excluded(blocks::blue_score)),
-                        blocks::blue_work.eq(excluded(blocks::blue_work)),
-                        blocks::daa_score.eq(excluded(blocks::daa_score)),
-                        blocks::hash_merkle_root.eq(excluded(blocks::hash_merkle_root)),
-                        blocks::nonce.eq(excluded(blocks::nonce)),
-                        blocks::parents.eq(excluded(blocks::parents)),
-                        blocks::pruning_point.eq(excluded(blocks::pruning_point)),
-                        blocks::timestamp.eq(excluded(blocks::timestamp)),
-                        blocks::utxo_commitment.eq(excluded(blocks::utxo_commitment)),
-                        blocks::version.eq(excluded(blocks::version)),
-                    ))
+                    .on_conflict_do_nothing()
                     .execute(con)
                     .expect("Commit blocks to database FAILED");
-
                 Ok::<_, Error>(())
             }).expect("Commit blocks to database FAILED");
 

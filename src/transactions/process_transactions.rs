@@ -8,13 +8,12 @@ use bigdecimal::ToPrimitive;
 use crossbeam_queue::ArrayQueue;
 use diesel::{insert_into, PgConnection, RunQueryDsl};
 use diesel::r2d2::{ConnectionManager, Pool};
-
 use kaspa_rpc_core::RpcTransaction;
-use log::{debug, info, trace, warn};
+use log::{debug, info};
 use tokio::time::sleep;
 
 use crate::database::models::{BlockTransaction, Subnetwork, SubnetworkInsertable, Transaction, TransactionInput, TransactionOutput};
-use crate::database::schema::{subnetworks};
+use crate::database::schema::subnetworks;
 
 pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
                                   db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>)>>,
@@ -30,8 +29,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
     loop {
         let transactions_option = rpc_transactions_queue.pop();
         if transactions_option.is_none() {
-            trace!("RPC transactions queue is empty");
-            sleep(Duration::from_secs(1)).await;
+            sleep(Duration::from_millis(100)).await;
             continue;
         }
         let transactions = transactions_option.unwrap();
@@ -58,8 +56,6 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 hash: Some(verbose_data.hash.as_bytes().to_vec()),
                 mass: Some(verbose_data.mass as i32),
                 block_time: Some((verbose_data.block_time / 1000) as i32),
-                is_accepted: false, // Acceptance data is set by the virtual chain processor
-                accepting_block_hash: None,
             };
 
             // Create block to transaction relation
@@ -89,8 +85,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
             }).collect::<Vec<TransactionOutput>>();
 
             while db_transactions_queue.is_full() {
-                warn!("DB transactions queue is full");
-                sleep(Duration::from_secs(2)).await;
+                sleep(Duration::from_millis(100)).await;
             }
             let _ = db_transactions_queue.push((db_transaction, db_block_transaction, db_transaction_inputs, db_transaction_outputs));
         }

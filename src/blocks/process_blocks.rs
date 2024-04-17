@@ -4,7 +4,6 @@ use std::time::Duration;
 use bigdecimal::BigDecimal;
 use crossbeam_queue::ArrayQueue;
 use kaspa_rpc_core::RpcBlock;
-use log::{trace, warn};
 use tokio::time::sleep;
 
 use crate::database::models::Block;
@@ -14,7 +13,6 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
     loop {
         let block_option = rpc_blocks_queue.pop();
         if block_option.is_none() {
-            trace!("RPC blocks queue is empty");
             sleep(Duration::from_millis(100)).await;
             continue;
         }
@@ -23,7 +21,6 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
             hash: block.header.hash.as_bytes().to_vec(),
             accepted_id_merkle_root: Some(block.header.accepted_id_merkle_root.as_bytes().to_vec()),
             difficulty: block.verbose_data.as_ref().map(|v| v.difficulty),
-            is_chain_block: block.verbose_data.as_ref().map(|v| v.is_chain_block).unwrap_or(false),
             merge_set_blues_hashes: block.verbose_data.as_ref().map(|v| v.merge_set_blues_hashes.iter()
                 .map(|w| Some(w.as_bytes().to_vec())).collect()),
             merge_set_reds_hashes: block.verbose_data.as_ref().map(|v| v.merge_set_reds_hashes.iter()
@@ -42,8 +39,7 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
             version: Some(block.header.version as i16),
         };
         while db_blocks_queue.is_full() {
-            warn!("DB blocks queue is full");
-            sleep(Duration::from_secs(2)).await;
+            sleep(Duration::from_millis(100)).await;
         }
         let _ = db_blocks_queue.push((db_block, block.verbose_data.as_ref()
             .map(|vd| vd.transaction_ids.iter()
