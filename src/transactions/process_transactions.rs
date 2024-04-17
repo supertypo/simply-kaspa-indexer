@@ -44,7 +44,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                     .values(SubnetworkInsertable { subnetwork_id: subnetwork_id.clone() })
                     .returning(subnetworks::id)
                     .get_results(&mut db_pool.get().expect("Database connection FAILED"))
-                    .expect("Commit transactions to database FAILED")[0];
+                    .expect("Commit transactions FAILED")[0];
                 subnetwork_map.insert(subnetwork_id.clone(), id);
                 debug!("Inserted new subnetwork, id: {} subnetwork_id: {}", id, subnetwork_id)
             }
@@ -52,7 +52,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
             // Create transaction
             let db_transaction = Transaction {
                 transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
-                subnetwork: Some(subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone()),
+                subnetwork_id: Some(subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone()),
                 hash: Some(verbose_data.hash.as_bytes().to_vec()),
                 mass: Some(verbose_data.mass as i32),
                 block_time: Some((verbose_data.block_time / 1000) as i32),
@@ -80,8 +80,8 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 index: i as i16,
                 amount: output.value as i64,
                 script_public_key: output.script_public_key.script().to_vec(),
-                script_public_key_address: output.verbose_data.clone().unwrap().script_public_key_address.to_string(),
-                script_public_key_type: output.verbose_data.clone().unwrap().script_public_key_type.to_string(),
+                script_public_key_address: output.verbose_data.clone().unwrap().script_public_key_address.payload_to_string().as_bytes().to_vec(),
+                script_public_key_type: output.verbose_data.clone().unwrap().script_public_key_type.to_string().as_bytes().to_vec(),
             }).collect::<Vec<TransactionOutput>>();
 
             while db_transactions_queue.is_full() {

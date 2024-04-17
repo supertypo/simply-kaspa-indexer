@@ -6,8 +6,8 @@ use diesel::result::Error;
 use kaspa_rpc_core::RpcHash;
 use log::{debug, info, trace};
 
-use crate::database::models::BlockChain;
-use crate::database::schema::blocks_chains;
+use crate::database::models::ChainBlock;
+use crate::database::schema::chain_blocks;
 
 pub fn update_chain_blocks(added_hashes: Vec<RpcHash>, removed_hashes: Vec<RpcHash>, db_pool: Pool<ConnectionManager<PgConnection>>) {
     const INSERT_QUEUE_SIZE: usize = 7500;
@@ -23,28 +23,28 @@ pub fn update_chain_blocks(added_hashes: Vec<RpcHash>, removed_hashes: Vec<RpcHa
             let mut rows_affected = 0;
             con.transaction(|con| {
                 debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
-                rows_affected = delete(blocks_chains::dsl::blocks_chains)
-                    .filter(blocks_chains::block_hash.eq_any(removed_blocks_chunk))
+                rows_affected = delete(chain_blocks::dsl::chain_blocks)
+                    .filter(chain_blocks::block_hash.eq_any(removed_blocks_chunk))
                     .execute(con)
-                    .expect("Commit removed chain blocks to database FAILED");
+                    .expect("Commit removed chain blocks FAILED");
                 Ok::<_, Error>(())
-            }).expect("Commit removed chain blocks to database FAILED");
-            info!("Committed {} removed chain blocks to database", rows_affected);
+            }).expect("Commit removed chain blocks FAILED");
+            info!("Committed {} removed chain blocks", rows_affected);
         }
 
-        let added_blocks = added_hashes.into_iter().map(|h| BlockChain { block_hash: h.as_bytes().to_vec() }).collect::<Vec<BlockChain>>();
+        let added_blocks = added_hashes.into_iter().map(|h| ChainBlock { block_hash: h.as_bytes().to_vec() }).collect::<Vec<ChainBlock>>();
         for added_blocks_chunk in added_blocks.chunks(INSERT_QUEUE_SIZE) {
             let mut rows_affected = 0;
             con.transaction(|con| {
                 debug!("Processing {} added chain blocks", added_blocks_chunk.len());
-                rows_affected = insert_into(blocks_chains::dsl::blocks_chains)
+                rows_affected = insert_into(chain_blocks::dsl::chain_blocks)
                     .values(added_blocks_chunk)
                     .on_conflict_do_nothing()
                     .execute(con)
-                    .expect("Commit added chain blocks to database FAILED");
+                    .expect("Commit added chain blocks FAILED");
                 Ok::<_, Error>(())
-            }).expect("Commit added chain blocks to database FAILED");
-            info!("Committed {} added chain blocks to database", rows_affected);
+            }).expect("Commit added chain blocks FAILED");
+            info!("Committed {} added chain blocks", rows_affected);
         }
     }
 }

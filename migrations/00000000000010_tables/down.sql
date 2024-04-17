@@ -4,6 +4,6 @@ DROP TABLE IF EXISTS "blocks_transactions";
 DROP TABLE IF EXISTS "transactions_acceptances";
 DROP TABLE IF EXISTS "transactions";
 DROP TABLE IF EXISTS "subnetworks";
-DROP TABLE IF EXISTS "blocks_chains";
+DROP TABLE IF EXISTS "chain_blocks";
 DROP TABLE IF EXISTS "blocks";
 DROP TABLE IF EXISTS "vars";

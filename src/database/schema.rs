@@ -23,15 +23,15 @@ diesel::table! {
 }
 
 diesel::table! {
-    blocks_chains (block_hash) {
+    blocks_transactions (block_hash, transaction_id) {
         block_hash -> Bytea,
+        transaction_id -> Bytea,
     }
 }
 
 diesel::table! {
-    blocks_transactions (block_hash, transaction_id) {
+    chain_blocks (block_hash) {
         block_hash -> Bytea,
-        transaction_id -> Bytea,
     }
 }
 
@@ -46,7 +46,7 @@ diesel::table! {
 diesel::table! {
     transactions (transaction_id) {
         transaction_id -> Bytea,
-        subnetwork -> Nullable<Int4>,
+        subnetwork_id -> Nullable<Int4>,
         hash -> Nullable<Bytea>,
         mass -> Nullable<Int4>,
         block_time -> Nullable<Int4>,
@@ -77,10 +77,8 @@ diesel::table! {
         index -> Int2,
         amount -> Int8,
         script_public_key -> Bytea,
-        #[max_length = 128]
-        script_public_key_address -> Varchar,
-        #[max_length = 32]
-        script_public_key_type -> Varchar,
+        script_public_key_address -> Bytea,
+        script_public_key_type -> Bytea,
     }
 }
 
@@ -94,8 +92,8 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     blocks,
-    blocks_chains,
     blocks_transactions,
+    chain_blocks,
     subnetworks,
     transactions,
     transactions_acceptances,

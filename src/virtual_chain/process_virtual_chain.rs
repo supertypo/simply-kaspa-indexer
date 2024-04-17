@@ -43,7 +43,9 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
         update_chain_blocks(response.added_chain_block_hashes, response.removed_chain_block_hashes, db_pool.clone());
 
         if SystemTime::now().duration_since(checkpoint_hash_last_saved).unwrap().as_secs() > 60 {
-            save_virtual_checkpoint(hex::encode(checkpoint_hash.clone()), db_pool.clone());
+            let checkpoint = hex::encode(checkpoint_hash.clone());
+            info!("Saving virtual_checkpoint={}", checkpoint);
+            save_virtual_checkpoint(checkpoint, db_pool.clone());
             checkpoint_hash_last_saved = SystemTime::now();
         }
         if !synced {

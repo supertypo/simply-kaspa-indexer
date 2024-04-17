@@ -92,7 +92,7 @@ async fn main() {
         .expect("Database pool FAILED");
     let db_con = &mut db_pool.get()
         .expect("Database connection FAILED");
-    info!("Connection to database established");
+    info!("Connection established");
 
     if ddl_auto || network != "mainnet" {
         info!("Applying pending diesel migrations");
@@ -121,14 +121,20 @@ async fn start_processing(ignore_checkpoint: bool,
     let mut block_checkpoint_hash = checkpoint_hash.clone();
     let mut virtual_checkpoint_hash = checkpoint_hash.clone();
     if !ignore_checkpoint {
-        block_checkpoint_hash = load_block_checkpoint(db_pool.clone()).unwrap_or_else(|| {
-            warn!("block_checkpoint_hash not found");
-            block_checkpoint_hash.clone()
-        });
-        virtual_checkpoint_hash = load_virtual_checkpoint(db_pool.clone()).unwrap_or_else(|| {
-            warn!("virtual_checkpoint_hash not found");
-            block_checkpoint_hash.clone()
-        });
+        let saved_block_checkpoint = load_block_checkpoint(db_pool.clone());
+        if saved_block_checkpoint.is_some() {
+            block_checkpoint_hash = saved_block_checkpoint.unwrap();
+            info!("Loaded block_checkpoint={}", block_checkpoint_hash);
+        } else {
+            warn!("block_checkpoint_hash not found, using {}", if from_pruning_point { "pruning point" } else { "virtual_parent_hash" });
+        }
+        let saved_virtual_checkpoint = load_virtual_checkpoint(db_pool.clone());
+        if saved_virtual_checkpoint.is_some() {
+            virtual_checkpoint_hash = saved_virtual_checkpoint.unwrap();
+            info!("Loaded block_checkpoint={}", virtual_checkpoint_hash);
+        } else {
+            warn!("virtual_checkpoint_hash not found, using {}", if from_pruning_point { "pruning point" } else { "virtual_parent_hash" });
+        }
     }
 
     let rpc_blocks_queue = Arc::new(ArrayQueue::new(3_000));

@@ -2,7 +2,7 @@ use diesel::{insert_into, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl
 use diesel::expression_methods::ExpressionMethods;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::upsert::excluded;
-use log::debug;
+use log::trace;
 
 use crate::database::models::{Var, VAR_KEY_BLOCK_CHECKPOINT, VAR_KEY_LEGACY_CHECKPOINT, VAR_KEY_VIRTUAL_CHECKPOINT};
 use crate::database::schema::vars;
@@ -35,22 +35,22 @@ pub fn load(key: String, db_pool: Pool<ConnectionManager<PgConnection>>) -> Opti
         .expect(format!("Loading var '{}' from database FAILED", key).as_str());
     if option.is_some() {
         let value = option.unwrap();
-        debug!("Database var with key '{}' loaded: {}", key, value);
+        trace!("Database var with key '{}' loaded: {}", key, value);
         Some(value)
     } else {
-        debug!("Database var with key '{}' not found", key);
+        trace!("Database var with key '{}' not found", key);
         None
     }
 }
 
 pub fn save(key: String, value: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    debug!("Saving database var with key '{}' value: {}", key, value);
+    trace!("Saving database var with key '{}' value: {}", key, value);
     insert_into(vars::dsl::vars)
         .values(Var { key, value })
         .on_conflict(vars::key)
         .do_update()
         .set(vars::value.eq(excluded(vars::value)))
         .execute(con)
-        .expect("Saving var to database FAILED");
+        .expect("Saving var FAILED");
 }

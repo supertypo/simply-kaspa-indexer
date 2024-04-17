@@ -59,9 +59,9 @@ impl Hash for Block {
 }
 
 #[derive(Queryable, Selectable, Insertable, Clone, Eq, PartialEq, Hash)]
-#[diesel(table_name = crate::database::schema::blocks_chains)]
+#[diesel(table_name = crate::database::schema::chain_blocks)]
 #[diesel(primary_key(block_hash))]
-pub struct BlockChain {
+pub struct ChainBlock {
     pub block_hash: Vec<u8>
 }
 
@@ -99,7 +99,7 @@ impl Hash for Subnetwork {
 #[diesel(primary_key(transaction_id))]
 pub struct Transaction {
     pub transaction_id: Vec<u8>,
-    pub subnetwork: Option<i32>,
+    pub subnetwork_id: Option<i32>,
     pub hash: Option<Vec<u8>>,
     pub mass: Option<i32>,
     pub block_time: Option<i32>,
@@ -184,8 +184,8 @@ pub struct TransactionOutput {
     pub index: i16,
     pub amount: i64,
     pub script_public_key: Vec<u8>,
-    pub script_public_key_address: String,
-    pub script_public_key_type: String,
+    pub script_public_key_address: Vec<u8>,
+    pub script_public_key_type: Vec<u8>,
 }
 
 impl Eq for TransactionOutput {}

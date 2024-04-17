@@ -37,11 +37,11 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
                     .values(Vec::from_iter(insert_queue.iter()))
                     .on_conflict_do_nothing()
                     .execute(con)
-                    .expect("Commit blocks to database FAILED");
+                    .expect("Commit blocks FAILED");
                 Ok::<_, Error>(())
-            }).expect("Commit blocks to database FAILED");
+            }).expect("Commit blocks FAILED");
 
-            info!("Committed {} new blocks to database. Last block timestamp: {}", rows_affected,
+            info!("Committed {} new blocks. Last block timestamp: {}", rows_affected,
                 chrono::DateTime::from_timestamp_millis(last_block_timestamp as i64 * 1000).unwrap());
             last_commit_time = SystemTime::now();
 
@@ -55,7 +55,9 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
                         .count()
                         .get_result::<i64>(con).unwrap();
                     if checkpoint_hash_tx_committed_count == checkpoint_hash_tx_expected_count {
-                        save_block_checkpoint(hex::encode(checkpoint_hash.clone()), db_pool.clone());
+                        let checkpoint = hex::encode(checkpoint_hash);
+                        info!("Saving block_checkpoint={}", checkpoint);
+                        save_block_checkpoint(checkpoint, db_pool.clone());
                         checkpoint_hash = vec![];
                         checkpoint_last_saved = SystemTime::now();
                     } else if checkpoint_hash_tx_committed_count > checkpoint_hash_tx_expected_count {

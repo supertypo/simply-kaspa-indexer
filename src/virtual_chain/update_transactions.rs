@@ -22,10 +22,10 @@ pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_id
             rows_affected = delete(transactions_acceptances::dsl::transactions_acceptances)
                 .filter(transactions_acceptances::block_hash.eq_any(removed_blocks_chunk))
                 .execute(con)
-                .expect("Commit rejected transactions to database FAILED");
+                .expect("Commit rejected transactions FAILED");
             Ok::<_, Error>(())
-        }).expect("Commit rejected transactions to database FAILED");
-        info!("Committed {} rejected transactions to database", rows_affected);
+        }).expect("Commit rejected transactions FAILED");
+        info!("Committed {} rejected transactions", rows_affected);
     }
 
     let mut accepted_transactions = vec![];
@@ -45,10 +45,10 @@ pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_id
                 .values(accepted_transactions_chunk)
                 .on_conflict_do_nothing()
                 .execute(con)
-                .expect("Commit accepted transactions to database FAILED");
+                .expect("Commit accepted transactions FAILED");
             Ok::<_, Error>(())
-        }).expect("Commit accepted transactions to database FAILED");
-        info!("Committed {} accepted transactions to database", rows_affected);
+        }).expect("Commit accepted transactions FAILED");
+        info!("Committed {} accepted transactions", rows_affected);
     }
     return accepted_transactions.last().map(|ta| ta.block_hash.clone());
 }
