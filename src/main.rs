@@ -141,15 +141,14 @@ async fn start_processing(ignore_checkpoint: bool,
     let rpc_transactions_queue = Arc::new(ArrayQueue::new(3_000));
     let db_blocks_queue = Arc::new(ArrayQueue::new(3_000));
     let db_transactions_queue = Arc::new(ArrayQueue::new(30_000));
-    let synced_queue = Arc::new(ArrayQueue::new(10));
 
     let mut tasks = vec![];
-    tasks.push(task::spawn(fetch_blocks(block_checkpoint_hash, kaspad_client.clone(), synced_queue.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
+    tasks.push(task::spawn(fetch_blocks(block_checkpoint_hash, kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
     tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
     tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_txs_ins_outs(db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(process_virtual_chain(virtual_checkpoint_hash, synced_queue.clone(), kaspad_client.clone(), db_pool.clone())));
+    tasks.push(task::spawn(process_virtual_chain(virtual_checkpoint_hash, kaspad_client.clone(), db_pool.clone())));
 
     for task in tasks {
         let _ = task.await.expect("Should not happen");

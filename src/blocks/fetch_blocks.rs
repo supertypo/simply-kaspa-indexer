@@ -16,7 +16,6 @@ use crate::kaspad::client::with_retry;
 
 pub async fn fetch_blocks(checkpoint_hash: String,
                           kaspad_client: KaspaRpcClient,
-                          synced_queue: Arc<ArrayQueue<bool>>,
                           rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
                           rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) -> Result<(), ()> {
     const INITIAL_SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(15);
@@ -52,7 +51,6 @@ pub async fn fetch_blocks(checkpoint_hash: String,
                     let time_to_sync = SystemTime::now().duration_since(start_time).unwrap();
                     info!("Found tip. Block fetcher synced! (in {}:{:0>2}:{:0>2}s)", time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
                     synced = true;
-                    synced_queue.push(true).unwrap();
                 }
                 if block_hash.as_bytes().to_vec() == low_hash && block_hash.as_bytes().to_vec() != checkpoint_hash {
                     trace!("Ignoring low_hash block {}", hex::encode(low_hash.clone()));
