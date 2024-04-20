@@ -2,7 +2,6 @@ use std::fmt;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
-use bigdecimal::BigDecimal;
 use diesel::prelude::*;
 
 pub const VAR_KEY_BLOCK_CHECKPOINT: &str = "block_checkpoint";
@@ -36,7 +35,7 @@ pub struct Block {
     pub blue_work: Option<Vec<u8>>,
     pub daa_score: Option<i64>,
     pub hash_merkle_root: Option<Vec<u8>>,
-    pub nonce: Option<BigDecimal>,
+    pub nonce: Option<Vec<u8>>,
     pub parents: Option<Vec<Option<Vec<u8>>>>,
     pub pruning_point: Option<Vec<u8>>,
     pub timestamp: Option<i32>,

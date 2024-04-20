@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS "blocks"
     blue_work               BYTEA,
     daa_score               BIGINT,
     hash_merkle_root        BYTEA,
-    nonce                   NUMERIC(32, 0),
+    nonce                   BYTEA,
     parents                 BYTEA[],
     pruning_point           BYTEA,
     "timestamp"             INTEGER,

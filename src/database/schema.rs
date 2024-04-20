@@ -13,7 +13,7 @@ diesel::table! {
         blue_work -> Nullable<Bytea>,
         daa_score -> Nullable<Int8>,
         hash_merkle_root -> Nullable<Bytea>,
-        nonce -> Nullable<Numeric>,
+        nonce -> Nullable<Bytea>,
         parents -> Nullable<Array<Nullable<Bytea>>>,
         pruning_point -> Nullable<Bytea>,
         timestamp -> Nullable<Int4>,

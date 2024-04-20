@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bigdecimal::BigDecimal;
 use crossbeam_queue::ArrayQueue;
 use kaspa_rpc_core::RpcBlock;
 use tokio::time::sleep;
@@ -31,7 +30,7 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
             blue_work: Some(block.header.blue_work.to_be_bytes_var()),
             daa_score: Some(block.header.daa_score as i64),
             hash_merkle_root: Some(block.header.hash_merkle_root.as_bytes().to_vec()),
-            nonce: Some(BigDecimal::from(block.header.nonce)),
+            nonce: Some(block.header.nonce.to_be_bytes().to_vec()),
             parents: Some(block.header.parents_by_level[0].iter().map(|v| Some(v.as_bytes().to_vec())).collect()),
             pruning_point: Some(block.header.pruning_point.as_bytes().to_vec()),
             timestamp: Some((block.header.timestamp / 1000) as i32),
