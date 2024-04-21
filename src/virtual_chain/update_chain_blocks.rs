@@ -38,6 +38,6 @@ pub fn update_chain_blocks(added_hashes: Vec<RpcHash>, removed_hashes: Vec<RpcHa
                 .expect("Commit added chain blocks FAILED");
         }
         Ok::<_, Error>(())
-    }).expect("Commit remove/added chain blocks FAILED");
+    }).expect("Commit removed/added chain blocks FAILED");
     info!("Committed {} added and {} removed chain blocks", rows_added, rows_removed);
 }
