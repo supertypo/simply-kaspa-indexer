@@ -90,8 +90,8 @@ CREATE TABLE IF NOT EXISTS "transactions_outputs"
     index                     SMALLINT NOT NULL,
     amount                    BIGINT   NOT NULL,
     script_public_key         BYTEA    NOT NULL,
-    script_public_key_address BYTEA    NOT NULL,
-    script_public_key_type    BYTEA    NOT NULL,
+    script_public_key_address VARCHAR  NOT NULL,
+    script_public_key_type    VARCHAR  NOT NULL,
     CONSTRAINT pk_transactions_outputs PRIMARY KEY (transaction_id, index)
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_outputs_transaction_id ON transactions_outputs (transaction_id);
