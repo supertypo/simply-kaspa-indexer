@@ -89,7 +89,7 @@ async fn insert_transaction_outputs(values: Vec<TransactionOutput>, db_pool: Poo
             Ok::<_, Error>(())
         }).expect(format!("Commit {} FAILED", key).as_str());
     }
-    debug!("Committed {} {} in {}ms", values.len(), key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
     return rows_affected;
 }
 
@@ -109,7 +109,7 @@ async fn insert_transaction_inputs(values: Vec<TransactionInput>, db_pool: Pool<
             Ok::<_, Error>(())
         }).expect(format!("Commit {} FAILED", key).as_str());
     }
-    debug!("Committed {} {} in {}ms", values.len(), key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
     return rows_affected;
 }
 
@@ -129,7 +129,7 @@ async fn insert_transactions(values: Vec<Transaction>, db_pool: Pool<ConnectionM
             Ok::<_, Error>(())
         }).expect(format!("Commit {} FAILED", key).as_str());
     }
-    debug!("Committed {} {} in {}ms", values.len(), key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
     return rows_affected;
 }
 
@@ -149,6 +149,6 @@ async fn insert_block_transaction(values: Vec<BlockTransaction>, db_pool: Pool<C
             Ok::<_, Error>(())
         }).expect(format!("Commit {} FAILED", key).as_str());
     }
-    debug!("Committed {} {} in {}ms", values.len(), key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
     return rows_affected;
 }
