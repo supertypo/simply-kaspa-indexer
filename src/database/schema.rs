@@ -79,6 +79,7 @@ diesel::table! {
         script_public_key -> Bytea,
         script_public_key_address -> Varchar,
         script_public_key_type -> Varchar,
+        block_time -> Int4,
     }
 }
 

@@ -19,7 +19,7 @@ use crate::database::schema::transactions;
 // A large queue helps us to filter duplicates during catch-up:
 const SET_SIZE: usize = 30000;
 // Max number of rows for insert statements:
-const INSERT_SIZE: usize = 10000;
+const INSERT_SIZE: usize = 9000;
 
 pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>)>>,
                                  db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {

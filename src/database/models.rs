@@ -185,6 +185,7 @@ pub struct TransactionOutput {
     pub script_public_key: Vec<u8>,
     pub script_public_key_address: String,
     pub script_public_key_type: String,
+    pub block_time: i32,
 }
 
 impl Eq for TransactionOutput {}
