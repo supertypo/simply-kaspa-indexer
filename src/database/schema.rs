@@ -37,7 +37,7 @@ diesel::table! {
 
 diesel::table! {
     subnetworks (id) {
-        id -> Int4,
+        id -> Int2,
         #[max_length = 40]
         subnetwork_id -> Varchar,
     }
@@ -46,7 +46,7 @@ diesel::table! {
 diesel::table! {
     transactions (transaction_id) {
         transaction_id -> Bytea,
-        subnetwork_id -> Nullable<Int4>,
+        subnetwork_id -> Nullable<Int2>,
         hash -> Nullable<Bytea>,
         mass -> Nullable<Int4>,
         block_time -> Nullable<Int4>,

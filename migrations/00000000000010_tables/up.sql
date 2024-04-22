@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS "chain_blocks"
 
 CREATE TABLE IF NOT EXISTS "subnetworks"
 (
-    id            SERIAL PRIMARY KEY,
+    id            SMALLSERIAL PRIMARY KEY,
     subnetwork_id VARCHAR(40) NOT NULL
 );
 
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS "subnetworks"
 CREATE TABLE IF NOT EXISTS "transactions"
 (
     transaction_id BYTEA PRIMARY KEY,
-    subnetwork_id  INT,
+    subnetwork_id  SMALLINT,
     hash           BYTEA,
     mass           INTEGER,
     block_time     INTEGER

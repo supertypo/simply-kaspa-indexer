@@ -18,7 +18,7 @@ use crate::database::schema::subnetworks;
 pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
                                   db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>)>>,
                                   db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
-    let mut subnetwork_map: HashMap<String, i32> = HashMap::new();
+    let mut subnetwork_map: HashMap<String, i16> = HashMap::new();
     let con = &mut db_pool.get().expect("Database connection FAILED");
     let results: Vec<Subnetwork> = subnetworks::dsl::subnetworks.load::<Subnetwork>(con).unwrap();
     for s in results {

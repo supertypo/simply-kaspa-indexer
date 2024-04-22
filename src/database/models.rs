@@ -68,7 +68,7 @@ pub struct ChainBlock {
 #[diesel(table_name = crate::database::schema::subnetworks)]
 #[diesel(primary_key(id))]
 pub struct Subnetwork {
-    pub id: i32,
+    pub id: i16,
     pub subnetwork_id: String,
 }
 
@@ -98,7 +98,7 @@ impl Hash for Subnetwork {
 #[diesel(primary_key(transaction_id))]
 pub struct Transaction {
     pub transaction_id: Vec<u8>,
-    pub subnetwork_id: Option<i32>,
+    pub subnetwork_id: Option<i16>,
     pub hash: Option<Vec<u8>>,
     pub mass: Option<i32>,
     pub block_time: Option<i32>,
