@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS "transactions"
     mass           INTEGER,
     block_time     INTEGER
 );
-CREATE INDEX IF NOT EXISTS idx_transactions_block_time ON transactions (block_time);
+CREATE INDEX IF NOT EXISTS idx_transactions_block_time ON transactions (block_time DESC NULLS LAST);
 
 
 CREATE TABLE IF NOT EXISTS "transactions_acceptances"
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS "transactions_inputs"
     CONSTRAINT pk_transactions_inputs PRIMARY KEY (transaction_id, index)
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_inputs_transaction_id ON transactions_inputs (transaction_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_inputs_previous_outpoint_hash ON transactions_inputs (previous_outpoint_hash);
+CREATE INDEX IF NOT EXISTS idx_transactions_inputs_previous_outpoint_hash_index ON transactions_inputs (previous_outpoint_hash, previous_outpoint_index);
 
 
 CREATE TABLE IF NOT EXISTS "transactions_outputs"
@@ -97,3 +97,4 @@ CREATE TABLE IF NOT EXISTS "transactions_outputs"
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_outputs_transaction_id ON transactions_outputs (transaction_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_outputs_script_public_key_address ON transactions_outputs (script_public_key_address);
+CREATE INDEX IF NOT EXISTS idx_transactions_outputs_block_time ON transactions (block_time DESC NULLS LAST);
