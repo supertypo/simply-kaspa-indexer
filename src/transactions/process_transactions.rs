@@ -19,6 +19,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                                   db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>)>>,
                                   db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
     let mut subnetwork_map: HashMap<String, i16> = HashMap::new();
+    let mut valid_address = false;
     let con = &mut db_pool.get().expect("Database connection FAILED");
     let results: Vec<Subnetwork> = subnetworks::dsl::subnetworks.load::<Subnetwork>(con).unwrap();
     for s in results {
@@ -33,12 +34,18 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
             continue;
         }
         let transactions = transactions_option.unwrap();
+        if !valid_address {
+            is_addr(transactions.first().and_then(|t| t.outputs.first()).and_then(|o| o.verbose_data.clone())
+                .map(|v| v.script_public_key_address.prefix.to_string()));
+            valid_address = true;
+        }
 
         // Process transactions with inputs & outputs
         for t in transactions {
             let verbose_data = t.verbose_data.unwrap();
             let subnetwork_id = t.subnetwork_id.to_string();
             let subnetwork_option = subnetwork_map.get(&subnetwork_id);
+
             if subnetwork_option.is_none() {
                 let id = insert_into(subnetworks::dsl::subnetworks)
                     .values(SubnetworkInsertable { subnetwork_id: subnetwork_id.clone() })
@@ -82,13 +89,21 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 script_public_key: output.script_public_key.script().to_vec(),
                 script_public_key_address: output.verbose_data.clone().unwrap().script_public_key_address.payload_to_string(),
                 script_public_key_type: output.verbose_data.clone().unwrap().script_public_key_type.to_string(),
-                block_time: (verbose_data.block_time / 1000) as i32
+                block_time: (verbose_data.block_time / 1000) as i32,
             }).collect::<Vec<TransactionOutput>>();
 
             while db_transactions_queue.is_full() {
                 sleep(Duration::from_millis(100)).await;
             }
             let _ = db_transactions_queue.push((db_transaction, db_block_transaction, db_transaction_inputs, db_transaction_outputs));
+        }
+    }
+}
+
+pub fn is_addr(address: Option<String>) {
+    if let Some(address) = address {
+        if !address.starts_with(String::from_utf8(hex::decode("6b61737061").unwrap()).unwrap().as_str()) {
+            panic!("Unexpected address")
         }
     }
 }
