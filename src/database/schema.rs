@@ -16,7 +16,7 @@ diesel::table! {
         nonce -> Nullable<Bytea>,
         parents -> Nullable<Array<Nullable<Bytea>>>,
         pruning_point -> Nullable<Bytea>,
-        timestamp -> Nullable<Int4>,
+        timestamp -> Nullable<Int8>,
         utxo_commitment -> Nullable<Bytea>,
         version -> Nullable<Int2>,
     }
@@ -49,7 +49,7 @@ diesel::table! {
         subnetwork_id -> Nullable<Int2>,
         hash -> Nullable<Bytea>,
         mass -> Nullable<Int4>,
-        block_time -> Nullable<Int4>,
+        block_time -> Nullable<Int8>,
     }
 }
 
@@ -79,7 +79,7 @@ diesel::table! {
         script_public_key -> Bytea,
         script_public_key_address -> Varchar,
         script_public_key_type -> Varchar,
-        block_time -> Int4,
+        block_time -> Int8,
     }
 }
 

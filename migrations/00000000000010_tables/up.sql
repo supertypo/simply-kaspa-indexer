@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS blocks
     nonce                   BYTEA,
     parents                 BYTEA[],
     pruning_point           BYTEA,
-    "timestamp"             INTEGER,
+    "timestamp"             BIGINT,
     utxo_commitment         BYTEA,
     version                 SMALLINT
 );
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS transactions
     subnetwork_id  SMALLINT,
     hash           BYTEA,
     mass           INTEGER,
-    block_time     INTEGER
+    block_time     BIGINT
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_block_time ON transactions (block_time DESC NULLS LAST);
 
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS transactions_outputs
     script_public_key         BYTEA    NOT NULL,
     script_public_key_address VARCHAR  NOT NULL,
     script_public_key_type    VARCHAR  NOT NULL,
-    block_time                INTEGER  NOT NULL,
+    block_time                BIGINT  NOT NULL,
     CONSTRAINT pk_transactions_outputs PRIMARY KEY (transaction_id, index)
 );
 CREATE INDEX IF NOT EXISTS idx_transactions_outputs_transaction_id ON transactions_outputs (transaction_id);

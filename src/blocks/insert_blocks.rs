@@ -42,7 +42,7 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
             }).expect("Commit blocks FAILED");
 
             info!("Committed {} new blocks. Last block timestamp: {}", rows_affected,
-                chrono::DateTime::from_timestamp_millis(last_block_timestamp as i64 * 1000).unwrap());
+                chrono::DateTime::from_timestamp_millis(last_block_timestamp).unwrap());
             last_commit_time = SystemTime::now();
 
             if insert_queue.len() >= 1 && SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > 60 {

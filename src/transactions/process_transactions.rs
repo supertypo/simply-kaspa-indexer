@@ -62,7 +62,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 subnetwork_id: Some(subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone()),
                 hash: Some(verbose_data.hash.as_bytes().to_vec()),
                 mass: Some(verbose_data.mass as i32),
-                block_time: Some((verbose_data.block_time / 1000) as i32),
+                block_time: Some(verbose_data.block_time as i64),
             };
 
             // Create block to transaction relation
@@ -89,7 +89,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 script_public_key: output.script_public_key.script().to_vec(),
                 script_public_key_address: output.verbose_data.clone().unwrap().script_public_key_address.payload_to_string(),
                 script_public_key_type: output.verbose_data.clone().unwrap().script_public_key_type.to_string(),
-                block_time: (verbose_data.block_time / 1000) as i32,
+                block_time: verbose_data.block_time as i64,
             }).collect::<Vec<TransactionOutput>>();
 
             while db_transactions_queue.is_full() {

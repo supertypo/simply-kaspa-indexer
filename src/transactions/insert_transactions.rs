@@ -62,7 +62,7 @@ pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transact
             let dv = (10000 / SystemTime::now().duration_since(last_commit_time).unwrap().as_millis()) as f64 / 10f64;
             info!("Committed {} transactions ({:.1} tps, {} block_txs, {} inputs, {} outputs). Last block timestamp: {}",
                 rows_affected_tx, rows_affected_tx as f64 * dv, rows_affected_block_tx, rows_affected_tx_inputs, rows_affected_tx_outputs,
-                chrono::DateTime::from_timestamp_millis(last_block_timestamp as i64 * 1000).unwrap());
+                chrono::DateTime::from_timestamp_millis(last_block_timestamp).unwrap());
 
             transactions = HashSet::with_capacity(INSERT_SIZE);
             block_tx = HashSet::with_capacity(INSERT_SIZE);

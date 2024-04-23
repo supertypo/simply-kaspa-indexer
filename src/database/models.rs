@@ -38,7 +38,7 @@ pub struct Block {
     pub nonce: Option<Vec<u8>>,
     pub parents: Option<Vec<Option<Vec<u8>>>>,
     pub pruning_point: Option<Vec<u8>>,
-    pub timestamp: Option<i32>,
+    pub timestamp: Option<i64>,
     pub utxo_commitment: Option<Vec<u8>>,
     pub version: Option<i16>,
 }
@@ -101,7 +101,7 @@ pub struct Transaction {
     pub subnetwork_id: Option<i16>,
     pub hash: Option<Vec<u8>>,
     pub mass: Option<i32>,
-    pub block_time: Option<i32>,
+    pub block_time: Option<i64>,
 }
 
 impl Eq for Transaction {}
@@ -185,7 +185,7 @@ pub struct TransactionOutput {
     pub script_public_key: Vec<u8>,
     pub script_public_key_address: String,
     pub script_public_key_type: String,
-    pub block_time: i32,
+    pub block_time: i64,
 }
 
 impl Eq for TransactionOutput {}

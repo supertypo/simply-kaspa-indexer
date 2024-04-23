@@ -33,7 +33,7 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
             nonce: Some(block.header.nonce.to_be_bytes().to_vec()),
             parents: Some(block.header.parents_by_level[0].iter().map(|v| Some(v.as_bytes().to_vec())).collect()),
             pruning_point: Some(block.header.pruning_point.as_bytes().to_vec()),
-            timestamp: Some((block.header.timestamp / 1000) as i32),
+            timestamp: Some(block.header.timestamp as i64),
             utxo_commitment: Some(block.header.utxo_commitment.as_bytes().to_vec()),
             version: Some(block.header.version as i16),
         };
