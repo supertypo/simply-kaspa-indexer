@@ -1,11 +1,11 @@
-CREATE TABLE IF NOT EXISTS "vars"
+CREATE TABLE IF NOT EXISTS vars
 (
     key   VARCHAR(255) PRIMARY KEY,
     value TEXT NOT NULL
 );
 
 
-CREATE TABLE IF NOT EXISTS "blocks"
+CREATE TABLE IF NOT EXISTS blocks
 (
     hash                    BYTEA PRIMARY KEY,
     accepted_id_merkle_root BYTEA,
@@ -28,20 +28,20 @@ CREATE TABLE IF NOT EXISTS "blocks"
 CREATE INDEX IF NOT EXISTS idx_blocks_blue_score ON blocks (blue_score);
 
 
-CREATE TABLE IF NOT EXISTS "chain_blocks"
+CREATE TABLE IF NOT EXISTS chain_blocks
 (
     block_hash BYTEA PRIMARY KEY
 );
 
 
-CREATE TABLE IF NOT EXISTS "subnetworks"
+CREATE TABLE IF NOT EXISTS subnetworks
 (
     id            SMALLSERIAL PRIMARY KEY,
     subnetwork_id VARCHAR(40) NOT NULL
 );
 
 
-CREATE TABLE IF NOT EXISTS "transactions"
+CREATE TABLE IF NOT EXISTS transactions
 (
     transaction_id BYTEA PRIMARY KEY,
     subnetwork_id  SMALLINT,
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS "transactions"
 CREATE INDEX IF NOT EXISTS idx_transactions_block_time ON transactions (block_time DESC NULLS LAST);
 
 
-CREATE TABLE IF NOT EXISTS "transactions_acceptances"
+CREATE TABLE IF NOT EXISTS transactions_acceptances
 (
     transaction_id BYTEA PRIMARY KEY,
     block_hash     BYTEA NOT NULL
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS "transactions_acceptances"
 CREATE INDEX IF NOT EXISTS idx_transactions_acceptances_accepting_block ON transactions_acceptances (block_hash);
 
 
-CREATE TABLE IF NOT EXISTS "blocks_transactions"
+CREATE TABLE IF NOT EXISTS blocks_transactions
 (
     block_hash     BYTEA NOT NULL,
     transaction_id BYTEA NOT NULL,
@@ -70,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_blocks_transactions_block_hash ON blocks_transact
 CREATE INDEX IF NOT EXISTS idx_blocks_transactions_transaction_id ON blocks_transactions (transaction_id);
 
 
-CREATE TABLE IF NOT EXISTS "transactions_inputs"
+CREATE TABLE IF NOT EXISTS transactions_inputs
 (
     transaction_id          BYTEA    NOT NULL,
     index                   SMALLINT NOT NULL,
@@ -84,7 +84,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_inputs_transaction_id ON transaction
 CREATE INDEX IF NOT EXISTS idx_transactions_inputs_previous_outpoint_hash_index ON transactions_inputs (previous_outpoint_hash, previous_outpoint_index);
 
 
-CREATE TABLE IF NOT EXISTS "transactions_outputs"
+CREATE TABLE IF NOT EXISTS transactions_outputs
 (
     transaction_id            BYTEA    NOT NULL,
     index                     SMALLINT NOT NULL,
