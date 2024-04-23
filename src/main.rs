@@ -12,7 +12,6 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{info, warn};
-use tokio::task;
 
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
 use kaspa_db_filler_ng::blocks::insert_blocks::insert_blocks;
@@ -65,10 +64,10 @@ async fn main() {
             .long("ignore-checkpoint")
             .help("Start from the pruning point or virtual parent instead of the saved checkpoint")
             .action(clap::ArgAction::SetTrue))
-        .arg(Arg::new("ddl-auto")
+        .arg(Arg::new("initialize-db")
             .short('c')
-            .long("ddl-auto")
-            .help("Enables automatic creation of database tables (always on for testnet)")
+            .long("initialize-db")
+            .help("(Re-)initializes the database schema. Use with care.")
             .action(clap::ArgAction::SetTrue))
         .get_matches();
 
@@ -78,7 +77,7 @@ async fn main() {
     let log_level = matches.get_one::<String>("log-level").unwrap();
     let from_pruning_point = matches.get_flag("from-pruning-point");
     let ignore_checkpoint = matches.get_flag("ignore-checkpoint");
-    let ddl_auto = matches.get_flag("ddl-auto");
+    let initialize_db = matches.get_flag("initialize-db");
 
     env::set_var("RUST_LOG", log_level);
     env_logger::builder()
@@ -94,10 +93,20 @@ async fn main() {
         .expect("Database connection FAILED");
     info!("Connection established");
 
-    if ddl_auto || network != "mainnet" {
-        info!("Applying pending diesel migrations");
-        db_con.run_pending_migrations(MIGRATIONS)
-            .expect("Unable to apply pending diesel migrations");
+    if initialize_db {
+        info!("Initializing database");
+        if let Err(e) = db_con.revert_all_migrations(MIGRATIONS) {
+            info!("Unable to revert diesel migrations: {:?}", e);
+        } else {
+            info!("All migrations successfully reverted.");
+        }
+    }
+    if initialize_db || network != "mainnet" {
+        if let Err(e) = db_con.run_pending_migrations(MIGRATIONS) {
+            info!("Unable to apply diesel migrations: {:?}", e);
+        } else {
+            info!("All migrations successfully applied.");
+        }
     }
 
     let kaspad_client = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
