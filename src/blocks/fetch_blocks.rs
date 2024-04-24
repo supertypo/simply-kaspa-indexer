@@ -71,8 +71,7 @@ pub async fn fetch_blocks(checkpoint_hash: String,
         if blocks_len < 50 {
             sleep(Duration::from_secs(2)).await;
         }
-        
-        let dv = (10000 / SystemTime::now().duration_since(last_fetch_time).unwrap().as_millis()) as f64 / 10f64;
-        debug!("Fetch blocks BPS: {:.1}, TPS: {:.1} ({:.1} txs/block)", blocks_len as f64 * dv, txs_len as f64 * dv, txs_len as f64 / blocks_len as f64);
+        let fetch_time = SystemTime::now().duration_since(last_fetch_time).unwrap().as_millis() as f64 / 1000f64;
+        debug!("Fetch blocks BPS: {:.1}, TPS: {:.1} ({:.1} txs/block)", blocks_len as f64 / fetch_time, txs_len as f64 / fetch_time, txs_len as f64 / blocks_len as f64);
     }
 }

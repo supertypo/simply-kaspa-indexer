@@ -12,6 +12,7 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{info, warn};
+use tokio::task;
 
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
 use kaspa_db_filler_ng::blocks::insert_blocks::insert_blocks;
@@ -151,13 +152,16 @@ async fn start_processing(ignore_checkpoint: bool,
     let db_blocks_queue = Arc::new(ArrayQueue::new(3_000));
     let db_transactions_queue = Arc::new(ArrayQueue::new(30_000));
 
-    let _ = tokio::join!(
-        fetch_blocks(block_checkpoint_hash, kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone()),
-        process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone()),
-        process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone()),
-        insert_blocks(db_blocks_queue.clone(), db_pool.clone()),
-        insert_txs_ins_outs(db_transactions_queue.clone(), db_pool.clone()),
-        process_virtual_chain(virtual_checkpoint_hash, kaspad_client.clone(), db_pool.clone()),
-    );
+    let mut tasks = vec![];
+    tasks.push(task::spawn(fetch_blocks(block_checkpoint_hash, kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
+    tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
+    tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(insert_txs_ins_outs(db_transactions_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(process_virtual_chain(virtual_checkpoint_hash, kaspad_client.clone(), db_pool.clone())));
+
+    for task in tasks {
+        let _ = task.await.expect("Should not happen");
+    }
     Ok(())
 }
