@@ -1,3 +1,5 @@
+DROP TRIGGER IF EXISTS trigger_before_insert_blocks_transactions ON blocks_transactions;
+DROP FUNCTION IF EXISTS update_adresses_transactions;
 DROP TABLE IF EXISTS addresses_transactions;
 DROP TABLE IF EXISTS transactions_inputs;
 DROP TABLE IF EXISTS transactions_outputs;

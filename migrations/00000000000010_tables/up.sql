@@ -62,8 +62,8 @@ CREATE INDEX ON transactions_acceptances (block_hash);
 
 CREATE TABLE blocks_transactions
 (
-    block_hash     BYTEA ,
-    transaction_id BYTEA ,
+    block_hash     BYTEA,
+    transaction_id BYTEA,
     PRIMARY KEY (block_hash, transaction_id)
 );
 CREATE INDEX ON blocks_transactions (block_hash);
@@ -72,12 +72,12 @@ CREATE INDEX ON blocks_transactions (transaction_id);
 
 CREATE TABLE transactions_inputs
 (
-    transaction_id          BYTEA    ,
-    index                   SMALLINT ,
-    previous_outpoint_hash  BYTEA    ,
-    previous_outpoint_index SMALLINT ,
-    signature_script        BYTEA    ,
-    sig_op_count            SMALLINT ,
+    transaction_id          BYTEA,
+    index                   SMALLINT,
+    previous_outpoint_hash  BYTEA,
+    previous_outpoint_index SMALLINT,
+    signature_script        BYTEA,
+    sig_op_count            SMALLINT,
     PRIMARY KEY (transaction_id, index)
 );
 CREATE INDEX ON transactions_inputs (transaction_id);
@@ -86,13 +86,13 @@ CREATE INDEX ON transactions_inputs (previous_outpoint_hash, previous_outpoint_i
 
 CREATE TABLE transactions_outputs
 (
-    transaction_id            BYTEA   ,
+    transaction_id            BYTEA,
     index                     SMALLINT,
-    amount                    BIGINT  ,
-    script_public_key         BYTEA   ,
-    script_public_key_address VARCHAR ,
-    script_public_key_type    VARCHAR ,
-    block_time                BIGINT ,
+    amount                    BIGINT,
+    script_public_key         BYTEA,
+    script_public_key_address VARCHAR,
+    script_public_key_type    VARCHAR,
+    block_time                BIGINT,
     PRIMARY KEY (transaction_id, index)
 );
 CREATE INDEX ON transactions_outputs (transaction_id);
@@ -110,3 +110,35 @@ CREATE TABLE addresses_transactions
 CREATE INDEX ON addresses_transactions (address);
 CREATE INDEX ON addresses_transactions (transaction_id);
 CREATE INDEX ON addresses_transactions (address, block_time DESC NULLS LAST);
+
+
+CREATE FUNCTION update_adresses_transactions()
+    RETURNS TRIGGER AS
+$$
+BEGIN
+    INSERT INTO addresses_transactions (address, transaction_id, block_time)
+    SELECT o.script_public_key_address,
+           o.transaction_id,
+           o.block_time
+    FROM transactions_outputs o
+    WHERE o.transaction_id = NEW.transaction_id
+    ON CONFLICT (address, transaction_id) DO NOTHING;
+
+    INSERT INTO addresses_transactions (address, transaction_id, block_time)
+    SELECT o.script_public_key_address,
+           i.transaction_id,
+           o.block_time
+    FROM transactions_inputs i
+             JOIN transactions_outputs o ON o.transaction_id = i.previous_outpoint_hash AND o.index = i.previous_outpoint_index
+    WHERE i.transaction_id = NEW.transaction_id
+    ON CONFLICT (address, transaction_id) DO NOTHING;
+
+    RETURN NEW; -- Must return NEW to proceed with the insert into blocks_transactions
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_before_insert_blocks_transactions
+    BEFORE INSERT
+    ON blocks_transactions
+    FOR EACH ROW
+EXECUTE FUNCTION update_adresses_transactions();
