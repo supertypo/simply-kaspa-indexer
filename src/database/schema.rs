@@ -1,6 +1,14 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    addresses_transactions (address, transaction_id) {
+        address -> Varchar,
+        transaction_id -> Bytea,
+        block_time -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
     blocks (hash) {
         hash -> Bytea,
         accepted_id_merkle_root -> Nullable<Bytea>,
@@ -56,7 +64,7 @@ diesel::table! {
 diesel::table! {
     transactions_acceptances (transaction_id) {
         transaction_id -> Bytea,
-        block_hash -> Bytea,
+        block_hash -> Nullable<Bytea>,
     }
 }
 
@@ -64,10 +72,10 @@ diesel::table! {
     transactions_inputs (transaction_id, index) {
         transaction_id -> Bytea,
         index -> Int2,
-        previous_outpoint_hash -> Bytea,
-        previous_outpoint_index -> Int2,
-        signature_script -> Bytea,
-        sig_op_count -> Int2,
+        previous_outpoint_hash -> Nullable<Bytea>,
+        previous_outpoint_index -> Nullable<Int2>,
+        signature_script -> Nullable<Bytea>,
+        sig_op_count -> Nullable<Int2>,
     }
 }
 
@@ -75,11 +83,11 @@ diesel::table! {
     transactions_outputs (transaction_id, index) {
         transaction_id -> Bytea,
         index -> Int2,
-        amount -> Int8,
-        script_public_key -> Bytea,
-        script_public_key_address -> Varchar,
-        script_public_key_type -> Varchar,
-        block_time -> Int8,
+        amount -> Nullable<Int8>,
+        script_public_key -> Nullable<Bytea>,
+        script_public_key_address -> Nullable<Varchar>,
+        script_public_key_type -> Nullable<Varchar>,
+        block_time -> Nullable<Int8>,
     }
 }
 
@@ -92,6 +100,7 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
+    addresses_transactions,
     blocks,
     blocks_transactions,
     chain_blocks,

@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS addresses_transactions;
 DROP TABLE IF EXISTS transactions_inputs;
 DROP TABLE IF EXISTS transactions_outputs;
 DROP TABLE IF EXISTS blocks_transactions;

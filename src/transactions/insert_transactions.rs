@@ -36,13 +36,12 @@ pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transact
             sleep(Duration::from_millis(100)).await;
             continue;
         }
-        let transaction_tuple = transaction_option.unwrap();
-        let transaction = transaction_tuple.0;
-        last_block_timestamp = transaction.block_time.unwrap();
+        let (transaction, block_transactions, inputs, outputs) = transaction_option.unwrap();
+        last_block_timestamp = transaction.block_time;
         transactions.insert(transaction);
-        block_tx.insert(transaction_tuple.1);
-        tx_inputs.extend(transaction_tuple.2.into_iter());
-        tx_outputs.extend(transaction_tuple.3.into_iter());
+        block_tx.insert(block_transactions);
+        tx_inputs.extend(inputs.into_iter());
+        tx_outputs.extend(outputs.into_iter());
 
         if block_tx.len() >= SET_SIZE || (block_tx.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
             debug!("Committing {} transactions ({} block/tx, {} inputs, {} outputs)",

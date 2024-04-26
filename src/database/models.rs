@@ -1,4 +1,3 @@
-use std::fmt;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
@@ -7,10 +6,6 @@ use diesel::prelude::*;
 pub const VAR_KEY_BLOCK_CHECKPOINT: &str = "block_checkpoint";
 pub const VAR_KEY_VIRTUAL_CHECKPOINT: &str = "virtual_checkpoint";
 pub const VAR_KEY_LEGACY_CHECKPOINT: &str = "vspc_last_start_hash";
-
-pub trait Similar {
-    fn is_similar(&self, other: &Self) -> bool;
-}
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::database::schema::vars)]
@@ -61,7 +56,7 @@ impl Hash for Block {
 #[diesel(table_name = crate::database::schema::chain_blocks)]
 #[diesel(primary_key(block_hash))]
 pub struct ChainBlock {
-    pub block_hash: Vec<u8>
+    pub block_hash: Vec<u8>,
 }
 
 #[derive(Queryable, Selectable, Clone)]
@@ -98,10 +93,10 @@ impl Hash for Subnetwork {
 #[diesel(primary_key(transaction_id))]
 pub struct Transaction {
     pub transaction_id: Vec<u8>,
-    pub subnetwork_id: Option<i16>,
-    pub hash: Option<Vec<u8>>,
-    pub mass: Option<i32>,
-    pub block_time: Option<i64>,
+    pub subnetwork_id: i16,
+    pub hash: Vec<u8>,
+    pub mass: i32,
+    pub block_time: i64,
 }
 
 impl Eq for Transaction {}
@@ -126,7 +121,7 @@ pub struct TransactionAcceptance {
     pub block_hash: Vec<u8>,
 }
 
-#[derive(Queryable, Selectable, Insertable, QueryableByName, Clone, Eq, PartialEq, Hash)]
+#[derive(Queryable, Selectable, Insertable, Clone, Eq, PartialEq, Hash)]
 #[diesel(table_name = crate::database::schema::blocks_transactions)]
 #[diesel(primary_key(block_hash, transaction_id))]
 pub struct BlockTransaction {
@@ -134,7 +129,7 @@ pub struct BlockTransaction {
     pub transaction_id: Vec<u8>,
 }
 
-#[derive(Queryable, Selectable, Insertable, Identifiable, QueryableByName, Clone)]
+#[derive(Queryable, Selectable, Insertable, Identifiable, Clone)]
 #[diesel(table_name = crate::database::schema::transactions_inputs)]
 #[diesel(primary_key(transaction_id, index))]
 pub struct TransactionInput {
@@ -144,19 +139,6 @@ pub struct TransactionInput {
     pub previous_outpoint_index: i16,
     pub signature_script: Vec<u8>,
     pub sig_op_count: i16,
-}
-
-impl Debug for TransactionInput {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut output = vec!["TransactionInput {".to_string()];
-        output.push(format!("  transaction_id: {}", hex::encode(&self.transaction_id)));
-        output.push(format!("  index: {}", &self.index));
-        output.push(format!("  previous_outpoint_hash: {}", hex::encode(&self.previous_outpoint_hash)));
-        output.push(format!("  previous_outpoint_index: {}", &self.previous_outpoint_index));
-        output.push(format!("  sig_op_count: {}", &self.sig_op_count));
-        output.push("}".to_string());
-        write!(f, "{}", output.join("\n"))
-    }
 }
 
 impl Eq for TransactionInput {}
@@ -175,7 +157,7 @@ impl Hash for TransactionInput {
     }
 }
 
-#[derive(Queryable, Selectable, Insertable, Identifiable, QueryableByName, Clone, Debug)]
+#[derive(Queryable, Selectable, Insertable, Identifiable, Clone, Debug)]
 #[diesel(table_name = crate::database::schema::transactions_outputs)]
 #[diesel(primary_key(transaction_id, index))]
 pub struct TransactionOutput {

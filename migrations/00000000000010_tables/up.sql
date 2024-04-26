@@ -1,11 +1,11 @@
-CREATE TABLE IF NOT EXISTS vars
+CREATE TABLE vars
 (
     key   VARCHAR(255) PRIMARY KEY,
     value TEXT NOT NULL
 );
 
 
-CREATE TABLE IF NOT EXISTS blocks
+CREATE TABLE blocks
 (
     hash                    BYTEA PRIMARY KEY,
     accepted_id_merkle_root BYTEA,
@@ -25,23 +25,23 @@ CREATE TABLE IF NOT EXISTS blocks
     utxo_commitment         BYTEA,
     version                 SMALLINT
 );
-CREATE INDEX IF NOT EXISTS idx_blocks_blue_score ON blocks (blue_score);
+CREATE INDEX ON blocks (blue_score);
 
 
-CREATE TABLE IF NOT EXISTS chain_blocks
+CREATE TABLE chain_blocks
 (
     block_hash BYTEA PRIMARY KEY
 );
 
 
-CREATE TABLE IF NOT EXISTS subnetworks
+CREATE TABLE subnetworks
 (
     id            SMALLSERIAL PRIMARY KEY,
     subnetwork_id VARCHAR(40) NOT NULL
 );
 
 
-CREATE TABLE IF NOT EXISTS transactions
+CREATE TABLE transactions
 (
     transaction_id BYTEA PRIMARY KEY,
     subnetwork_id  SMALLINT,
@@ -49,52 +49,64 @@ CREATE TABLE IF NOT EXISTS transactions
     mass           INTEGER,
     block_time     BIGINT
 );
-CREATE INDEX IF NOT EXISTS idx_transactions_block_time ON transactions (block_time DESC NULLS LAST);
+CREATE INDEX ON transactions (block_time DESC NULLS LAST);
 
 
-CREATE TABLE IF NOT EXISTS transactions_acceptances
+CREATE TABLE transactions_acceptances
 (
     transaction_id BYTEA PRIMARY KEY,
-    block_hash     BYTEA NOT NULL
+    block_hash     BYTEA
 );
-CREATE INDEX IF NOT EXISTS idx_transactions_acceptances_accepting_block ON transactions_acceptances (block_hash);
+CREATE INDEX ON transactions_acceptances (block_hash);
 
 
-CREATE TABLE IF NOT EXISTS blocks_transactions
+CREATE TABLE blocks_transactions
 (
-    block_hash     BYTEA NOT NULL,
-    transaction_id BYTEA NOT NULL,
-    CONSTRAINT pk_blocks_transactions PRIMARY KEY (block_hash, transaction_id)
+    block_hash     BYTEA ,
+    transaction_id BYTEA ,
+    PRIMARY KEY (block_hash, transaction_id)
 );
-CREATE INDEX IF NOT EXISTS idx_blocks_transactions_block_hash ON blocks_transactions (block_hash);
-CREATE INDEX IF NOT EXISTS idx_blocks_transactions_transaction_id ON blocks_transactions (transaction_id);
+CREATE INDEX ON blocks_transactions (block_hash);
+CREATE INDEX ON blocks_transactions (transaction_id);
 
 
-CREATE TABLE IF NOT EXISTS transactions_inputs
+CREATE TABLE transactions_inputs
 (
-    transaction_id          BYTEA    NOT NULL,
-    index                   SMALLINT NOT NULL,
-    previous_outpoint_hash  BYTEA    NOT NULL,
-    previous_outpoint_index SMALLINT NOT NULL,
-    signature_script        BYTEA    NOT NULL,
-    sig_op_count            SMALLINT NOT NULL,
-    CONSTRAINT pk_transactions_inputs PRIMARY KEY (transaction_id, index)
+    transaction_id          BYTEA    ,
+    index                   SMALLINT ,
+    previous_outpoint_hash  BYTEA    ,
+    previous_outpoint_index SMALLINT ,
+    signature_script        BYTEA    ,
+    sig_op_count            SMALLINT ,
+    PRIMARY KEY (transaction_id, index)
 );
-CREATE INDEX IF NOT EXISTS idx_transactions_inputs_transaction_id ON transactions_inputs (transaction_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_inputs_previous_outpoint_hash_index ON transactions_inputs (previous_outpoint_hash, previous_outpoint_index);
+CREATE INDEX ON transactions_inputs (transaction_id);
+CREATE INDEX ON transactions_inputs (previous_outpoint_hash, previous_outpoint_index);
 
 
-CREATE TABLE IF NOT EXISTS transactions_outputs
+CREATE TABLE transactions_outputs
 (
-    transaction_id            BYTEA    NOT NULL,
-    index                     SMALLINT NOT NULL,
-    amount                    BIGINT   NOT NULL,
-    script_public_key         BYTEA    NOT NULL,
-    script_public_key_address VARCHAR  NOT NULL,
-    script_public_key_type    VARCHAR  NOT NULL,
-    block_time                BIGINT  NOT NULL,
-    CONSTRAINT pk_transactions_outputs PRIMARY KEY (transaction_id, index)
+    transaction_id            BYTEA   ,
+    index                     SMALLINT,
+    amount                    BIGINT  ,
+    script_public_key         BYTEA   ,
+    script_public_key_address VARCHAR ,
+    script_public_key_type    VARCHAR ,
+    block_time                BIGINT ,
+    PRIMARY KEY (transaction_id, index)
 );
-CREATE INDEX IF NOT EXISTS idx_transactions_outputs_transaction_id ON transactions_outputs (transaction_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_outputs_script_public_key_address ON transactions_outputs (script_public_key_address);
-CREATE INDEX IF NOT EXISTS idx_transactions_outputs_block_time ON transactions (block_time DESC NULLS LAST);
+CREATE INDEX ON transactions_outputs (transaction_id);
+CREATE INDEX ON transactions_outputs (script_public_key_address);
+CREATE INDEX ON transactions (block_time DESC NULLS LAST);
+
+
+CREATE TABLE addresses_transactions
+(
+    address        VARCHAR,
+    transaction_id BYTEA,
+    block_time     BIGINT,
+    PRIMARY KEY (address, transaction_id)
+);
+CREATE INDEX ON addresses_transactions (address);
+CREATE INDEX ON addresses_transactions (transaction_id);
+CREATE INDEX ON addresses_transactions (address, block_time DESC NULLS LAST);
