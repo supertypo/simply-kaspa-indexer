@@ -141,7 +141,7 @@ async fn start_processing(ignore_checkpoint: bool,
         let saved_virtual_checkpoint = load_virtual_checkpoint(db_pool.clone());
         if saved_virtual_checkpoint.is_some() {
             virtual_checkpoint_hash = saved_virtual_checkpoint.unwrap();
-            info!("Loaded block_checkpoint={}", virtual_checkpoint_hash);
+            info!("Loaded virtual_checkpoint={}", virtual_checkpoint_hash);
         } else {
             warn!("virtual_checkpoint_hash not found, using {}", if from_pruning_point { "pruning point" } else { "virtual_parent_hash" });
         }
