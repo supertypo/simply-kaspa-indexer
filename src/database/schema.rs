@@ -87,7 +87,6 @@ diesel::table! {
         script_public_key -> Nullable<Bytea>,
         script_public_key_address -> Nullable<Varchar>,
         script_public_key_type -> Nullable<Varchar>,
-        block_time -> Nullable<Int8>,
     }
 }
 

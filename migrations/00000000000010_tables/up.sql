@@ -92,7 +92,6 @@ CREATE TABLE transactions_outputs
     script_public_key         BYTEA,
     script_public_key_address VARCHAR,
     script_public_key_type    VARCHAR,
-    block_time                BIGINT,
     PRIMARY KEY (transaction_id, index)
 );
 CREATE INDEX ON transactions_outputs (transaction_id);
@@ -118,17 +117,10 @@ $$
 BEGIN
     INSERT INTO addresses_transactions (address, transaction_id, block_time)
     SELECT o.script_public_key_address,
-           o.transaction_id,
-           o.block_time
-    FROM transactions_outputs o
-    WHERE o.transaction_id = NEW.transaction_id
-    ON CONFLICT (address, transaction_id) DO NOTHING;
-
-    INSERT INTO addresses_transactions (address, transaction_id, block_time)
-    SELECT o.script_public_key_address,
            i.transaction_id,
-           o.block_time
+           t.block_time
     FROM transactions_inputs i
+             JOIN transactions t ON t.transaction_id = i.transaction_id
              JOIN transactions_outputs o ON o.transaction_id = i.previous_outpoint_hash AND o.index = i.previous_outpoint_index
     WHERE i.transaction_id = NEW.transaction_id
     ON CONFLICT (address, transaction_id) DO NOTHING;

@@ -1,20 +1,26 @@
 version: "3"
 
 services:
-  kaspad:
-    container_name: kaspad
-    image: supertypo/rusty-kaspad:latest
+  kaspa_explorer:
+    container_name: kaspa_explorer
+    image: supertypo/kaspa-explorer:latest
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: 2
+          memory: 128M
     ports:
-      - "17110:17110"
-    volumes:
-      - /var/kaspad:/app/data/
-    command: kaspad --yes --utxoindex --rpclisten=0.0.0.0:16110 --rpclisten-borsh=0.0.0.0:17110 --ram-scale=0.3 --nologfiles --disable-upnp
+      - "8080:8080"
+    environment:
+      API_URI: http://192.168.168.197:8000
+      API_WS_URI: ws://192.168.168.197:8001
 
   kaspa_db_filler_db:
     container_name: kaspa_db_filler_db
     image: postgres:16-alpine
     restart: unless-stopped
+    stop_grace_period: 10m
     shm_size: 1gb
     environment:
       POSTGRES_USER: postgres
@@ -22,13 +28,5 @@ services:
       POSTGRES_DB: postgres
     ports:
       - "55543:5432"
-
-  pgadmin:
-    container_name: pgadmin
-    image: dpage/pgadmin4:latest
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: mthoring@gmail.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "8989:80"
+    volumes:
+      - ./data/:/var/lib/postgresql/data/

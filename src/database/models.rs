@@ -167,7 +167,6 @@ pub struct TransactionOutput {
     pub script_public_key: Vec<u8>,
     pub script_public_key_address: String,
     pub script_public_key_type: String,
-    pub block_time: i64,
 }
 
 impl Eq for TransactionOutput {}
@@ -183,5 +182,30 @@ impl Hash for TransactionOutput {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.transaction_id.hash(state);
         self.index.hash(state);
+    }
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Clone, Debug)]
+#[diesel(table_name = crate::database::schema::addresses_transactions)]
+#[diesel(primary_key(address, transaction_id))]
+pub struct AddressTransaction {
+    pub address: String,
+    pub transaction_id: Vec<u8>,
+    pub block_time: i64,
+}
+
+impl Eq for AddressTransaction {}
+
+impl PartialEq for AddressTransaction {
+    fn eq(&self, other: &Self) -> bool {
+        self.address == other.address
+            && self.transaction_id == other.transaction_id
+    }
+}
+
+impl Hash for AddressTransaction {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.address.hash(state);
+        self.transaction_id.hash(state);
     }
 }
