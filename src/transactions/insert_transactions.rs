@@ -5,10 +5,11 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, insert_into, RunQueryDsl};
+use diesel::{Connection, insert_into, RunQueryDsl, sql_query};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
+use itertools::Itertools;
 use log::{debug, info};
 use tokio::task;
 use tokio::time::sleep;
@@ -50,7 +51,8 @@ pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transact
             debug!("Committing {} transactions ({} block/tx, {} inputs, {} outputs)",
                 transactions.len(), block_tx.len(), tx_inputs.len(), tx_outputs.len());
             // We used a HashSet first to filter some amount of duplicates locally, now we can switch back to vector:
-            let transactions_vec = transactions.into_iter().collect();
+            let transactions_vec: Vec<Transaction> = transactions.into_iter().collect();
+            let transaction_ids = transactions_vec.iter().map(|t| t.transaction_id.clone()).collect();
             let block_transactions_vec = block_tx.into_iter().collect();
             let inputs_vec = tx_inputs.into_iter().collect();
             let outputs_vec = tx_outputs.into_iter().collect();
@@ -63,12 +65,13 @@ pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transact
             let db_pool_clone = db_pool.clone();
             let tx_outputs_handle = task::spawn_blocking(|| { insert_transaction_outputs(outputs_vec, db_pool_clone) });
             let db_pool_clone = db_pool.clone();
-            let tx_addresses_handle = task::spawn_blocking(|| { insert_transaction_addresses(addresses_vec, db_pool_clone) });
+            let tx_out_addr_handle = task::spawn_blocking(|| { insert_output_transaction_addresses(addresses_vec, db_pool_clone) });
 
             let rows_affected_tx = tx_handle.await.unwrap();
             let rows_affected_tx_inputs = tx_inputs_handle.await.unwrap();
             let rows_affected_tx_outputs = tx_outputs_handle.await.unwrap();
-            let rows_affected_tx_addresses = tx_addresses_handle.await.unwrap();
+            let mut rows_affected_tx_addresses = tx_out_addr_handle.await.unwrap();
+            rows_affected_tx_addresses += insert_input_transaction_addresses(transaction_ids, db_pool.clone());
             // ^Needs to complete first to avoid incomplete block checkpoints
             let rows_affected_block_tx = insert_block_transaction(block_transactions_vec, db_pool.clone());
 
@@ -88,8 +91,34 @@ pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transact
     }
 }
 
-fn insert_transaction_addresses(values: Vec<AddressTransaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
-    let key = "addresses_transactions";
+fn insert_input_transaction_addresses(values: Vec<Vec<u8>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
+    let key = "input addresses_transactions";
+    let start_time = SystemTime::now();
+    debug!("Processing {} transactions for {}", values.len(), key);
+    let mut rows_affected = 0;
+    let con = &mut db_pool.get().expect("Database connection FAILED");
+    for batch_values in values.chunks(INSERT_SIZE) {
+        con.transaction(|con| {
+            let query = format!(
+                "INSERT INTO addresses_transactions (address, transaction_id, block_time) \
+                    SELECT o.script_public_key_address, i.transaction_id, t.block_time \
+                        FROM transactions_inputs i \
+                        JOIN transactions t ON t.transaction_id = i.transaction_id \
+                        JOIN transactions_outputs o ON o.transaction_id = i.previous_outpoint_hash AND o.index = i.previous_outpoint_index \
+                    WHERE i.transaction_id IN ({0}) AND t.transaction_id IN ({0}) \
+                    ON CONFLICT DO NOTHING", batch_values.iter().map(|v| format!("'\\x{}'", hex::encode(v))).join(", "));
+            rows_affected += sql_query(query)
+                .execute(con)
+                .expect(format!("Commit {} FAILED", key).as_str());
+            Ok::<_, Error>(())
+        }).expect(format!("Commit {} FAILED", key).as_str());
+    }
+    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    return rows_affected;
+}
+
+fn insert_output_transaction_addresses(values: Vec<AddressTransaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
+    let key = "output addresses_transactions";
     let start_time = SystemTime::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
