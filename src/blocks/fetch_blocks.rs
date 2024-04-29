@@ -49,7 +49,8 @@ pub async fn fetch_blocks(checkpoint_hash: String,
                 let block_hash = b.header.hash;
                 if !synced && block_hash == tip_hash {
                     let time_to_sync = SystemTime::now().duration_since(start_time).unwrap();
-                    info!("Found tip. Block fetcher synced! (in {}:{:0>2}:{:0>2}s)", time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
+                    info!("\x1b[32mFound tip. Block fetcher synced! (in {}:{:0>2}:{:0>2}s)\x1b[0m", 
+                        time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
                     synced = true;
                 }
                 if block_hash.as_bytes().to_vec() == low_hash && block_hash.as_bytes().to_vec() != checkpoint_hash {
@@ -57,12 +58,12 @@ pub async fn fetch_blocks(checkpoint_hash: String,
                     continue;
                 }
                 while rpc_blocks_queue.is_full() {
-                    warn!("RPC blocks queue is full, sleeping 2 seconds...");
-                    sleep(Duration::from_secs(2)).await;
+                    warn!("RPC blocks queue is full, sleeping 5 seconds...");
+                    sleep(Duration::from_secs(5)).await;
                 }
                 while rpc_transactions_queue.is_full() {
-                    warn!("RPC transactions queue is full, sleeping 2 seconds...");
-                    sleep(Duration::from_secs(2)).await;
+                    warn!("RPC transactions queue is full, sleeping 5 seconds...");
+                    sleep(Duration::from_secs(5)).await;
                 }
                 rpc_blocks_queue.push(RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }).unwrap();
                 rpc_transactions_queue.push(b.transactions).unwrap();

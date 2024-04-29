@@ -4,13 +4,16 @@ use diesel::{Connection, delete, ExpressionMethods, insert_into, PgConnection, R
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcHash};
-use log::{debug, info};
+use log::{debug, info, trace};
 
 use crate::database::models::TransactionAcceptance;
 use crate::database::schema::transactions_acceptances;
 
 pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_ids: Vec<RpcAcceptedTransactionIds>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<Vec<u8>> {
-    const INSERT_QUEUE_SIZE: usize = 7500;
+    const BATCH_INSERT_SIZE: usize = 7500;
+    trace!("Received {} accepted transactions and {} removed chain blocks", accepted_transaction_ids.len(), removed_hashes.len());
+    trace!("Accepted transaction ids: \n{:#?}", accepted_transaction_ids);
+    trace!("Removed chain blocks: \n{:#?}", removed_hashes);
 
     let mut rows_removed = 0;
     let mut rows_added = 0;
@@ -20,7 +23,7 @@ pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_id
 
     con.transaction(|con| {
         let removed_blocks = removed_hashes.into_iter().map(|h| h.as_bytes().to_vec()).collect::<Vec<Vec<u8>>>();
-        for removed_blocks_chunk in removed_blocks.chunks(INSERT_QUEUE_SIZE) {
+        for removed_blocks_chunk in removed_blocks.chunks(BATCH_INSERT_SIZE) {
             debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
             rows_removed += delete(transactions_acceptances::dsl::transactions_acceptances)
                 .filter(transactions_acceptances::block_hash.eq_any(removed_blocks_chunk))
@@ -37,7 +40,7 @@ pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_id
             }
         }
         last_accepted_block_hash = accepted_transactions.last().map(|ta| ta.block_hash.clone());
-        for accepted_transactions_chunk in accepted_transactions.chunks(INSERT_QUEUE_SIZE) {
+        for accepted_transactions_chunk in accepted_transactions.chunks(BATCH_INSERT_SIZE) {
             debug!("Processing {} accepted transactions", accepted_transactions_chunk.len());
             rows_added += insert_into(transactions_acceptances::dsl::transactions_acceptances)
                 .values(accepted_transactions_chunk)
@@ -47,6 +50,6 @@ pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_id
         }
         Ok::<_, Error>(())
     }).expect("Commit rejected/accepted transactions FAILED");
-    info!("Committed {} accepted and {} rejected chain blocks", rows_added, rows_removed);
+    info!("Committed {} accepted and {} rejected transactions", rows_added, rows_removed);
     return last_accepted_block_hash;
 }

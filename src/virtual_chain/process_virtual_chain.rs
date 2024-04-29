@@ -18,6 +18,7 @@ use crate::virtual_chain::update_transactions::update_transactions;
 pub async fn process_virtual_chain(checkpoint_hash: String,
                                    kaspad_client: KaspaRpcClient,
                                    db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+    const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     let start_time = SystemTime::now();
     let mut synced = false;
     let mut checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
@@ -31,7 +32,7 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
         checkpoint_hash = update_transactions(response.removed_chain_block_hashes.clone(), response.accepted_transaction_ids, db_pool.clone()).unwrap_or(checkpoint_hash.clone());
         update_chain_blocks(response.added_chain_block_hashes, response.removed_chain_block_hashes, db_pool.clone());
 
-        if SystemTime::now().duration_since(checkpoint_hash_last_saved).unwrap().as_secs() > 60 {
+        if SystemTime::now().duration_since(checkpoint_hash_last_saved).unwrap().as_secs() > CHECKPOINT_SAVE_INTERVAL {
             let checkpoint = hex::encode(checkpoint_hash.clone());
             info!("Saving virtual_checkpoint={}", checkpoint);
             save_virtual_checkpoint(checkpoint, db_pool.clone());
@@ -39,7 +40,7 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
         }
         if !synced {
             let time_to_sync = SystemTime::now().duration_since(start_time).unwrap();
-            info!("Virtual chain processor synced! (in {}:{:0>2}:{:0>2}s)", time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
+            info!("\x1b[32mVirtual chain processor synced! (in {}:{:0>2}:{:0>2}s)\x1b[0m", time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
             synced = true;
         }
 

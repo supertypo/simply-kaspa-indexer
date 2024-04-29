@@ -19,6 +19,7 @@ use crate::vars::vars::save_block_checkpoint;
 
 pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
                            db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+    const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     const INSERT_QUEUE_SIZE: usize = 1800;
     let mut insert_queue: HashSet<Block> = HashSet::with_capacity(INSERT_QUEUE_SIZE);
     let mut rows_affected = 0;
@@ -45,7 +46,7 @@ pub async fn insert_blocks(db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)
                 chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap());
             last_commit_time = SystemTime::now();
 
-            if insert_queue.len() >= 1 && SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > 60 {
+            if insert_queue.len() >= 1 && SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > CHECKPOINT_SAVE_INTERVAL {
                 if checkpoint_hash.is_empty() {
                     checkpoint_hash = last_block_hash.clone();
                     checkpoint_hash_tx_expected_count = last_block_tx_count;

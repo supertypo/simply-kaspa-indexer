@@ -10,8 +10,8 @@ use crate::database::models::ChainBlock;
 use crate::database::schema::chain_blocks;
 
 pub fn update_chain_blocks(added_hashes: Vec<RpcHash>, removed_hashes: Vec<RpcHash>, db_pool: Pool<ConnectionManager<PgConnection>>) {
-    const INSERT_QUEUE_SIZE: usize = 7500;
-    info!("Received {} added and {} removed chain blocks", added_hashes.len(), removed_hashes.len());
+    const BATCH_INSERT_SIZE: usize = 7500;
+    trace!("Received {} added and {} removed chain blocks", added_hashes.len(), removed_hashes.len());
     trace!("Added chain blocks: \n{:#?}", added_hashes);
     trace!("Removed chain blocks: \n{:#?}", removed_hashes);
 
@@ -21,7 +21,7 @@ pub fn update_chain_blocks(added_hashes: Vec<RpcHash>, removed_hashes: Vec<RpcHa
     let con = &mut db_pool.get().expect("Database connection FAILED");
     con.transaction(|con| {
         let removed_blocks = removed_hashes.into_iter().map(|h| h.as_bytes().to_vec()).collect::<Vec<Vec<u8>>>();
-        for removed_blocks_chunk in removed_blocks.chunks(INSERT_QUEUE_SIZE) {
+        for removed_blocks_chunk in removed_blocks.chunks(BATCH_INSERT_SIZE) {
             debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
             rows_removed = delete(chain_blocks::dsl::chain_blocks)
                 .filter(chain_blocks::block_hash.eq_any(removed_blocks_chunk))
@@ -29,7 +29,7 @@ pub fn update_chain_blocks(added_hashes: Vec<RpcHash>, removed_hashes: Vec<RpcHa
                 .expect("Commit removed chain blocks FAILED");
         }
         let added_blocks = added_hashes.into_iter().map(|h| ChainBlock { block_hash: h.as_bytes().to_vec() }).collect::<Vec<ChainBlock>>();
-        for added_blocks_chunk in added_blocks.chunks(INSERT_QUEUE_SIZE) {
+        for added_blocks_chunk in added_blocks.chunks(BATCH_INSERT_SIZE) {
             debug!("Processing {} added chain blocks", added_blocks_chunk.len());
             rows_added = insert_into(chain_blocks::dsl::chain_blocks)
                 .values(added_blocks_chunk)

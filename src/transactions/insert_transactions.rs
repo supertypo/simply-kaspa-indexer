@@ -10,7 +10,7 @@ use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
 use itertools::Itertools;
-use log::{debug, info};
+use log::{debug, info, trace};
 use tokio::task;
 use tokio::time::sleep;
 
@@ -18,10 +18,10 @@ use crate::database::models::{AddressTransaction, BlockTransaction, Transaction,
 use crate::database::schema::{blocks_transactions, transactions_inputs, transactions_outputs, addresses_transactions};
 use crate::database::schema::transactions;
 
-// A large queue helps us to filter duplicates during catch-up:
+// Large sets helps us to filter duplicates during catch-up:
 const SET_SIZE: usize = 9000;
 // Max number of rows for insert statements:
-const INSERT_SIZE: usize = 9000;
+const BATCH_INSERT_SIZE: usize = 3600;
 
 pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>>,
                                  db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
@@ -51,6 +51,7 @@ pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transact
             debug!("Committing {} transactions ({} block/tx, {} inputs, {} outputs)",
                 transactions.len(), block_tx.len(), tx_inputs.len(), tx_outputs.len());
             // We used a HashSet first to filter some amount of duplicates locally, now we can switch back to vector:
+            let transactions_len = transactions.len();
             let transactions_vec: Vec<Transaction> = transactions.into_iter().collect();
             let transaction_ids = transactions_vec.iter().map(|t| t.transaction_id.clone()).collect();
             let block_transactions_vec = block_tx.into_iter().collect();
@@ -76,16 +77,16 @@ pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transact
             let rows_affected_block_tx = insert_block_transaction(block_transactions_vec, db_pool.clone());
 
             let commit_time = SystemTime::now().duration_since(start_commit_time).unwrap().as_millis();
-            let tps = rows_affected_tx as f64 / commit_time as f64 * 1000f64;
-            info!("Committed {} transactions in {}ms ({:.1} tps, {} block_txs, {} inputs, {} outputs, {} addr_txs). Last block timestamp: {}",
+            let tps = transactions_len as f64 / commit_time as f64 * 1000f64;
+            info!("Committed {} txs in {}ms ({:.1} tps, {} blk_tx, {} tx_in, {} tx_out, {} adr_tx). Last tx: {}",
                 rows_affected_tx, commit_time, tps, rows_affected_block_tx, rows_affected_tx_inputs, rows_affected_tx_outputs, rows_affected_tx_addresses,
                 chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap());
 
-            transactions = HashSet::with_capacity(INSERT_SIZE);
-            block_tx = HashSet::with_capacity(INSERT_SIZE);
-            tx_inputs = HashSet::with_capacity(INSERT_SIZE * 2);
-            tx_outputs = HashSet::with_capacity(INSERT_SIZE * 2);
-            tx_addresses = HashSet::with_capacity(INSERT_SIZE * 2);
+            transactions = HashSet::with_capacity(BATCH_INSERT_SIZE);
+            block_tx = HashSet::with_capacity(BATCH_INSERT_SIZE);
+            tx_inputs = HashSet::with_capacity(BATCH_INSERT_SIZE * 2);
+            tx_outputs = HashSet::with_capacity(BATCH_INSERT_SIZE * 2);
+            tx_addresses = HashSet::with_capacity(BATCH_INSERT_SIZE * 2);
             last_commit_time = SystemTime::now();
         }
     }
@@ -97,7 +98,7 @@ fn insert_input_transaction_addresses(values: Vec<Vec<u8>>, db_pool: Pool<Connec
     debug!("Processing {} transactions for {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(INSERT_SIZE) {
+    for batch_values in values.chunks(BATCH_INSERT_SIZE) {
         con.transaction(|con| {
             let query = format!(
                 "INSERT INTO addresses_transactions (address, transaction_id, block_time) \
@@ -107,6 +108,7 @@ fn insert_input_transaction_addresses(values: Vec<Vec<u8>>, db_pool: Pool<Connec
                         JOIN transactions_outputs o ON o.transaction_id = i.previous_outpoint_hash AND o.index = i.previous_outpoint_index \
                     WHERE i.transaction_id IN ({0}) AND t.transaction_id IN ({0}) \
                     ON CONFLICT DO NOTHING", batch_values.iter().map(|v| format!("'\\x{}'", hex::encode(v))).join(", "));
+            trace!("Executing {} query:\n{}", key, query);
             rows_affected += sql_query(query)
                 .execute(con)
                 .expect(format!("Commit {} FAILED", key).as_str());
@@ -123,7 +125,7 @@ fn insert_output_transaction_addresses(values: Vec<AddressTransaction>, db_pool:
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(INSERT_SIZE) {
+    for batch_values in values.chunks(BATCH_INSERT_SIZE) {
         con.transaction(|con| {
             rows_affected += insert_into(addresses_transactions::dsl::addresses_transactions)
                 .values(batch_values)
@@ -143,7 +145,7 @@ fn insert_transaction_outputs(values: Vec<TransactionOutput>, db_pool: Pool<Conn
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(INSERT_SIZE) {
+    for batch_values in values.chunks(BATCH_INSERT_SIZE) {
         con.transaction(|con| {
             rows_affected += insert_into(transactions_outputs::dsl::transactions_outputs)
                 .values(batch_values)
@@ -163,7 +165,7 @@ fn insert_transaction_inputs(values: Vec<TransactionInput>, db_pool: Pool<Connec
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(INSERT_SIZE) {
+    for batch_values in values.chunks(BATCH_INSERT_SIZE) {
         con.transaction(|con| {
             rows_affected += insert_into(transactions_inputs::dsl::transactions_inputs)
                 .values(batch_values)
@@ -183,7 +185,7 @@ fn insert_transactions(values: Vec<Transaction>, db_pool: Pool<ConnectionManager
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(INSERT_SIZE) {
+    for batch_values in values.chunks(BATCH_INSERT_SIZE) {
         con.transaction(|con| {
             rows_affected += insert_into(transactions::dsl::transactions)
                 .values(batch_values)
@@ -203,7 +205,7 @@ fn insert_block_transaction(values: Vec<BlockTransaction>, db_pool: Pool<Connect
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(INSERT_SIZE) {
+    for batch_values in values.chunks(BATCH_INSERT_SIZE) {
         con.transaction(|con| {
             rows_affected = insert_into(blocks_transactions::dsl::blocks_transactions)
                 .values(batch_values)
