@@ -78,7 +78,7 @@ pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transact
 
             let commit_time = SystemTime::now().duration_since(start_commit_time).unwrap().as_millis();
             let tps = transactions_len as f64 / commit_time as f64 * 1000f64;
-            info!("Committed {} txs in {}ms ({:.1} tps, {} blk_tx, {} tx_in, {} tx_out, {} adr_tx). Last tx: {}",
+            info!("Committed {} new txs in {}ms ({:.1} tps, {} blk_tx, {} tx_in, {} tx_out, {} adr_tx). Last tx: {}",
                 rows_affected_tx, commit_time, tps, rows_affected_block_tx, rows_affected_tx_inputs, rows_affected_tx_outputs, rows_affected_tx_addresses,
                 chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap());
 
