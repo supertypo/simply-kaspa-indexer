@@ -8,6 +8,7 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
+use tokio::task;
 use tokio::time::sleep;
 
 use crate::kaspad::client::with_retry;
@@ -29,8 +30,20 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
         let response = with_retry(|| kaspad_client.get_virtual_chain_from_block(kaspa_hashes::Hash::from_slice(checkpoint_hash.as_slice()), true)).await
             .expect("Error when invoking GetBlocks");
 
-        checkpoint_hash = update_transactions(response.removed_chain_block_hashes.clone(), response.accepted_transaction_ids, db_pool.clone()).unwrap_or(checkpoint_hash.clone());
-        update_chain_blocks(response.added_chain_block_hashes, response.removed_chain_block_hashes, db_pool.clone());
+        let db_pool_clone = db_pool.clone();
+        let removed_chain_block_hashes_clone = response.removed_chain_block_hashes.clone();
+        let update_transactions_handle = task::spawn_blocking(|| {
+            update_transactions(removed_chain_block_hashes_clone, response.accepted_transaction_ids, db_pool_clone)
+        });
+        let db_pool_clone = db_pool.clone();
+        let update_chain_blocks_handle = task::spawn_blocking(|| {
+            update_chain_blocks(response.added_chain_block_hashes, response.removed_chain_block_hashes, db_pool_clone)
+        });
+        let (update_transactions_result, _) = tokio::join!(update_transactions_handle,update_chain_blocks_handle);
+
+        if let Ok(Some(new_checkpoint_hash)) = update_transactions_result {
+            checkpoint_hash = new_checkpoint_hash;
+        }
 
         if SystemTime::now().duration_since(checkpoint_hash_last_saved).unwrap().as_secs() > CHECKPOINT_SAVE_INTERVAL {
             let checkpoint = hex::encode(checkpoint_hash.clone());
