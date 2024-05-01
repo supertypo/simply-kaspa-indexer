@@ -40,7 +40,7 @@ pub async fn with_retry<F, Fut, T, E>(mut f: F) -> Result<T, E>
 
 pub async fn connect_kaspad(url: String, force_network: String) -> Result<KaspaRpcClient, Error> {
     info!("Connecting to kaspad {}", url);
-    let client = KaspaRpcClient::new(WrpcEncoding::Borsh, &url)?;
+    let client = KaspaRpcClient::new(WrpcEncoding::Borsh, &url, None)?;
     client.connect(ConnectOptions::fallback()).await?;
     let server_info = client.get_server_info().await?;
     let network = format!("{}{}", server_info.network_id.network_type,
