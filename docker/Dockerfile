@@ -38,9 +38,7 @@ RUN cargo build --release
 FROM alpine
 
 RUN apk --no-cache add \
-  libgcc \
   libstdc++ \
-  bind-tools \
   postgresql-client
 
 USER 13337:13337

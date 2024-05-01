@@ -6,7 +6,7 @@ BUILD_DIR="$(dirname $0)"
 PUSH=$1
 VERSION=$2
 TAG=${3:-main}
-REPO_DIR="$BUILD_DIR/work"
+REPO_DIR="$BUILD_DIR/.work"
 
 set -e
 
