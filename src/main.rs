@@ -4,7 +4,7 @@ use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
-use clap::{Arg, Command};
+use clap::{Arg, Command, crate_authors, crate_description, crate_name, crate_version};
 use crossbeam_queue::ArrayQueue;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -27,14 +27,13 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 #[tokio::main]
 async fn main() {
-    let matches = Command::new("My Application")
-        .version("1.0")
-        .author("Your Name")
-        .about("Connects to a kaspad instance and manages a database")
+    let matches = Command::new(crate_name!())
+        .version(crate_version!())
+        .about(crate_description!())
         .arg(Arg::new("rpc-url")
             .short('s')
             .long("rpc-url")
-            .help("The url to the kaspad instance")
+            .help("The url to a kaspad instance")
             .default_value("ws://127.0.0.1:17110")
             .action(clap::ArgAction::Set))
         .arg(Arg::new("network")
