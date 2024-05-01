@@ -6,7 +6,6 @@ panic = "abort"
 
 [package]
 name = "kaspa-db-filler-ng"
-version = "0.1.0"
 description = "Feed block and transaction data from Kaspad to a database"
 authors = ["suprtypo@pm.me"]
 license-file = "LICENSE"

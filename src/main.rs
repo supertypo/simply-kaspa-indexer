@@ -4,7 +4,7 @@ use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
-use clap::{Arg, Command, crate_authors, crate_description, crate_name, crate_version};
+use clap::{Arg, Command, crate_description, crate_name};
 use crossbeam_queue::ArrayQueue;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -28,7 +28,6 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 #[tokio::main]
 async fn main() {
     let matches = Command::new(crate_name!())
-        .version(crate_version!())
         .about(crate_description!())
         .arg(Arg::new("rpc-url")
             .short('s')
