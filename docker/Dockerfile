@@ -43,6 +43,7 @@ RUN apk --no-cache add \
 
 USER 13337:13337
 
+COPY LICENSE /usr/local/bin/
 COPY --from=builder /work/target/release/kaspa-db-filler-ng /usr/local/bin/
 
 ENTRYPOINT ["kaspa-db-filler-ng"]
