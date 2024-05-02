@@ -9,7 +9,7 @@ use log::{debug, info, trace};
 use crate::database::models::TransactionAcceptance;
 use crate::database::schema::transactions_acceptances;
 
-pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_ids: Vec<RpcAcceptedTransactionIds>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<Vec<u8>> {
+pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_ids: Vec<RpcAcceptedTransactionIds>, last_accepted_block_time: Option<u64>, db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<Vec<u8>> {
     const BATCH_INSERT_SIZE: usize = 7500;
     trace!("Received {} accepted transactions and {} removed chain blocks", accepted_transaction_ids.len(), removed_hashes.len());
     trace!("Accepted transaction ids: \n{:#?}", accepted_transaction_ids);
@@ -50,6 +50,11 @@ pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_id
         }
         Ok::<_, Error>(())
     }).expect("Commit rejected/accepted transactions FAILED");
-    info!("Committed {} accepted and {} rejected transactions", rows_added, rows_removed);
+
+    let mut last_accepted_block_msg = String::from("");
+    if let Some(last_accepted_block_timestamp) = last_accepted_block_time {
+        last_accepted_block_msg = format!(". Last accepted timestamp: {}", chrono::DateTime::from_timestamp_millis(last_accepted_block_timestamp as i64 / 1000 * 1000).unwrap());
+    }
+    info!("Committed {} accepted and {} rejected transactions{}", rows_added, rows_removed, last_accepted_block_msg);
     return last_accepted_block_hash;
 }
