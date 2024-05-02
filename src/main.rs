@@ -148,7 +148,7 @@ async fn start_processing(ignore_checkpoint: bool,
     let rpc_blocks_queue = Arc::new(ArrayQueue::new(3_000));
     let rpc_transactions_queue = Arc::new(ArrayQueue::new(3_000));
     let db_blocks_queue = Arc::new(ArrayQueue::new(3_000));
-    let db_transactions_queue = Arc::new(ArrayQueue::new(30_000));
+    let db_transactions_queue = Arc::new(ArrayQueue::new(6_000));
 
     let mut tasks = vec![];
     tasks.push(task::spawn(fetch_blocks(block_checkpoint_hash, kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
