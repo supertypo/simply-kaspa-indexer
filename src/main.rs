@@ -53,6 +53,13 @@ async fn main() {
             .help("error, warn, info, debug, trace, off")
             .default_value("info")
             .action(clap::ArgAction::Set))
+        .arg(Arg::new("buffer-size")
+            .short('b')
+            .long("buffer-size")
+            .help("Internal buffer size factor [0.1-10]")
+            .default_value("1.0")
+            .action(clap::ArgAction::Set)
+            .value_parser(clap::value_parser!(f64)))
         .arg(Arg::new("from-pruning-point")
             .short('p')
             .long("from-pruning-point")
@@ -74,6 +81,7 @@ async fn main() {
     let network = matches.get_one::<String>("network").unwrap().to_lowercase();
     let database_url = matches.get_one::<String>("database-url").unwrap();
     let log_level = matches.get_one::<String>("log-level").unwrap();
+    let buffer_size = matches.get_one::<f64>("buffer-size").unwrap().to_owned();
     let from_pruning_point = matches.get_flag("from-pruning-point");
     let ignore_checkpoint = matches.get_flag("ignore-checkpoint");
     let initialize_db = matches.get_flag("initialize-db");
@@ -82,6 +90,10 @@ async fn main() {
     env_logger::builder()
         .format_timestamp_millis()
         .init();
+
+    if buffer_size < 0.1 || buffer_size > 10.0 {
+        panic!("Invalid buffer-size");
+    }
 
     let db_pool = Pool::builder()
         .connection_timeout(Duration::from_secs(10))
@@ -110,10 +122,11 @@ async fn main() {
 
     let kaspad_client = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
 
-    start_processing(ignore_checkpoint, from_pruning_point, db_pool, kaspad_client).await.expect("Unreachable");
+    start_processing(buffer_size, ignore_checkpoint, from_pruning_point, db_pool, kaspad_client).await.expect("Unreachable");
 }
 
-async fn start_processing(ignore_checkpoint: bool,
+async fn start_processing(buffer_size: f64,
+                          ignore_checkpoint: bool,
                           from_pruning_point: bool,
                           db_pool: Pool<ConnectionManager<PgConnection>>,
                           kaspad_client: KaspaRpcClient) -> Result<(), ()> {
@@ -145,17 +158,18 @@ async fn start_processing(ignore_checkpoint: bool,
         }
     }
 
-    let rpc_blocks_queue = Arc::new(ArrayQueue::new(3_000));
-    let rpc_transactions_queue = Arc::new(ArrayQueue::new(3_000));
-    let db_blocks_queue = Arc::new(ArrayQueue::new(3_000));
-    let db_transactions_queue = Arc::new(ArrayQueue::new(6_000));
+    let base_buffer = 3000f64;
+    let rpc_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
+    let rpc_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
+    let db_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
+    let db_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
 
     let mut tasks = vec![];
     tasks.push(task::spawn(fetch_blocks(block_checkpoint_hash, kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
     tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
     tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(insert_blocks(db_blocks_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(insert_txs_ins_outs(db_transactions_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(insert_blocks(buffer_size, db_blocks_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(insert_txs_ins_outs(buffer_size, db_transactions_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(process_virtual_chain(virtual_checkpoint_hash, kaspad_client.clone(), db_pool.clone())));
 
     for task in tasks {

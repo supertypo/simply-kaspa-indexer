@@ -15,21 +15,21 @@ use tokio::task;
 use tokio::time::sleep;
 
 use crate::database::models::{AddressTransaction, BlockTransaction, Transaction, TransactionInput, TransactionOutput};
-use crate::database::schema::{blocks_transactions, transactions_inputs, transactions_outputs, addresses_transactions};
+use crate::database::schema::{addresses_transactions, blocks_transactions, transactions_inputs, transactions_outputs};
 use crate::database::schema::transactions;
 
-// Large sets helps us to filter duplicates during catch-up:
-const SET_SIZE: usize = 9000;
 // Max number of rows for insert statements:
 const BATCH_INSERT_SIZE: usize = 3600;
 
-pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>>,
+pub async fn insert_txs_ins_outs(buffer_size: f64,
+                                 db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>>,
                                  db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
-    let mut transactions: HashSet<Transaction> = HashSet::with_capacity(SET_SIZE);
-    let mut block_tx: HashSet<BlockTransaction> = HashSet::with_capacity(SET_SIZE);
-    let mut tx_inputs: HashSet<TransactionInput> = HashSet::with_capacity(SET_SIZE * 2);
-    let mut tx_outputs: HashSet<TransactionOutput> = HashSet::with_capacity(SET_SIZE * 2);
-    let mut tx_addresses: HashSet<AddressTransaction> = HashSet::with_capacity(SET_SIZE * 2);
+    let max_set_size = (3000f64 * buffer_size) as usize; // Large sets helps us to filter duplicates during catch-up
+    let mut transactions: HashSet<Transaction> = HashSet::with_capacity(max_set_size);
+    let mut block_tx: HashSet<BlockTransaction> = HashSet::with_capacity(max_set_size);
+    let mut tx_inputs: HashSet<TransactionInput> = HashSet::with_capacity(max_set_size * 2);
+    let mut tx_outputs: HashSet<TransactionOutput> = HashSet::with_capacity(max_set_size * 2);
+    let mut tx_addresses: HashSet<AddressTransaction> = HashSet::with_capacity(max_set_size * 2);
     let mut last_block_timestamp;
     let mut last_commit_time = SystemTime::now();
     loop {
@@ -46,7 +46,7 @@ pub async fn insert_txs_ins_outs(db_transactions_queue: Arc<ArrayQueue<(Transact
         tx_outputs.extend(outputs.into_iter());
         tx_addresses.extend(addresses.into_iter());
 
-        if block_tx.len() >= SET_SIZE || (block_tx.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
+        if block_tx.len() >= max_set_size || (block_tx.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
             let start_commit_time = SystemTime::now();
             debug!("Committing {} transactions ({} block/tx, {} inputs, {} outputs)",
                 transactions.len(), block_tx.len(), tx_inputs.len(), tx_outputs.len());
