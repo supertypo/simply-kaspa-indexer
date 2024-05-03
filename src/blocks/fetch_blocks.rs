@@ -57,13 +57,21 @@ pub async fn fetch_blocks(checkpoint_hash: String,
                     trace!("Ignoring low_hash block {}", hex::encode(low_hash.clone()));
                     continue;
                 }
+                let mut last_blocks_warn = SystemTime::now();
                 while rpc_blocks_queue.is_full() {
-                    warn!("RPC blocks queue is full, sleeping 5 seconds...");
-                    sleep(Duration::from_secs(5)).await;
+                    if SystemTime::now().duration_since(last_blocks_warn).unwrap().as_secs() >= 10 {
+                        warn!("RPC blocks queue is full");
+                        last_blocks_warn = SystemTime::now();
+                    }
+                    sleep(Duration::from_secs(1)).await;
                 }
+                let mut last_transactions_warn = SystemTime::now();
                 while rpc_transactions_queue.is_full() {
-                    warn!("RPC transactions queue is full, sleeping 5 seconds...");
-                    sleep(Duration::from_secs(5)).await;
+                    if SystemTime::now().duration_since(last_transactions_warn).unwrap().as_secs() >= 10 {
+                        warn!("RPC transactions queue is full");
+                        last_transactions_warn = SystemTime::now();
+                    }
+                    sleep(Duration::from_secs(1)).await;
                 }
                 rpc_blocks_queue.push(RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }).unwrap();
                 rpc_transactions_queue.push(b.transactions).unwrap();
