@@ -88,6 +88,7 @@ async fn main() {
 
     env::set_var("RUST_LOG", log_level);
     env_logger::builder()
+        .target(env_logger::Target::Stdout)
         .format_timestamp_millis()
         .init();
 
