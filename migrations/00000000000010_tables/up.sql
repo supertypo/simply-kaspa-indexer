@@ -91,7 +91,6 @@ CREATE TABLE transactions_outputs
     amount                    BIGINT,
     script_public_key         BYTEA,
     script_public_key_address VARCHAR,
-    script_public_key_type    VARCHAR,
     PRIMARY KEY (transaction_id, index)
 );
 CREATE INDEX ON transactions_outputs (transaction_id);

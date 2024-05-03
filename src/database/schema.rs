@@ -86,7 +86,6 @@ diesel::table! {
         amount -> Nullable<Int8>,
         script_public_key -> Nullable<Bytea>,
         script_public_key_address -> Nullable<Varchar>,
-        script_public_key_type -> Nullable<Varchar>,
     }
 }
 
