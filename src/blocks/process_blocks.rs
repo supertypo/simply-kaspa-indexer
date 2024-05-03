@@ -20,10 +20,20 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
             hash: block.header.hash.as_bytes().to_vec(),
             accepted_id_merkle_root: Some(block.header.accepted_id_merkle_root.as_bytes().to_vec()),
             difficulty: block.verbose_data.as_ref().map(|v| v.difficulty),
-            merge_set_blues_hashes: block.verbose_data.as_ref().map(|v| v.merge_set_blues_hashes.iter()
-                .map(|w| Some(w.as_bytes().to_vec())).collect()),
-            merge_set_reds_hashes: block.verbose_data.as_ref().map(|v| v.merge_set_reds_hashes.iter()
-                .map(|w| Some(w.as_bytes().to_vec())).collect()),
+            merge_set_blues_hashes: block.verbose_data.as_ref().map(|v| {
+                if !v.merge_set_blues_hashes.is_empty() {
+                    Some(v.merge_set_blues_hashes.iter().map(|w| w.as_bytes().to_vec()).collect())
+                } else {
+                    None
+                }
+            }).unwrap(),
+            merge_set_reds_hashes: block.verbose_data.as_ref().map(|v| {
+                if !v.merge_set_reds_hashes.is_empty() {
+                    Some(v.merge_set_reds_hashes.iter().map(|w| w.as_bytes().to_vec()).collect())
+                } else {
+                    None
+                }
+            }).unwrap(),
             selected_parent_hash: block.verbose_data.as_ref().map(|v| v.selected_parent_hash.as_bytes().to_vec()),
             bits: Some(block.header.bits as i64),
             blue_score: Some(block.header.blue_score as i64),
@@ -31,7 +41,7 @@ pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
             daa_score: Some(block.header.daa_score as i64),
             hash_merkle_root: Some(block.header.hash_merkle_root.as_bytes().to_vec()),
             nonce: Some(block.header.nonce.to_be_bytes().to_vec()),
-            parents: Some(block.header.parents_by_level[0].iter().map(|v| Some(v.as_bytes().to_vec())).collect()),
+            parents: Some(block.header.parents_by_level[0].iter().map(|v| v.as_bytes().to_vec()).collect()),
             pruning_point: Some(block.header.pruning_point.as_bytes().to_vec()),
             timestamp: Some(block.header.timestamp as i64),
             utxo_commitment: Some(block.header.utxo_commitment.as_bytes().to_vec()),
