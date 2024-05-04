@@ -135,10 +135,10 @@ async fn start_processing(buffer_size: f64,
     let checkpoint_hash;
     if from_pruning_point {
         checkpoint_hash = block_dag_info.pruning_point_hash.to_string();
-        info!("BlockDagInfo received: pruning_point={}", checkpoint_hash);
+        info!("BlockDagInfo received: pruning_point {}", checkpoint_hash);
     } else {
         checkpoint_hash = block_dag_info.virtual_parent_hashes.get(0).unwrap().to_string();
-        info!("BlockDagInfo received: virtual_parent_hash={}", checkpoint_hash);
+        info!("BlockDagInfo received: virtual_parent_hash {}", checkpoint_hash);
     }
     let mut block_checkpoint_hash = checkpoint_hash.clone();
     let mut virtual_checkpoint_hash = checkpoint_hash.clone();
@@ -146,14 +146,14 @@ async fn start_processing(buffer_size: f64,
         let saved_block_checkpoint = load_block_checkpoint(db_pool.clone());
         if saved_block_checkpoint.is_some() {
             block_checkpoint_hash = saved_block_checkpoint.unwrap();
-            info!("Loaded block_checkpoint={}", block_checkpoint_hash);
+            info!("Loaded block_checkpoint {}", block_checkpoint_hash);
         } else {
             warn!("block_checkpoint_hash not found, using {}", if from_pruning_point { "pruning point" } else { "virtual_parent_hash" });
         }
         let saved_virtual_checkpoint = load_virtual_checkpoint(db_pool.clone());
         if saved_virtual_checkpoint.is_some() {
             virtual_checkpoint_hash = saved_virtual_checkpoint.unwrap();
-            info!("Loaded virtual_checkpoint={}", virtual_checkpoint_hash);
+            info!("Loaded virtual_checkpoint {}", virtual_checkpoint_hash);
         } else {
             warn!("virtual_checkpoint_hash not found, using {}", if from_pruning_point { "pruning point" } else { "virtual_parent_hash" });
         }

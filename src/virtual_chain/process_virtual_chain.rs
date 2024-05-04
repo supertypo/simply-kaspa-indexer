@@ -26,7 +26,7 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
     let mut checkpoint_hash_last_saved = SystemTime::now();
 
     loop {
-        info!("Getting virtual chain from start_hash={}", hex::encode(checkpoint_hash.clone()));
+        info!("Getting virtual chain from start_hash {}", hex::encode(checkpoint_hash.clone()));
         let response = with_retry(|| kaspad_client.get_virtual_chain_from_block(kaspa_hashes::Hash::from_slice(checkpoint_hash.as_slice()), true)).await
             .expect("Error when invoking GetVirtualChainFromBlock");
 
@@ -56,7 +56,7 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
 
         if SystemTime::now().duration_since(checkpoint_hash_last_saved).unwrap().as_secs() > CHECKPOINT_SAVE_INTERVAL {
             let checkpoint = hex::encode(checkpoint_hash.clone());
-            info!("Saving virtual_checkpoint={}", checkpoint);
+            info!("Saving virtual_checkpoint {}", checkpoint);
             save_virtual_checkpoint(checkpoint, db_pool.clone());
             checkpoint_hash_last_saved = SystemTime::now();
         }

@@ -27,7 +27,7 @@ pub async fn fetch_blocks(checkpoint_hash: String,
     let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
     loop {
         let last_fetch_time = SystemTime::now();
-        info!("Getting blocks with low_hash={}", hex::encode(low_hash.clone()));
+        info!("Getting blocks with low_hash {}", hex::encode(low_hash.clone()));
         let response = with_retry(|| kaspad_client.get_blocks(Some(Hash::from_slice(low_hash.as_slice())), true, true)).await.expect("Error when invoking GetBlocks");
         info!("Received {} blocks", response.blocks.len());
         trace!("Block hashes: \n{:#?}", response.block_hashes);

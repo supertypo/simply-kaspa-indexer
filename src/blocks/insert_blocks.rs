@@ -59,14 +59,14 @@ pub async fn insert_blocks(buffer_size: f64,
                         .get_result::<i64>(con).unwrap();
                     if checkpoint_hash_tx_committed_count == checkpoint_hash_tx_expected_count {
                         let checkpoint = hex::encode(checkpoint_hash);
-                        info!("Saving block_checkpoint={}", checkpoint);
+                        info!("Saving block_checkpoint {}", checkpoint);
                         save_block_checkpoint(checkpoint, db_pool.clone());
                         checkpoint_hash = vec![];
                         checkpoint_last_saved = SystemTime::now();
                     } else if checkpoint_hash_tx_committed_count > checkpoint_hash_tx_expected_count {
                         panic!("Expected {}, but found {} transactions on block {}!", checkpoint_hash_tx_expected_count, checkpoint_hash_tx_committed_count, hex::encode(&checkpoint_hash))
                     } else if SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > 300 {
-                        error!("Still unable to save block_checkpoint={}. Expected {} txs, committed {}", hex::encode(&checkpoint_hash), checkpoint_hash_tx_expected_count, checkpoint_hash_tx_committed_count)
+                        error!("Still unable to save block_checkpoint {}. Expected {} txs, committed {}", hex::encode(&checkpoint_hash), checkpoint_hash_tx_expected_count, checkpoint_hash_tx_committed_count)
                     }
                 }
             }
