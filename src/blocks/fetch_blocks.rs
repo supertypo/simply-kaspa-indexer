@@ -2,6 +2,7 @@ extern crate diesel;
 
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
@@ -14,10 +15,11 @@ use log::info;
 use tokio::time::sleep;
 use crate::kaspad::client::with_retry;
 
-pub async fn fetch_blocks(checkpoint_hash: String,
+pub async fn fetch_blocks(running: Arc<AtomicBool>,
+                          checkpoint_hash: String,
                           kaspad_client: KaspaRpcClient,
                           rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
-                          rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) -> Result<(), ()> {
+                          rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) {
     const INITIAL_SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(15);
     let start_time = SystemTime::now();
     let checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
@@ -25,7 +27,8 @@ pub async fn fetch_blocks(checkpoint_hash: String,
     let mut last_sync_check = SystemTime::UNIX_EPOCH;
     let mut synced = false;
     let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
-    loop {
+
+    while running.load(Ordering::Relaxed) {
         let last_fetch_time = SystemTime::now();
         debug!("Getting blocks with low_hash {}", hex::encode(low_hash.clone()));
         let response = with_retry(|| kaspad_client.get_blocks(Some(Hash::from_slice(low_hash.as_slice())), true, true)).await.expect("Error when invoking GetBlocks");

@@ -2,6 +2,7 @@ extern crate diesel;
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use bigdecimal::ToPrimitive;
@@ -15,9 +16,10 @@ use tokio::time::sleep;
 use crate::database::models::{AddressTransaction, BlockTransaction, Subnetwork, SubnetworkInsertable, Transaction, TransactionInput, TransactionOutput};
 use crate::database::schema::subnetworks;
 
-pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
+pub async fn process_transactions(running: Arc<AtomicBool>,
+                                  rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
                                   db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>>,
-                                  db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+                                  db_pool: Pool<ConnectionManager<PgConnection>>) {
     let mut subnetwork_map: HashMap<String, i16> = HashMap::new();
     let mut valid_address = false;
     let con = &mut db_pool.get().expect("Database connection FAILED");
@@ -27,7 +29,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
     }
     info!("Loaded {} known subnetworks", subnetwork_map.len());
 
-    loop {
+    while running.load(Ordering::Relaxed) {
         let transactions_option = rpc_transactions_queue.pop();
         if transactions_option.is_none() {
             sleep(Duration::from_millis(100)).await;

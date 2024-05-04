@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crossbeam_queue::ArrayQueue;
@@ -7,9 +8,10 @@ use tokio::time::sleep;
 
 use crate::database::models::Block;
 
-pub async fn process_blocks(rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
-                            db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>) -> Result<(), ()> {
-    loop {
+pub async fn process_blocks(running: Arc<AtomicBool>,
+                            rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
+                            db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>) {
+    while running.load(Ordering::Relaxed) {
         let block_option = rpc_blocks_queue.pop();
         if block_option.is_none() {
             sleep(Duration::from_millis(100)).await;

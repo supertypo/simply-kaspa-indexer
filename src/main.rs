@@ -1,7 +1,8 @@
 extern crate diesel;
 
-use std::env;
+use std::{env, process};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use clap::{Arg, Command, crate_description, crate_name};
@@ -12,6 +13,9 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, info, warn};
+use signal_hook::consts::{SIGINT, SIGQUIT, SIGTERM};
+use signal_hook::iterator::Signals;
+use signal_hook::low_level::signal_name;
 use tokio::task;
 
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
@@ -167,6 +171,20 @@ async fn start_processing(buffer_size: f64,
         }
     }
 
+    let running = Arc::new(AtomicBool::new(true));
+    let running_clone = running.clone();
+    std::thread::spawn(move || {
+        for signal in Signals::new(&[SIGINT, SIGQUIT, SIGTERM]).expect("Signal handler setup FAILED").forever() {
+            let signal_name = signal_name(signal).unwrap_or("UNKNOWN");
+            if !running_clone.load(Ordering::Relaxed) {
+                warn!("{} received, terminating...", signal_name);
+                process::exit(1);
+            }
+            running_clone.store(false, Ordering::Relaxed);
+            warn!("{} received, stopping... (repeat for forced close)", signal_name);
+        }
+    });
+
     let base_buffer = 3000f64;
     let rpc_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
     let rpc_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
@@ -174,12 +192,12 @@ async fn start_processing(buffer_size: f64,
     let db_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
 
     let mut tasks = vec![];
-    tasks.push(task::spawn(fetch_blocks(block_checkpoint_hash, kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
-    tasks.push(task::spawn(process_blocks(rpc_blocks_queue.clone(), db_blocks_queue.clone())));
-    tasks.push(task::spawn(process_transactions(rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(insert_blocks(buffer_size, db_blocks_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(insert_txs_ins_outs(buffer_size, db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(process_virtual_chain(virtual_checkpoint_hash, kaspad_client.clone(), db_pool.clone())));
+    tasks.push(task::spawn(fetch_blocks(running.clone(), block_checkpoint_hash, kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
+    tasks.push(task::spawn(process_blocks(running.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())));
+    tasks.push(task::spawn(process_transactions(running.clone(), rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(insert_blocks(running.clone(), buffer_size, db_blocks_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(insert_txs_ins_outs(running.clone(), buffer_size, db_transactions_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(process_virtual_chain(running.clone(), virtual_checkpoint_hash, kaspad_client.clone(), db_pool.clone())));
 
     for task in tasks {
         let _ = task.await.expect("Should not happen");

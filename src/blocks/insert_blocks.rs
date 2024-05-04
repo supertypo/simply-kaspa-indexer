@@ -3,6 +3,7 @@ extern crate diesel;
 use std::cmp::min;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
@@ -18,9 +19,10 @@ use crate::database::schema::blocks;
 use crate::database::schema::blocks_transactions;
 use crate::vars::vars::save_block_checkpoint;
 
-pub async fn insert_blocks(buffer_size: f64,
+pub async fn insert_blocks(running: Arc<AtomicBool>,
+                           buffer_size: f64,
                            db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
-                           db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+                           db_pool: Pool<ConnectionManager<PgConnection>>) {
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     let max_queue_size = min((1000f64 * buffer_size) as usize, 3500); // ~3500 is the max batch size db supports
     let mut insert_queue: HashSet<Block> = HashSet::with_capacity(max_queue_size);
@@ -32,7 +34,8 @@ pub async fn insert_blocks(buffer_size: f64,
     let mut checkpoint_hash_tx_expected_count = 0;
     let mut checkpoint_last_saved = SystemTime::now();
     let mut last_commit_time = SystemTime::now();
-    loop {
+
+    while running.load(Ordering::Relaxed) {
         if insert_queue.len() >= max_queue_size || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
             let con = &mut db_pool.get().expect("Database connection FAILED");
             con.transaction(|con| {

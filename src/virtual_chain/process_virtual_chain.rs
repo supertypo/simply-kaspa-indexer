@@ -1,6 +1,8 @@
 extern crate diesel;
 
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
 use diesel::PgConnection;
@@ -16,16 +18,17 @@ use crate::vars::vars::save_virtual_checkpoint;
 use crate::virtual_chain::update_chain_blocks::update_chain_blocks;
 use crate::virtual_chain::update_transactions::update_transactions;
 
-pub async fn process_virtual_chain(checkpoint_hash: String,
+pub async fn process_virtual_chain(running: Arc<AtomicBool>,
+                                   checkpoint_hash: String,
                                    kaspad_client: KaspaRpcClient,
-                                   db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+                                   db_pool: Pool<ConnectionManager<PgConnection>>) {
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     let start_time = SystemTime::now();
     let mut synced = false;
     let mut checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
     let mut checkpoint_hash_last_saved = SystemTime::now();
 
-    loop {
+    while running.load(Ordering::Relaxed) {
         debug!("Getting virtual chain from start_hash {}", hex::encode(checkpoint_hash.clone()));
         let response = with_retry(|| kaspad_client.get_virtual_chain_from_block(kaspa_hashes::Hash::from_slice(checkpoint_hash.as_slice()), true)).await
             .expect("Error when invoking GetVirtualChainFromBlock");

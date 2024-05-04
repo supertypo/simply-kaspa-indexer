@@ -2,6 +2,7 @@ extern crate diesel;
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
@@ -21,9 +22,10 @@ use crate::database::schema::transactions;
 // Max number of rows for insert statements:
 const BATCH_INSERT_SIZE: usize = 3600;
 
-pub async fn insert_txs_ins_outs(buffer_size: f64,
+pub async fn insert_txs_ins_outs(running: Arc<AtomicBool>,
+                                 buffer_size: f64,
                                  db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>>,
-                                 db_pool: Pool<ConnectionManager<PgConnection>>) -> Result<(), ()> {
+                                 db_pool: Pool<ConnectionManager<PgConnection>>) {
     let max_set_size = (3000f64 * buffer_size) as usize; // Large sets helps us to filter duplicates during catch-up
     let mut transactions: HashSet<Transaction> = HashSet::with_capacity(max_set_size);
     let mut block_tx: HashSet<BlockTransaction> = HashSet::with_capacity(max_set_size);
@@ -32,7 +34,8 @@ pub async fn insert_txs_ins_outs(buffer_size: f64,
     let mut tx_addresses: HashSet<AddressTransaction> = HashSet::with_capacity(max_set_size * 2);
     let mut last_block_timestamp;
     let mut last_commit_time = SystemTime::now();
-    loop {
+
+    while running.load(Ordering::Relaxed) {
         let transaction_option = db_transactions_queue.pop();
         if transaction_option.is_none() {
             sleep(Duration::from_millis(100)).await;
