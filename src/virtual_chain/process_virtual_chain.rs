@@ -7,7 +7,7 @@ use diesel::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
-use log::info;
+use log::{debug, info};
 use tokio::task;
 use tokio::time::sleep;
 
@@ -26,7 +26,7 @@ pub async fn process_virtual_chain(checkpoint_hash: String,
     let mut checkpoint_hash_last_saved = SystemTime::now();
 
     loop {
-        info!("Getting virtual chain from start_hash {}", hex::encode(checkpoint_hash.clone()));
+        debug!("Getting virtual chain from start_hash {}", hex::encode(checkpoint_hash.clone()));
         let response = with_retry(|| kaspad_client.get_virtual_chain_from_block(kaspa_hashes::Hash::from_slice(checkpoint_hash.as_slice()), true)).await
             .expect("Error when invoking GetVirtualChainFromBlock");
 

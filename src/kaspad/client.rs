@@ -7,7 +7,7 @@ use kaspa_rpc_core::RpcNetworkType;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspa_wrpc_client::client::ConnectOptions;
 use kaspa_wrpc_client::error::Error;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use tokio::time::sleep;
 
 pub async fn with_retry<F, Fut, T, E>(mut f: F) -> Result<T, E>
@@ -39,13 +39,13 @@ pub async fn with_retry<F, Fut, T, E>(mut f: F) -> Result<T, E>
 }
 
 pub async fn connect_kaspad(url: String, force_network: String) -> Result<KaspaRpcClient, Error> {
-    info!("Connecting to kaspad {}", url);
+    debug!("Connecting to Kaspad {}", url);
     let client = KaspaRpcClient::new(WrpcEncoding::Borsh, &url, None)?;
     client.connect(ConnectOptions::fallback()).await?;
     let server_info = client.get_server_info().await?;
     let network = format!("{}{}", server_info.network_id.network_type,
                           server_info.network_id.suffix.map(|s| format!("-{}", s.to_string())).unwrap_or_default());
-    info!("Connected to kaspad version: {}, network: {}", server_info.server_version, network);
+    info!("Connected to Kaspad {} version: {}, network: {}", url, server_info.server_version, network);
 
     if network != force_network {
         return Err(Error::Custom(format!("Network mismatch, expected '{}', actual '{}'", force_network, network)));

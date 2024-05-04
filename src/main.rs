@@ -11,7 +11,7 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
-use log::{info, warn};
+use log::{debug, info, warn};
 use tokio::task;
 
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
@@ -53,6 +53,10 @@ async fn main() {
             .help("error, warn, info, debug, trace, off")
             .default_value("info")
             .action(clap::ArgAction::Set))
+        .arg(Arg::new("log-no-color")
+            .long("no-color")
+            .help("Disable colored output")
+            .action(clap::ArgAction::SetTrue))
         .arg(Arg::new("buffer-size")
             .short('b')
             .long("buffer-size")
@@ -73,7 +77,7 @@ async fn main() {
         .arg(Arg::new("initialize-db")
             .short('c')
             .long("initialize-db")
-            .help("(Re-)initializes the database schema. Use with care.")
+            .help("(Re-)initializes the database schema. Use with care")
             .action(clap::ArgAction::SetTrue))
         .get_matches();
 
@@ -81,14 +85,17 @@ async fn main() {
     let network = matches.get_one::<String>("network").unwrap().to_lowercase();
     let database_url = matches.get_one::<String>("database-url").unwrap();
     let log_level = matches.get_one::<String>("log-level").unwrap();
+    let log_no_color = matches.get_flag("log-no-color");
     let buffer_size = matches.get_one::<f64>("buffer-size").unwrap().to_owned();
     let from_pruning_point = matches.get_flag("from-pruning-point");
     let ignore_checkpoint = matches.get_flag("ignore-checkpoint");
     let initialize_db = matches.get_flag("initialize-db");
 
     env::set_var("RUST_LOG", log_level);
+    env::set_var("RUST_LOG_STYLE", if log_no_color { "never" } else { "always" });
     env_logger::builder()
         .target(env_logger::Target::Stdout)
+        .format_target(false)
         .format_timestamp_millis()
         .init();
 
@@ -96,6 +103,7 @@ async fn main() {
         panic!("Invalid buffer-size");
     }
 
+    debug!("Connecting to PostgreSQL {}", database_url);
     let db_pool = Pool::builder()
         .connection_timeout(Duration::from_secs(10))
         .max_size(20)
@@ -103,7 +111,7 @@ async fn main() {
         .expect("Database pool FAILED");
     let db_con = &mut db_pool.get()
         .expect("Database connection FAILED");
-    info!("Connection established");
+    info!("Connected to PostgreSQL {}", database_url);
 
     if initialize_db {
         info!("Initializing database");

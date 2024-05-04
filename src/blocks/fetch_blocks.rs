@@ -22,14 +22,14 @@ pub async fn fetch_blocks(checkpoint_hash: String,
     let start_time = SystemTime::now();
     let checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
     let mut low_hash = checkpoint_hash.clone();
-    let mut last_sync_check = SystemTime::now();
+    let mut last_sync_check = SystemTime::UNIX_EPOCH;
     let mut synced = false;
     let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
     loop {
         let last_fetch_time = SystemTime::now();
-        info!("Getting blocks with low_hash {}", hex::encode(low_hash.clone()));
+        debug!("Getting blocks with low_hash {}", hex::encode(low_hash.clone()));
         let response = with_retry(|| kaspad_client.get_blocks(Some(Hash::from_slice(low_hash.as_slice())), true, true)).await.expect("Error when invoking GetBlocks");
-        info!("Received {} blocks", response.blocks.len());
+        debug!("Received {} blocks", response.blocks.len());
         trace!("Block hashes: \n{:#?}", response.block_hashes);
 
         if !synced {
@@ -59,7 +59,7 @@ pub async fn fetch_blocks(checkpoint_hash: String,
                 }
                 let mut last_blocks_warn = SystemTime::now();
                 while rpc_blocks_queue.is_full() {
-                    if SystemTime::now().duration_since(last_blocks_warn).unwrap().as_secs() >= 10 {
+                    if SystemTime::now().duration_since(last_blocks_warn).unwrap().as_secs() >= 30 {
                         warn!("RPC blocks queue is full");
                         last_blocks_warn = SystemTime::now();
                     }
@@ -67,7 +67,7 @@ pub async fn fetch_blocks(checkpoint_hash: String,
                 }
                 let mut last_transactions_warn = SystemTime::now();
                 while rpc_transactions_queue.is_full() {
-                    if SystemTime::now().duration_since(last_transactions_warn).unwrap().as_secs() >= 10 {
+                    if SystemTime::now().duration_since(last_transactions_warn).unwrap().as_secs() >= 30 {
                         warn!("RPC transactions queue is full");
                         last_transactions_warn = SystemTime::now();
                     }
