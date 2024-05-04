@@ -61,7 +61,7 @@ pub async fn process_transactions(rpc_transactions_queue: Arc<ArrayQueue<Vec<Rpc
                 transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
                 subnetwork_id: subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone(),
                 hash: verbose_data.hash.as_bytes().to_vec(),
-                mass: verbose_data.mass as i32,
+                mass: if verbose_data.mass != 0 { Some(verbose_data.mass as i32) } else { None },
                 block_time: verbose_data.block_time as i64,
             };
 

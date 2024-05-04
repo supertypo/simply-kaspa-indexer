@@ -95,7 +95,7 @@ pub struct Transaction {
     pub transaction_id: Vec<u8>,
     pub subnetwork_id: i16,
     pub hash: Vec<u8>,
-    pub mass: i32,
+    pub mass: Option<i32>,
     pub block_time: i64,
 }
 
