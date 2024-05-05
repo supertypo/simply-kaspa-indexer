@@ -49,7 +49,7 @@ pub async fn process_blocks(running: Arc<AtomicBool>,
             utxo_commitment: Some(block.header.utxo_commitment.as_bytes().to_vec()),
             version: Some(block.header.version as i16),
         };
-        while db_blocks_queue.is_full() {
+        while db_blocks_queue.is_full() && running.load(Ordering::Relaxed) {
             sleep(Duration::from_millis(100)).await;
         }
         let _ = db_blocks_queue.push((db_block, block.verbose_data.as_ref()

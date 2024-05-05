@@ -61,7 +61,7 @@ pub async fn fetch_blocks(running: Arc<AtomicBool>,
                     continue;
                 }
                 let mut last_blocks_warn = SystemTime::now();
-                while rpc_blocks_queue.is_full() {
+                while rpc_blocks_queue.is_full() && running.load(Ordering::Relaxed) {
                     if SystemTime::now().duration_since(last_blocks_warn).unwrap().as_secs() >= 30 {
                         warn!("RPC blocks queue is full");
                         last_blocks_warn = SystemTime::now();
@@ -69,7 +69,7 @@ pub async fn fetch_blocks(running: Arc<AtomicBool>,
                     sleep(Duration::from_secs(1)).await;
                 }
                 let mut last_transactions_warn = SystemTime::now();
-                while rpc_transactions_queue.is_full() {
+                while rpc_transactions_queue.is_full() && running.load(Ordering::Relaxed) {
                     if SystemTime::now().duration_since(last_transactions_warn).unwrap().as_secs() >= 30 {
                         warn!("RPC transactions queue is full");
                         last_transactions_warn = SystemTime::now();

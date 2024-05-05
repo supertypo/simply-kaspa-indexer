@@ -102,7 +102,7 @@ pub async fn process_transactions(running: Arc<AtomicBool>,
                 o
             }).collect::<Vec<TransactionOutput>>();
 
-            while db_transactions_queue.is_full() {
+            while db_transactions_queue.is_full() && running.load(Ordering::Relaxed) {
                 sleep(Duration::from_millis(100)).await;
             }
             let _ = db_transactions_queue.push((db_transaction, db_block_transaction, db_transaction_inputs, db_transaction_outputs, db_addresses_transactions));
