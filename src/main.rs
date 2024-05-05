@@ -197,7 +197,7 @@ async fn start_processing(buffer_size: f64,
     tasks.push(task::spawn(process_transactions(running.clone(), rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_blocks(running.clone(), buffer_size, db_blocks_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_txs_ins_outs(running.clone(), buffer_size, db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(process_virtual_chain(running.clone(), virtual_checkpoint_hash, kaspad_client.clone(), db_pool.clone())));
+    tasks.push(task::spawn(process_virtual_chain(running.clone(), buffer_size, virtual_checkpoint_hash, kaspad_client.clone(), db_pool.clone())));
 
     for task in tasks {
         let _ = task.await.expect("Should not happen");

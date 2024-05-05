@@ -19,6 +19,7 @@ use crate::virtual_chain::update_chain_blocks::update_chain_blocks;
 use crate::virtual_chain::update_transactions::update_transactions;
 
 pub async fn process_virtual_chain(running: Arc<AtomicBool>,
+                                   buffer_size: f64,
                                    checkpoint_hash: String,
                                    kaspad_client: KaspaRpcClient,
                                    db_pool: Pool<ConnectionManager<PgConnection>>) {
@@ -43,8 +44,8 @@ pub async fn process_virtual_chain(running: Arc<AtomicBool>,
         let con = &mut db_pool.get().expect("Database connection FAILED");
         con.transaction(|con| {
             // We need to do all the chain processing in a single transaction to avoid an incomplete state if the process is killed
-            update_transactions(response.removed_chain_block_hashes.clone(), response.accepted_transaction_ids, last_accepted_block_time.clone(), con);
-            update_chain_blocks(response.added_chain_block_hashes, response.removed_chain_block_hashes, con);
+            update_transactions(buffer_size, response.removed_chain_block_hashes.clone(), response.accepted_transaction_ids, last_accepted_block_time.clone(), con);
+            update_chain_blocks(buffer_size, response.added_chain_block_hashes, response.removed_chain_block_hashes, con);
             if let Some(new_checkpoint_hash) = last_accepted_block_hash {
                 checkpoint_hash = new_checkpoint_hash.as_bytes().to_vec();
                 let checkpoint = hex::encode(checkpoint_hash.clone());

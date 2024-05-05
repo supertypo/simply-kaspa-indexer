@@ -1,5 +1,7 @@
 extern crate diesel;
 
+use std::cmp::min;
+
 use diesel::{delete, ExpressionMethods, insert_into, PgConnection, RunQueryDsl};
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcHash};
@@ -8,8 +10,13 @@ use log::{debug, info, trace};
 use crate::database::models::TransactionAcceptance;
 use crate::database::schema::transactions_acceptances;
 
-pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_ids: Vec<RpcAcceptedTransactionIds>, last_accepted_block_time: Option<u64>, con: &mut PooledConnection<ConnectionManager<PgConnection>>) {
-    const BATCH_INSERT_SIZE: usize = 7500;
+pub fn update_transactions(buffer_size: f64,
+                           removed_hashes: Vec<RpcHash>,
+                           accepted_transaction_ids: Vec<RpcAcceptedTransactionIds>,
+                           last_accepted_block_time: Option<u64>,
+                           con: &mut PooledConnection<ConnectionManager<PgConnection>>) {
+    // ~7500 is the max batch size db supports:
+    let batch_insert_size = min((2000f64 * buffer_size) as usize, 7500);
     if log::log_enabled!(log::Level::Debug) {
         let accepted_count = accepted_transaction_ids.iter().map(|t| t.accepted_transaction_ids.len()).sum::<usize>();
         debug!("Received {} accepted transactions and {} removed chain blocks", accepted_count, removed_hashes.len());
@@ -21,7 +28,7 @@ pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_id
     let mut rows_added = 0;
 
     let removed_blocks = removed_hashes.into_iter().map(|h| h.as_bytes().to_vec()).collect::<Vec<Vec<u8>>>();
-    for removed_blocks_chunk in removed_blocks.chunks(BATCH_INSERT_SIZE) {
+    for removed_blocks_chunk in removed_blocks.chunks(batch_insert_size) {
         debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
         rows_removed += delete(transactions_acceptances::dsl::transactions_acceptances)
             .filter(transactions_acceptances::block_hash.eq_any(removed_blocks_chunk))
@@ -37,7 +44,7 @@ pub fn update_transactions(removed_hashes: Vec<RpcHash>, accepted_transaction_id
             });
         }
     }
-    for accepted_transactions_chunk in accepted_transactions.chunks(BATCH_INSERT_SIZE) {
+    for accepted_transactions_chunk in accepted_transactions.chunks(batch_insert_size) {
         debug!("Processing {} accepted transactions", accepted_transactions_chunk.len());
         rows_added += insert_into(transactions_acceptances::dsl::transactions_acceptances)
             .values(accepted_transactions_chunk)
