@@ -1,6 +1,6 @@
 use diesel::{insert_into, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use diesel::expression_methods::ExpressionMethods;
-use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::upsert::excluded;
 use log::trace;
 
@@ -18,11 +18,12 @@ pub fn load_virtual_checkpoint(db_pool: Pool<ConnectionManager<PgConnection>>) -
 }
 
 pub fn save_block_checkpoint(start_point: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
-    save(String::from(VAR_KEY_BLOCK_CHECKPOINT), start_point, db_pool)
+    let con = &mut db_pool.get().expect("Database connection FAILED");
+    save(String::from(VAR_KEY_BLOCK_CHECKPOINT), start_point, con)
 }
 
-pub fn save_virtual_checkpoint(start_point: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
-    save(String::from(VAR_KEY_VIRTUAL_CHECKPOINT), start_point, db_pool)
+pub fn save_virtual_checkpoint(start_point: String, con: &mut PooledConnection<ConnectionManager<PgConnection>>) {
+    save(String::from(VAR_KEY_VIRTUAL_CHECKPOINT), start_point, con)
 }
 
 pub fn load(key: String, db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
@@ -43,8 +44,7 @@ pub fn load(key: String, db_pool: Pool<ConnectionManager<PgConnection>>) -> Opti
     }
 }
 
-pub fn save(key: String, value: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
-    let con = &mut db_pool.get().expect("Database connection FAILED");
+pub fn save(key: String, value: String, con: &mut PooledConnection<ConnectionManager<PgConnection>>) {
     trace!("Saving database var with key '{}' value: {}", key, value);
     insert_into(vars::dsl::vars)
         .values(Var { key, value })
