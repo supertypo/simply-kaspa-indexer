@@ -12,7 +12,7 @@ use diesel::dsl::exists;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
-use log::{error, info};
+use log::{info, warn};
 use tokio::time::sleep;
 
 use crate::database::models::Block;
@@ -99,7 +99,7 @@ pub async fn insert_blocks(running: Arc<AtomicBool>,
                     } else if checkpoint_hash_tx_committed_count > checkpoint_hash_tx_expected_count {
                         panic!("Expected {}, but found {} transactions on block {}!", checkpoint_hash_tx_expected_count, checkpoint_hash_tx_committed_count, hex::encode(&checkpoint_hash))
                     } else if SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > 300 {
-                        error!("Still unable to save block_checkpoint {}. Expected {} txs, committed {}", hex::encode(&checkpoint_hash), checkpoint_hash_tx_expected_count, checkpoint_hash_tx_committed_count)
+                        warn!("Still unable to save block_checkpoint {}. Expected {} txs, committed {}", hex::encode(&checkpoint_hash), checkpoint_hash_tx_expected_count, checkpoint_hash_tx_committed_count)
                     }
                 }
             }
