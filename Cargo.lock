@@ -1475,6 +1475,7 @@ dependencies = [
  "kaspa-rpc-core",
  "kaspa-wrpc-client",
  "log",
+ "regex",
  "serde",
  "signal-hook",
  "tokio",

@@ -13,6 +13,7 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, info, warn};
+use regex::Regex;
 use signal_hook::consts::{SIGINT, SIGQUIT, SIGTERM};
 use signal_hook::iterator::Signals;
 use signal_hook::low_level::signal_name;
@@ -107,7 +108,8 @@ async fn main() {
         panic!("Invalid buffer-size");
     }
 
-    debug!("Connecting to PostgreSQL {}", database_url);
+    let db_url_cleaned = Regex::new(r"(postgres://postgres:)[^@]+(@)").unwrap().replace(database_url, "$1$2");
+    debug!("Connecting to PostgreSQL {}", db_url_cleaned);
     let db_pool = Pool::builder()
         .connection_timeout(Duration::from_secs(10))
         .max_size(20)
@@ -115,7 +117,7 @@ async fn main() {
         .expect("Database pool FAILED");
     let db_con = &mut db_pool.get()
         .expect("Database connection FAILED");
-    info!("Connected to PostgreSQL {}", database_url);
+    info!("Connected to PostgreSQL {}", db_url_cleaned);
 
     if initialize_db {
         info!("Initializing database");
