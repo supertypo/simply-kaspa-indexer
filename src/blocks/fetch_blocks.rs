@@ -19,9 +19,9 @@ use crate::kaspad::client::with_retry;
 pub async fn fetch_blocks(running: Arc<AtomicBool>,
                           checkpoint_hash: String,
                           kaspad_client: KaspaRpcClient,
-                          rpc_blocks_queue: Arc<ArrayQueue<(bool, RpcBlock)>>,
+                          rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
                           rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) {
-    const INITIAL_SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(15);
+    const SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(30);
     let start_time = SystemTime::now();
     let checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
     let mut low_hash = checkpoint_hash;
@@ -37,7 +37,7 @@ pub async fn fetch_blocks(running: Arc<AtomicBool>,
         trace!("Block hashes: \n{:#?}", response.block_hashes);
 
         if !synced {
-            if SystemTime::now().duration_since(last_sync_check).unwrap() >= INITIAL_SYNC_CHECK_INTERVAL {
+            if SystemTime::now().duration_since(last_sync_check).unwrap() >= SYNC_CHECK_INTERVAL {
                 let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
                 info!("Getting tip hashes from BlockDagInfo for sync check");
                 tip_hash = block_dag_info.tip_hashes[0];
@@ -48,7 +48,7 @@ pub async fn fetch_blocks(running: Arc<AtomicBool>,
         let blocks_len = response.blocks.len();
         let txs_len: usize = response.blocks.iter().map(|b| b.transactions.len()).sum();
         if blocks_len > 1 {
-            low_hash = response.blocks.last().unwrap().header.hash.as_bytes().to_vec();
+            let new_low_hash = response.blocks.last().unwrap().header.hash.as_bytes().to_vec();
             for b in response.blocks {
                 let block_hash = b.header.hash;
                 if !synced && block_hash == tip_hash {
@@ -57,7 +57,7 @@ pub async fn fetch_blocks(running: Arc<AtomicBool>,
                         time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
                     synced = true;
                 }
-                if block_hash.as_bytes().to_vec() == low_hash { // VCP doesn't get acceptance data from the checkpoint_hash, so no need to make an exception for it
+                if block_hash.as_bytes().to_vec() == low_hash {
                     trace!("Ignoring low_hash block {}", hex::encode(low_hash.clone()));
                     continue;
                 }
@@ -77,9 +77,10 @@ pub async fn fetch_blocks(running: Arc<AtomicBool>,
                     }
                     sleep(Duration::from_secs(1)).await;
                 }
-                rpc_blocks_queue.push((synced, RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data })).unwrap();
+                rpc_blocks_queue.push(RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }).unwrap();
                 rpc_transactions_queue.push(b.transactions).unwrap();
             }
+            low_hash = new_low_hash;
         }
         if blocks_len < 50 {
             sleep(Duration::from_secs(2)).await;
