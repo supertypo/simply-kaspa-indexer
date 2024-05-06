@@ -69,16 +69,11 @@ async fn main() {
             .default_value("1.0")
             .action(clap::ArgAction::Set)
             .value_parser(clap::value_parser!(f64)))
-        .arg(Arg::new("from-pruning-point")
-            .short('p')
-            .long("from-pruning-point")
-            .help("Start from the pruning point instead of a virtual parent")
-            .action(clap::ArgAction::SetTrue))
         .arg(Arg::new("ignore-checkpoint")
             .short('i')
             .long("ignore-checkpoint")
-            .help("Start from the pruning point or virtual parent instead of the saved checkpoint")
-            .action(clap::ArgAction::SetTrue))
+            .help("Ignore checkpoint and start from a specified block hash, or 'p' for pruning point")
+            .action(clap::ArgAction::Set))
         .arg(Arg::new("initialize-db")
             .short('c')
             .long("initialize-db")
@@ -89,11 +84,10 @@ async fn main() {
     let rpc_url = matches.get_one::<String>("rpc-url").unwrap().to_string();
     let network = matches.get_one::<String>("network").unwrap().to_lowercase();
     let database_url = matches.get_one::<String>("database-url").unwrap();
-    let log_level = matches.get_one::<String>("log-level").unwrap();
+    let log_level = matches.get_one::<String>("log-level").unwrap().to_lowercase();
     let log_no_color = matches.get_flag("log-no-color");
     let buffer_size = matches.get_one::<f64>("buffer-size").unwrap().to_owned();
-    let from_pruning_point = matches.get_flag("from-pruning-point");
-    let ignore_checkpoint = matches.get_flag("ignore-checkpoint");
+    let ignore_checkpoint = matches.get_one::<String>("ignore-checkpoint").map(|i| i.to_lowercase());
     let initialize_db = matches.get_flag("initialize-db");
 
     env::set_var("RUST_LOG", log_level);
@@ -137,30 +131,33 @@ async fn main() {
 
     let kaspad_client = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
 
-    start_processing(buffer_size, ignore_checkpoint, from_pruning_point, db_pool, kaspad_client).await.expect("Unreachable");
+    start_processing(buffer_size, ignore_checkpoint, db_pool, kaspad_client).await.expect("Unreachable");
 }
 
 async fn start_processing(buffer_size: f64,
-                          ignore_checkpoint: bool,
-                          from_pruning_point: bool,
+                          ignore_checkpoint: Option<String>,
                           db_pool: Pool<ConnectionManager<PgConnection>>,
                           kaspad_client: KaspaRpcClient) -> Result<(), ()> {
     let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
-    let mut checkpoint_hash;
-    if from_pruning_point {
-        checkpoint_hash = block_dag_info.pruning_point_hash.to_string();
-        info!("BlockDagInfo received: pruning_point {}", checkpoint_hash);
+    let checkpoint_hash;
+
+    if let Some(ignore_checkpoint) = ignore_checkpoint {
+        warn!("Checkpoint ignored due to user request (-i)");
+        if ignore_checkpoint == "p" {
+            checkpoint_hash = block_dag_info.pruning_point_hash.to_string();
+            info!("Starting from pruning_point {}", checkpoint_hash);
+        } else {
+            checkpoint_hash = ignore_checkpoint;
+            info!("Starting from user supplied block {}", checkpoint_hash);
+        }
     } else {
-        checkpoint_hash = block_dag_info.virtual_parent_hashes.get(0).unwrap().to_string();
-        info!("BlockDagInfo received: virtual_parent_hash {}", checkpoint_hash);
-    }
-    if !ignore_checkpoint {
         let saved_block_checkpoint = load_block_checkpoint(db_pool.clone());
         if saved_block_checkpoint.is_some() {
             checkpoint_hash = saved_block_checkpoint.unwrap();
-            info!("Loaded checkpoint {}", checkpoint_hash);
+            info!("Starting from checkpoint {}", checkpoint_hash);
         } else {
-            warn!("Checkpoint not found, using {}", if from_pruning_point { "pruning point" } else { "virtual_parent_hash" });
+            checkpoint_hash = block_dag_info.pruning_point_hash.to_string();
+            warn!("Checkpoint not found, starting from pruning point {}", checkpoint_hash);
         }
     }
 

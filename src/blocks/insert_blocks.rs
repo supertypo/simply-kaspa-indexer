@@ -69,7 +69,7 @@ pub async fn insert_blocks(running: Arc<AtomicBool>,
                         .expect("Commit removed chain blocks FAILED");
                 }
                 if !vcp_started && cb_cleared == 0 && ta_cleared == 0 {
-                    info!("Front of previous run reached, notifying virtual chain processor");
+                    info!("End of previous run reached, notifying virtual chain processor");
                     start_vcp.store(true, Ordering::Relaxed);
                     vcp_started = true;
                     checkpoint_last_saved = checkpoint_last_saved.add(Duration::from_secs(CHECKPOINT_SAVE_INTERVAL));
