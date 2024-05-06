@@ -4,7 +4,7 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::upsert::excluded;
 use log::trace;
 
-use crate::database::models::{Var, VAR_KEY_BLOCK_CHECKPOINT, VAR_KEY_LEGACY_CHECKPOINT, VAR_KEY_VIRTUAL_CHECKPOINT};
+use crate::database::models::{Var, VAR_KEY_BLOCK_CHECKPOINT, VAR_KEY_LEGACY_CHECKPOINT};
 use crate::database::schema::vars;
 
 pub fn load_block_checkpoint(db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
@@ -12,18 +12,9 @@ pub fn load_block_checkpoint(db_pool: Pool<ConnectionManager<PgConnection>>) -> 
         .or_else(|| load(String::from(VAR_KEY_LEGACY_CHECKPOINT), db_pool))
 }
 
-pub fn load_virtual_checkpoint(db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
-    load(String::from(VAR_KEY_VIRTUAL_CHECKPOINT), db_pool.clone())
-        .or_else(|| load(String::from(VAR_KEY_LEGACY_CHECKPOINT), db_pool))
-}
-
 pub fn save_block_checkpoint(start_point: String, db_pool: Pool<ConnectionManager<PgConnection>>) {
     let con = &mut db_pool.get().expect("Database connection FAILED");
     save(String::from(VAR_KEY_BLOCK_CHECKPOINT), start_point, con)
-}
-
-pub fn save_virtual_checkpoint(start_point: String, con: &mut PooledConnection<ConnectionManager<PgConnection>>) {
-    save(String::from(VAR_KEY_VIRTUAL_CHECKPOINT), start_point, con)
 }
 
 pub fn load(key: String, db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {

@@ -24,7 +24,7 @@ use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
 use kaspa_db_filler_ng::transactions::insert_transactions::insert_txs_ins_outs;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
-use kaspa_db_filler_ng::vars::vars::{load_block_checkpoint, load_virtual_checkpoint};
+use kaspa_db_filler_ng::vars::vars::load_block_checkpoint;
 use kaspa_db_filler_ng::virtual_chain::process_virtual_chain::process_virtual_chain;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -144,7 +144,7 @@ async fn start_processing(buffer_size: f64,
                           db_pool: Pool<ConnectionManager<PgConnection>>,
                           kaspad_client: KaspaRpcClient) -> Result<(), ()> {
     let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
-    let checkpoint_hash;
+    let mut checkpoint_hash;
     if from_pruning_point {
         checkpoint_hash = block_dag_info.pruning_point_hash.to_string();
         info!("BlockDagInfo received: pruning_point {}", checkpoint_hash);
@@ -152,22 +152,13 @@ async fn start_processing(buffer_size: f64,
         checkpoint_hash = block_dag_info.virtual_parent_hashes.get(0).unwrap().to_string();
         info!("BlockDagInfo received: virtual_parent_hash {}", checkpoint_hash);
     }
-    let mut block_checkpoint_hash = checkpoint_hash.clone();
-    let mut virtual_checkpoint_hash = checkpoint_hash.clone();
     if !ignore_checkpoint {
         let saved_block_checkpoint = load_block_checkpoint(db_pool.clone());
         if saved_block_checkpoint.is_some() {
-            block_checkpoint_hash = saved_block_checkpoint.unwrap();
-            info!("Loaded block_checkpoint {}", block_checkpoint_hash);
+            checkpoint_hash = saved_block_checkpoint.unwrap();
+            info!("Loaded checkpoint {}", checkpoint_hash);
         } else {
-            warn!("block_checkpoint_hash not found, using {}", if from_pruning_point { "pruning point" } else { "virtual_parent_hash" });
-        }
-        let saved_virtual_checkpoint = load_virtual_checkpoint(db_pool.clone());
-        if saved_virtual_checkpoint.is_some() {
-            virtual_checkpoint_hash = saved_virtual_checkpoint.unwrap();
-            info!("Loaded virtual_checkpoint {}", virtual_checkpoint_hash);
-        } else {
-            warn!("virtual_checkpoint_hash not found, using {}", if from_pruning_point { "pruning point" } else { "virtual_parent_hash" });
+            warn!("Checkpoint not found, using {}", if from_pruning_point { "pruning point" } else { "virtual_parent_hash" });
         }
     }
 
@@ -191,13 +182,14 @@ async fn start_processing(buffer_size: f64,
     let db_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
     let db_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
 
+    let start_vcp = Arc::new(AtomicBool::new(false));
     let mut tasks = vec![];
-    tasks.push(task::spawn(fetch_blocks(running.clone(), block_checkpoint_hash, kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
+    tasks.push(task::spawn(fetch_blocks(running.clone(), checkpoint_hash.clone(), kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
     tasks.push(task::spawn(process_blocks(running.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())));
     tasks.push(task::spawn(process_transactions(running.clone(), rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(insert_blocks(running.clone(), buffer_size, db_blocks_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(insert_blocks(running.clone(), buffer_size, start_vcp.clone(), db_blocks_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_txs_ins_outs(running.clone(), buffer_size, db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(process_virtual_chain(running.clone(), buffer_size, virtual_checkpoint_hash, kaspad_client.clone(), db_pool.clone())));
+    tasks.push(task::spawn(process_virtual_chain(running.clone(), start_vcp.clone(), buffer_size, checkpoint_hash, kaspad_client.clone(), db_pool.clone())));
 
     for task in tasks {
         let _ = task.await.expect("Should not happen");

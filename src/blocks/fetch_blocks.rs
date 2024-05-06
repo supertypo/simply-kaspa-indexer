@@ -13,12 +13,13 @@ use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, trace, warn};
 use log::info;
 use tokio::time::sleep;
+
 use crate::kaspad::client::with_retry;
 
 pub async fn fetch_blocks(running: Arc<AtomicBool>,
                           checkpoint_hash: String,
                           kaspad_client: KaspaRpcClient,
-                          rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
+                          rpc_blocks_queue: Arc<ArrayQueue<(bool, RpcBlock)>>,
                           rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>) {
     const INITIAL_SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(15);
     let start_time = SystemTime::now();
@@ -76,7 +77,7 @@ pub async fn fetch_blocks(running: Arc<AtomicBool>,
                     }
                     sleep(Duration::from_secs(1)).await;
                 }
-                rpc_blocks_queue.push(RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }).unwrap();
+                rpc_blocks_queue.push((synced, RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data })).unwrap();
                 rpc_transactions_queue.push(b.transactions).unwrap();
             }
         }

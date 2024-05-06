@@ -5,20 +5,20 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
-use diesel::{Connection, PgConnection};
+use diesel::{PgConnection};
 use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::result::Error;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, info};
+use tokio::task;
 use tokio::time::sleep;
 
 use crate::kaspad::client::with_retry;
-use crate::vars::vars::save_virtual_checkpoint;
 use crate::virtual_chain::update_chain_blocks::update_chain_blocks;
 use crate::virtual_chain::update_transactions::update_transactions;
 
 pub async fn process_virtual_chain(running: Arc<AtomicBool>,
+                                   start_vcp: Arc<AtomicBool>,
                                    buffer_size: f64,
                                    checkpoint_hash: String,
                                    kaspad_client: KaspaRpcClient,
@@ -26,6 +26,11 @@ pub async fn process_virtual_chain(running: Arc<AtomicBool>,
     let start_time = SystemTime::now();
     let mut synced = false;
     let mut checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
+
+    while running.load(Ordering::Relaxed) && !start_vcp.load(Ordering::Relaxed) {
+        debug!("Waiting for start notification");
+        sleep(Duration::from_secs(5)).await;
+    }
 
     while running.load(Ordering::Relaxed) {
         debug!("Getting virtual chain from start_hash {}", hex::encode(checkpoint_hash.clone()));
@@ -41,19 +46,20 @@ pub async fn process_virtual_chain(running: Arc<AtomicBool>,
                 .header.timestamp);
         }
 
-        let con = &mut db_pool.get().expect("Database connection FAILED");
-        con.transaction(|con| {
-            // We need to do all the chain processing in a single transaction to avoid an incomplete state if the process is killed
-            update_transactions(buffer_size, response.removed_chain_block_hashes.clone(), response.accepted_transaction_ids, last_accepted_block_time.clone(), con);
-            update_chain_blocks(buffer_size, response.added_chain_block_hashes, response.removed_chain_block_hashes, con);
-            if let Some(new_checkpoint_hash) = last_accepted_block_hash {
-                checkpoint_hash = new_checkpoint_hash.as_bytes().to_vec();
-                let checkpoint = hex::encode(checkpoint_hash.clone());
-                debug!("Saving virtual_checkpoint {}", checkpoint);
-                save_virtual_checkpoint(checkpoint, con);
-            }
-            Ok::<_, Error>(())
-        }).expect("Commit virtual chain FAILED");
+        let db_pool_clone = db_pool.clone();
+        let removed_chain_block_hashes_clone = response.removed_chain_block_hashes.clone();
+        let update_transactions_handle = task::spawn_blocking(move || {
+            update_transactions(buffer_size, removed_chain_block_hashes_clone, response.accepted_transaction_ids, last_accepted_block_time.clone(), db_pool_clone)
+        });
+        let db_pool_clone = db_pool.clone();
+        let update_chain_blocks_handle = task::spawn_blocking(move || {
+            update_chain_blocks(buffer_size, response.added_chain_block_hashes, response.removed_chain_block_hashes, db_pool_clone)
+        });
+        let _ = tokio::join!(update_transactions_handle, update_chain_blocks_handle);
+
+        if let Some(new_checkpoint_hash) = last_accepted_block_hash {
+            checkpoint_hash = new_checkpoint_hash.as_bytes().to_vec();
+        }
 
         if !synced {
             let time_to_sync = SystemTime::now().duration_since(start_time).unwrap();

@@ -4,7 +4,6 @@ use std::hash::{Hash, Hasher};
 use diesel::prelude::*;
 
 pub const VAR_KEY_BLOCK_CHECKPOINT: &str = "block_checkpoint";
-pub const VAR_KEY_VIRTUAL_CHECKPOINT: &str = "virtual_checkpoint";
 pub const VAR_KEY_LEGACY_CHECKPOINT: &str = "vspc_last_start_hash";
 
 #[derive(Queryable, Selectable, Insertable)]

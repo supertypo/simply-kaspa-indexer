@@ -9,15 +9,16 @@ use tokio::time::sleep;
 use crate::database::models::Block;
 
 pub async fn process_blocks(running: Arc<AtomicBool>,
-                            rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
-                            db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>) {
+                            rpc_blocks_queue: Arc<ArrayQueue<(bool, RpcBlock)>>,
+                            db_blocks_queue: Arc<ArrayQueue<(bool, Block, Vec<Vec<u8>>)>>) {
     while running.load(Ordering::Relaxed) {
         let block_option = rpc_blocks_queue.pop();
         if block_option.is_none() {
             sleep(Duration::from_millis(100)).await;
             continue;
         }
-        let block = block_option.unwrap();
+        let synced_block = block_option.unwrap();
+        let block = synced_block.1;
         let db_block = Block {
             hash: block.header.hash.as_bytes().to_vec(),
             accepted_id_merkle_root: Some(block.header.accepted_id_merkle_root.as_bytes().to_vec()),
@@ -52,7 +53,7 @@ pub async fn process_blocks(running: Arc<AtomicBool>,
         while db_blocks_queue.is_full() && running.load(Ordering::Relaxed) {
             sleep(Duration::from_millis(100)).await;
         }
-        let _ = db_blocks_queue.push((db_block, block.verbose_data.as_ref()
+        let _ = db_blocks_queue.push((synced_block.0, db_block, block.verbose_data.as_ref()
             .map(|vd| vd.transaction_ids.iter()
                 .map(|t| t.as_bytes().to_vec())
                 .collect()).unwrap()));

@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
+use diesel::{Connection, delete, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
@@ -15,18 +15,20 @@ use log::{error, info};
 use tokio::time::sleep;
 
 use crate::database::models::Block;
-use crate::database::schema::blocks;
+use crate::database::schema::{blocks, chain_blocks, transactions_acceptances};
 use crate::database::schema::blocks_transactions;
 use crate::vars::vars::save_block_checkpoint;
 
 pub async fn insert_blocks(running: Arc<AtomicBool>,
                            buffer_size: f64,
-                           db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
+                           start_vcp: Arc<AtomicBool>,
+                           db_blocks_queue: Arc<ArrayQueue<(bool, Block, Vec<Vec<u8>>)>>,
                            db_pool: Pool<ConnectionManager<PgConnection>>) {
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     let max_queue_size = min((1000f64 * buffer_size) as usize, 3500); // ~3500 is the max batch size db supports
+    let mut vcp_notified = false;
+    let mut delete_chain_blocks_queue: Vec<Vec<u8>> = vec![];
     let mut insert_queue: HashSet<Block> = HashSet::with_capacity(max_queue_size);
-    let mut rows_affected = 0;
     let mut last_block_hash = vec![];
     let mut last_block_tx_count = 0;
     let mut last_block_timestamp = 0;
@@ -37,9 +39,26 @@ pub async fn insert_blocks(running: Arc<AtomicBool>,
 
     while running.load(Ordering::Relaxed) {
         if insert_queue.len() >= max_queue_size || (insert_queue.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
+            let mut cbs_cleared = 0;
+            let mut tas_cleared = 0;
+            let mut blocks_inserted = 0;
             let con = &mut db_pool.get().expect("Database connection FAILED");
             con.transaction(|con| {
-                rows_affected = insert_into(blocks::dsl::blocks)
+                if !delete_chain_blocks_queue.is_empty() {
+                    cbs_cleared = delete(chain_blocks::dsl::chain_blocks)
+                        .filter(chain_blocks::block_hash.eq_any(&delete_chain_blocks_queue))
+                        .execute(con)
+                        .expect("Commit removed chain blocks FAILED");
+                    tas_cleared = delete(transactions_acceptances::dsl::transactions_acceptances)
+                        .filter(transactions_acceptances::block_hash.eq_any(&delete_chain_blocks_queue))
+                        .execute(con)
+                        .expect("Commit rejected transactions FAILED");
+                } else if !vcp_notified {
+                    info!("\x1b[32mChain blocks and transaction acceptances cleared, notifying VCP\x1b[0m");
+                    start_vcp.store(true, Ordering::Relaxed); // Let VCP commence
+                    vcp_notified = true;
+                }
+                blocks_inserted = insert_into(blocks::dsl::blocks)
                     .values(Vec::from_iter(insert_queue.iter()))
                     .on_conflict_do_nothing()
                     .execute(con)
@@ -47,8 +66,13 @@ pub async fn insert_blocks(running: Arc<AtomicBool>,
                 Ok::<_, Error>(())
             }).expect("Commit blocks FAILED");
 
-            info!("Committed {} new blocks. Last block timestamp: {}", rows_affected,
+            if cbs_cleared != 0 {
+                info!("Committed {} new blocks, cleared {} cb and {} ta. Last block timestamp: {}", blocks_inserted, cbs_cleared, tas_cleared,
                 chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap());
+            } else {
+                info!("Committed {} new blocks. Last block timestamp: {}", blocks_inserted,
+                chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap());
+            }
             last_commit_time = SystemTime::now();
 
             if insert_queue.len() >= 1 && SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > CHECKPOINT_SAVE_INTERVAL {
@@ -73,16 +97,21 @@ pub async fn insert_blocks(running: Arc<AtomicBool>,
                     }
                 }
             }
+            delete_chain_blocks_queue = vec![];
             insert_queue = HashSet::with_capacity(max_queue_size);
         }
         let block_tuple = db_blocks_queue.pop();
         if block_tuple.is_some() {
             let block_tuple = block_tuple.unwrap();
-            let block = block_tuple.0;
-            let transactions = block_tuple.1;
+            let synced = block_tuple.0;
+            let block = block_tuple.1;
+            let transactions = block_tuple.2;
             last_block_hash = block.hash.clone();
             last_block_tx_count = transactions.len() as i64;
             last_block_timestamp = block.timestamp.unwrap();
+            if !synced {
+                delete_chain_blocks_queue.push(block.hash.clone());
+            }
             insert_queue.insert(block);
         } else {
             sleep(Duration::from_millis(100)).await;
