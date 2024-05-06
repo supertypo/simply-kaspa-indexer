@@ -25,6 +25,7 @@ pub async fn insert_blocks(running: Arc<AtomicBool>,
                            start_vcp: Arc<AtomicBool>,
                            db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
                            db_pool: Pool<ConnectionManager<PgConnection>>) {
+    const EMPTY_DELETES_BEFORE_VCP: i32 = 10;
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     const CHECKPOINT_WARN_AFTER: u64 = 5 * CHECKPOINT_SAVE_INTERVAL;
     let max_queue_size = min((1000f64 * buffer_size) as usize, 3500); // ~3500 is the max batch size db supports
@@ -37,6 +38,7 @@ pub async fn insert_blocks(running: Arc<AtomicBool>,
     let mut checkpoint_hash_tx_expected_count = 0;
     let mut checkpoint_last_saved = Instant::now();
     let mut last_commit_time = Instant::now();
+    let mut empty_delete_count = 0;
 
     while running.load(Ordering::Relaxed) {
         let block_tuple = db_blocks_queue.pop();
@@ -67,8 +69,13 @@ pub async fn insert_blocks(running: Arc<AtomicBool>,
                         .filter(chain_blocks::block_hash.eq_any(&delete_block_hashes))
                         .execute(con)
                         .expect("Commit removed chain blocks FAILED");
+                    if cb_cleared == 0 && ta_cleared == 0 {
+                        empty_delete_count += 1;
+                    } else {
+                        empty_delete_count = 0;
+                    }
                 }
-                if !vcp_started && cb_cleared == 0 && ta_cleared == 0 {
+                if !vcp_started && empty_delete_count > EMPTY_DELETES_BEFORE_VCP {
                     info!("End of previous run reached, notifying virtual chain processor");
                     start_vcp.store(true, Ordering::Relaxed);
                     vcp_started = true;
