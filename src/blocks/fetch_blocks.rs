@@ -24,7 +24,7 @@ pub async fn fetch_blocks(running: Arc<AtomicBool>,
     const INITIAL_SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(15);
     let start_time = SystemTime::now();
     let checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
-    let mut low_hash = checkpoint_hash.clone();
+    let mut low_hash = checkpoint_hash;
     let mut last_sync_check = SystemTime::UNIX_EPOCH;
     let mut synced = false;
     let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
@@ -57,7 +57,7 @@ pub async fn fetch_blocks(running: Arc<AtomicBool>,
                         time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
                     synced = true;
                 }
-                if block_hash.as_bytes().to_vec() == low_hash && block_hash.as_bytes().to_vec() != checkpoint_hash {
+                if block_hash.as_bytes().to_vec() == low_hash { // VCP doesn't get acceptance data from the checkpoint_hash, so no need to make an exception for it
                     trace!("Ignoring low_hash block {}", hex::encode(low_hash.clone()));
                     continue;
                 }
