@@ -7,7 +7,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, delete, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
+use diesel::{Connection, delete, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl, select};
+use diesel::dsl::exists;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
@@ -85,11 +86,16 @@ pub async fn insert_blocks(running: Arc<AtomicBool>,
                         .count()
                         .get_result::<i64>(con).unwrap();
                     if checkpoint_hash_tx_committed_count == checkpoint_hash_tx_expected_count {
-                        let checkpoint = hex::encode(checkpoint_hash);
-                        info!("Saving block_checkpoint {}", checkpoint);
-                        save_block_checkpoint(checkpoint, db_pool.clone());
+                        let is_chain_block = select(exists(chain_blocks::dsl::chain_blocks
+                            .filter(chain_blocks::block_hash.eq(&checkpoint_hash))))
+                            .get_result::<bool>(con).unwrap();
+                        if is_chain_block { // Make sure the VCP also has processed this block
+                            let checkpoint = hex::encode(checkpoint_hash);
+                            info!("Saving block_checkpoint {}", checkpoint);
+                            save_block_checkpoint(checkpoint, db_pool.clone());
+                            checkpoint_last_saved = SystemTime::now();
+                        }
                         checkpoint_hash = vec![];
-                        checkpoint_last_saved = SystemTime::now();
                     } else if checkpoint_hash_tx_committed_count > checkpoint_hash_tx_expected_count {
                         panic!("Expected {}, but found {} transactions on block {}!", checkpoint_hash_tx_expected_count, checkpoint_hash_tx_committed_count, hex::encode(&checkpoint_hash))
                     } else if SystemTime::now().duration_since(checkpoint_last_saved).unwrap().as_secs() > 300 {

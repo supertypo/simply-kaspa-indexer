@@ -48,14 +48,13 @@ pub async fn process_virtual_chain(running: Arc<AtomicBool>,
 
         let db_pool_clone = db_pool.clone();
         let removed_chain_block_hashes_clone = response.removed_chain_block_hashes.clone();
-        let update_transactions_handle = task::spawn_blocking(move || {
+        let _ = task::spawn_blocking(move || {
             update_transactions(buffer_size, removed_chain_block_hashes_clone, response.accepted_transaction_ids, last_accepted_block_time.clone(), db_pool_clone)
-        });
+        }).await;
         let db_pool_clone = db_pool.clone();
-        let update_chain_blocks_handle = task::spawn_blocking(move || {
+        let _ = task::spawn_blocking(move || {
             update_chain_blocks(buffer_size, response.added_chain_block_hashes, response.removed_chain_block_hashes, db_pool_clone)
-        });
-        let _ = tokio::join!(update_transactions_handle, update_chain_blocks_handle);
+        }).await;
 
         if let Some(new_checkpoint_hash) = last_accepted_block_hash {
             checkpoint_hash = new_checkpoint_hash.as_bytes().to_vec();
