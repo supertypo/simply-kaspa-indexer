@@ -3,9 +3,9 @@ extern crate diesel;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
-use diesel::{PgConnection};
+use diesel::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
@@ -23,7 +23,7 @@ pub async fn process_virtual_chain(running: Arc<AtomicBool>,
                                    checkpoint_hash: String,
                                    kaspad_client: KaspaRpcClient,
                                    db_pool: Pool<ConnectionManager<PgConnection>>) {
-    let start_time = SystemTime::now();
+    let start_time = Instant::now();
     let mut synced = false;
     let mut checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
 
@@ -61,7 +61,7 @@ pub async fn process_virtual_chain(running: Arc<AtomicBool>,
         }
 
         if !synced {
-            let time_to_sync = SystemTime::now().duration_since(start_time).unwrap();
+            let time_to_sync = Instant::now().duration_since(start_time);
             info!("\x1b[32mVirtual chain processor synced! (in {}:{:0>2}:{:0>2}s)\x1b[0m", time_to_sync.as_secs() / 3600, time_to_sync.as_secs() % 3600 / 60, time_to_sync.as_secs() % 60);
             synced = true;
         }

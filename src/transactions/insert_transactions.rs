@@ -3,7 +3,7 @@ extern crate diesel;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 use crossbeam_queue::ArrayQueue;
 use diesel::{Connection, insert_into, RunQueryDsl, sql_query};
@@ -33,7 +33,7 @@ pub async fn insert_txs_ins_outs(running: Arc<AtomicBool>,
     let mut tx_outputs: HashSet<TransactionOutput> = HashSet::with_capacity(max_set_size * 2);
     let mut tx_addresses: HashSet<AddressTransaction> = HashSet::with_capacity(max_set_size * 2);
     let mut last_block_timestamp;
-    let mut last_commit_time = SystemTime::now();
+    let mut last_commit_time = Instant::now();
 
     while running.load(Ordering::Relaxed) {
         let transaction_option = db_transactions_queue.pop();
@@ -49,8 +49,8 @@ pub async fn insert_txs_ins_outs(running: Arc<AtomicBool>,
         tx_outputs.extend(outputs.into_iter());
         tx_addresses.extend(addresses.into_iter());
 
-        if block_tx.len() >= max_set_size || (block_tx.len() >= 1 && SystemTime::now().duration_since(last_commit_time).unwrap().as_secs() > 2) {
-            let start_commit_time = SystemTime::now();
+        if block_tx.len() >= max_set_size || (block_tx.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
+            let start_commit_time = Instant::now();
             debug!("Committing {} transactions ({} block/tx, {} inputs, {} outputs)",
                 transactions.len(), block_tx.len(), tx_inputs.len(), tx_outputs.len());
             // We used a HashSet first to filter some amount of duplicates locally, now we can switch back to vector:
@@ -79,7 +79,7 @@ pub async fn insert_txs_ins_outs(running: Arc<AtomicBool>,
             // ^Needs to complete first to avoid incomplete block checkpoints
             let rows_affected_block_tx = insert_block_transaction(block_transactions_vec, db_pool.clone());
 
-            let commit_time = SystemTime::now().duration_since(start_commit_time).unwrap().as_millis();
+            let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
             let tps = transactions_len as f64 / commit_time as f64 * 1000f64;
             info!("Committed {} new txs in {}ms ({:.1} tps, {} blk_tx, {} tx_in, {} tx_out, {} adr_tx). Last tx: {}",
                 rows_affected_tx, commit_time, tps, rows_affected_block_tx, rows_affected_tx_inputs, rows_affected_tx_outputs, rows_affected_tx_addresses,
@@ -90,14 +90,14 @@ pub async fn insert_txs_ins_outs(running: Arc<AtomicBool>,
             tx_inputs = HashSet::with_capacity(BATCH_INSERT_SIZE * 2);
             tx_outputs = HashSet::with_capacity(BATCH_INSERT_SIZE * 2);
             tx_addresses = HashSet::with_capacity(BATCH_INSERT_SIZE * 2);
-            last_commit_time = SystemTime::now();
+            last_commit_time = Instant::now();
         }
     }
 }
 
 fn insert_input_transaction_addresses(values: Vec<Vec<u8>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "input addresses_transactions";
-    let start_time = SystemTime::now();
+    let start_time = Instant::now();
     debug!("Processing {} transactions for {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
@@ -118,13 +118,13 @@ fn insert_input_transaction_addresses(values: Vec<Vec<u8>>, db_pool: Pool<Connec
             Ok::<_, Error>(())
         }).expect(format!("Commit {} FAILED", key).as_str());
     }
-    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
 
 fn insert_output_transaction_addresses(values: Vec<AddressTransaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "output addresses_transactions";
-    let start_time = SystemTime::now();
+    let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
@@ -138,13 +138,13 @@ fn insert_output_transaction_addresses(values: Vec<AddressTransaction>, db_pool:
             Ok::<_, Error>(())
         }).expect(format!("Commit {} FAILED", key).as_str());
     }
-    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
 
 fn insert_transaction_outputs(values: Vec<TransactionOutput>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "transactions_outputs";
-    let start_time = SystemTime::now();
+    let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
@@ -158,13 +158,13 @@ fn insert_transaction_outputs(values: Vec<TransactionOutput>, db_pool: Pool<Conn
             Ok::<_, Error>(())
         }).expect(format!("Commit {} FAILED", key).as_str());
     }
-    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
 
 fn insert_transaction_inputs(values: Vec<TransactionInput>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "transaction_inputs";
-    let start_time = SystemTime::now();
+    let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
@@ -178,13 +178,13 @@ fn insert_transaction_inputs(values: Vec<TransactionInput>, db_pool: Pool<Connec
             Ok::<_, Error>(())
         }).expect(format!("Commit {} FAILED", key).as_str());
     }
-    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
 
 fn insert_transactions(values: Vec<Transaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "transactions";
-    let start_time = SystemTime::now();
+    let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
@@ -198,13 +198,13 @@ fn insert_transactions(values: Vec<Transaction>, db_pool: Pool<ConnectionManager
             Ok::<_, Error>(())
         }).expect(format!("Commit {} FAILED", key).as_str());
     }
-    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
 
 fn insert_block_transaction(values: Vec<BlockTransaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "block/transaction mappings";
-    let start_time = SystemTime::now();
+    let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
@@ -218,6 +218,6 @@ fn insert_block_transaction(values: Vec<BlockTransaction>, db_pool: Pool<Connect
             Ok::<_, Error>(())
         }).expect(format!("Commit {} FAILED", key).as_str());
     }
-    debug!("Committed {} {} in {}ms", rows_affected, key, SystemTime::now().duration_since(start_time).unwrap().as_millis());
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
