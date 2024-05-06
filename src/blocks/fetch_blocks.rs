@@ -36,7 +36,7 @@ pub async fn fetch_blocks(running: Arc<AtomicBool>,
         debug!("Received {} blocks", response.blocks.len());
         trace!("Block hashes: \n{:#?}", response.block_hashes);
 
-        if !synced {
+        if !synced && response.blocks.len() < 100 {
             if Instant::now().duration_since(last_sync_check) >= SYNC_CHECK_INTERVAL {
                 let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
                 info!("Getting tip hashes from BlockDagInfo for sync check");
