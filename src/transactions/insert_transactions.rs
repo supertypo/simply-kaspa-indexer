@@ -1,31 +1,35 @@
 extern crate diesel;
 
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossbeam_queue::ArrayQueue;
-use diesel::{Connection, insert_into, RunQueryDsl, sql_query};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
+use diesel::{insert_into, sql_query, Connection, RunQueryDsl};
 use itertools::Itertools;
 use log::{debug, info, trace};
 use tokio::task;
 use tokio::time::sleep;
 
 use crate::database::models::{AddressTransaction, BlockTransaction, Transaction, TransactionInput, TransactionOutput};
-use crate::database::schema::{addresses_transactions, blocks_transactions, transactions_inputs, transactions_outputs};
 use crate::database::schema::transactions;
+use crate::database::schema::{addresses_transactions, blocks_transactions, transactions_inputs, transactions_outputs};
 
 // Max number of rows for insert statements:
 const BATCH_INSERT_SIZE: usize = 3600;
 
-pub async fn insert_txs_ins_outs(running: Arc<AtomicBool>,
-                                 buffer_size: f64,
-                                 db_transactions_queue: Arc<ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>>,
-                                 db_pool: Pool<ConnectionManager<PgConnection>>) {
+pub async fn insert_txs_ins_outs(
+    running: Arc<AtomicBool>,
+    buffer_size: f64,
+    db_transactions_queue: Arc<
+        ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
+    >,
+    db_pool: Pool<ConnectionManager<PgConnection>>,
+) {
     let max_set_size = (3000f64 * buffer_size) as usize; // Large sets helps us to filter duplicates during catch-up
     let mut transactions: HashSet<Transaction> = HashSet::with_capacity(max_set_size);
     let mut block_tx: HashSet<BlockTransaction> = HashSet::with_capacity(max_set_size);
@@ -51,8 +55,13 @@ pub async fn insert_txs_ins_outs(running: Arc<AtomicBool>,
 
         if block_tx.len() >= max_set_size || (block_tx.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
             let start_commit_time = Instant::now();
-            debug!("Committing {} transactions ({} block/tx, {} inputs, {} outputs)",
-                transactions.len(), block_tx.len(), tx_inputs.len(), tx_outputs.len());
+            debug!(
+                "Committing {} transactions ({} block/tx, {} inputs, {} outputs)",
+                transactions.len(),
+                block_tx.len(),
+                tx_inputs.len(),
+                tx_outputs.len()
+            );
             // We used a HashSet first to filter some amount of duplicates locally, now we can switch back to vector:
             let transactions_len = transactions.len();
             let transactions_vec: Vec<Transaction> = transactions.into_iter().collect();
@@ -63,13 +72,13 @@ pub async fn insert_txs_ins_outs(running: Arc<AtomicBool>,
             let addresses_vec = tx_addresses.into_iter().collect();
 
             let db_pool_clone = db_pool.clone();
-            let tx_handle = task::spawn_blocking(|| { insert_transactions(transactions_vec, db_pool_clone) });
+            let tx_handle = task::spawn_blocking(|| insert_transactions(transactions_vec, db_pool_clone));
             let db_pool_clone = db_pool.clone();
-            let tx_inputs_handle = task::spawn_blocking(|| { insert_transaction_inputs(inputs_vec, db_pool_clone) });
+            let tx_inputs_handle = task::spawn_blocking(|| insert_transaction_inputs(inputs_vec, db_pool_clone));
             let db_pool_clone = db_pool.clone();
-            let tx_outputs_handle = task::spawn_blocking(|| { insert_transaction_outputs(outputs_vec, db_pool_clone) });
+            let tx_outputs_handle = task::spawn_blocking(|| insert_transaction_outputs(outputs_vec, db_pool_clone));
             let db_pool_clone = db_pool.clone();
-            let tx_out_addr_handle = task::spawn_blocking(|| { insert_output_transaction_addresses(addresses_vec, db_pool_clone) });
+            let tx_out_addr_handle = task::spawn_blocking(|| insert_output_transaction_addresses(addresses_vec, db_pool_clone));
 
             let rows_affected_tx = tx_handle.await.unwrap();
             let rows_affected_tx_inputs = tx_inputs_handle.await.unwrap();
@@ -81,9 +90,17 @@ pub async fn insert_txs_ins_outs(running: Arc<AtomicBool>,
 
             let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
             let tps = transactions_len as f64 / commit_time as f64 * 1000f64;
-            info!("Committed {} new txs in {}ms ({:.1} tps, {} blk_tx, {} tx_in, {} tx_out, {} adr_tx). Last tx: {}",
-                rows_affected_tx, commit_time, tps, rows_affected_block_tx, rows_affected_tx_inputs, rows_affected_tx_outputs, rows_affected_tx_addresses,
-                chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap());
+            info!(
+                "Committed {} new txs in {}ms ({:.1} tps, {} blk_tx, {} tx_in, {} tx_out, {} adr_tx). Last tx: {}",
+                rows_affected_tx,
+                commit_time,
+                tps,
+                rows_affected_block_tx,
+                rows_affected_tx_inputs,
+                rows_affected_tx_outputs,
+                rows_affected_tx_addresses,
+                chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap()
+            );
 
             transactions = HashSet::with_capacity(BATCH_INSERT_SIZE);
             block_tx = HashSet::with_capacity(BATCH_INSERT_SIZE);
@@ -136,7 +153,8 @@ fn insert_output_transaction_addresses(values: Vec<AddressTransaction>, db_pool:
                 .execute(con)
                 .expect(format!("Commit {} FAILED", key).as_str());
             Ok::<_, Error>(())
-        }).expect(format!("Commit {} FAILED", key).as_str());
+        })
+        .expect(format!("Commit {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
@@ -156,7 +174,8 @@ fn insert_transaction_outputs(values: Vec<TransactionOutput>, db_pool: Pool<Conn
                 .execute(con)
                 .expect(format!("Commit {} FAILED", key).as_str());
             Ok::<_, Error>(())
-        }).expect(format!("Commit {} FAILED", key).as_str());
+        })
+        .expect(format!("Commit {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
@@ -176,7 +195,8 @@ fn insert_transaction_inputs(values: Vec<TransactionInput>, db_pool: Pool<Connec
                 .execute(con)
                 .expect(format!("Commit {} FAILED", key).as_str());
             Ok::<_, Error>(())
-        }).expect(format!("Commit {} FAILED", key).as_str());
+        })
+        .expect(format!("Commit {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
@@ -196,7 +216,8 @@ fn insert_transactions(values: Vec<Transaction>, db_pool: Pool<ConnectionManager
                 .execute(con)
                 .expect(format!("Commit {} FAILED", key).as_str());
             Ok::<_, Error>(())
-        }).expect(format!("Commit {} FAILED", key).as_str());
+        })
+        .expect(format!("Commit {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
@@ -216,7 +237,8 @@ fn insert_block_transaction(values: Vec<BlockTransaction>, db_pool: Pool<Connect
                 .execute(con)
                 .expect(format!("Commit {} FAILED", key).as_str());
             Ok::<_, Error>(())
-        }).expect(format!("Commit {} FAILED", key).as_str());
+        })
+        .expect(format!("Commit {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;

@@ -66,7 +66,6 @@ pub struct Subnetwork {
     pub subnetwork_id: String,
 }
 
-
 #[derive(Insertable)]
 #[diesel(table_name = crate::database::schema::subnetworks)]
 pub struct SubnetworkInsertable {
@@ -144,8 +143,7 @@ impl Eq for TransactionInput {}
 
 impl PartialEq for TransactionInput {
     fn eq(&self, other: &Self) -> bool {
-        self.transaction_id == other.transaction_id
-            && self.index == other.index
+        self.transaction_id == other.transaction_id && self.index == other.index
     }
 }
 
@@ -171,8 +169,7 @@ impl Eq for TransactionOutput {}
 
 impl PartialEq for TransactionOutput {
     fn eq(&self, other: &Self) -> bool {
-        self.transaction_id == other.transaction_id
-            && self.index == other.index
+        self.transaction_id == other.transaction_id && self.index == other.index
     }
 }
 
@@ -196,8 +193,7 @@ impl Eq for AddressTransaction {}
 
 impl PartialEq for AddressTransaction {
     fn eq(&self, other: &Self) -> bool {
-        self.address == other.address
-            && self.transaction_id == other.transaction_id
+        self.address == other.address && self.transaction_id == other.transaction_id
     }
 }
 

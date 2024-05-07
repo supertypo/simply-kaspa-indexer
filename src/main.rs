@@ -1,11 +1,11 @@
 extern crate diesel;
 
-use std::{env, process};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
+use std::{env, process};
 
-use clap::{Arg, Command, crate_description, crate_name};
+use clap::{crate_description, crate_name, Arg, Command};
 use crossbeam_queue::ArrayQueue;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -40,51 +40,62 @@ async fn main() {
     println!();
     let matches = Command::new(crate_name!())
         .about(crate_description!())
-        .arg(Arg::new("rpc-url")
-            .short('s')
-            .long("rpc-url")
-            .help("The url to a kaspad instance")
-            .default_value("ws://127.0.0.1:17110")
-            .action(clap::ArgAction::Set))
-        .arg(Arg::new("network")
-            .short('n')
-            .long("network")
-            .help("The network type and suffix, e.g. 'testnet-11'")
-            .default_value("mainnet")
-            .action(clap::ArgAction::Set))
-        .arg(Arg::new("database-url")
-            .short('d')
-            .long("database-url")
-            .help("The url to a PostgreSQL instance")
-            .default_value("postgres://postgres:postgres@localhost:5432/postgres")
-            .action(clap::ArgAction::Set))
-        .arg(Arg::new("log-level")
-            .short('l')
-            .long("log-level")
-            .help("error, warn, info, debug, trace, off")
-            .default_value("info")
-            .action(clap::ArgAction::Set))
-        .arg(Arg::new("log-no-color")
-            .long("no-color")
-            .help("Disable colored output")
-            .action(clap::ArgAction::SetTrue))
-        .arg(Arg::new("buffer-size")
-            .short('b')
-            .long("buffer-size")
-            .help("Internal buffer size factor [0.1-10]")
-            .default_value("1.0")
-            .action(clap::ArgAction::Set)
-            .value_parser(clap::value_parser!(f64)))
-        .arg(Arg::new("ignore-checkpoint")
-            .short('i')
-            .long("ignore-checkpoint")
-            .help("Ignore checkpoint and start from a specified block hash, 'p' for pruning point or 'v' for virtual")
-            .action(clap::ArgAction::Set))
-        .arg(Arg::new("initialize-db")
-            .short('c')
-            .long("initialize-db")
-            .help("(Re-)initializes the database schema. Use with care")
-            .action(clap::ArgAction::SetTrue))
+        .arg(
+            Arg::new("rpc-url")
+                .short('s')
+                .long("rpc-url")
+                .help("The url to a kaspad instance")
+                .default_value("ws://127.0.0.1:17110")
+                .action(clap::ArgAction::Set),
+        )
+        .arg(
+            Arg::new("network")
+                .short('n')
+                .long("network")
+                .help("The network type and suffix, e.g. 'testnet-11'")
+                .default_value("mainnet")
+                .action(clap::ArgAction::Set),
+        )
+        .arg(
+            Arg::new("database-url")
+                .short('d')
+                .long("database-url")
+                .help("The url to a PostgreSQL instance")
+                .default_value("postgres://postgres:postgres@localhost:5432/postgres")
+                .action(clap::ArgAction::Set),
+        )
+        .arg(
+            Arg::new("log-level")
+                .short('l')
+                .long("log-level")
+                .help("error, warn, info, debug, trace, off")
+                .default_value("info")
+                .action(clap::ArgAction::Set),
+        )
+        .arg(Arg::new("log-no-color").long("no-color").help("Disable colored output").action(clap::ArgAction::SetTrue))
+        .arg(
+            Arg::new("buffer-size")
+                .short('b')
+                .long("buffer-size")
+                .help("Internal buffer size factor [0.1-10]")
+                .default_value("1.0")
+                .action(clap::ArgAction::Set)
+                .value_parser(clap::value_parser!(f64)),
+        )
+        .arg(
+            Arg::new("ignore-checkpoint")
+                .short('i')
+                .long("ignore-checkpoint")
+                .help("Ignore checkpoint and start from a specified block hash, 'p' for pruning point or 'v' for virtual")
+                .action(clap::ArgAction::Set),
+        )
+        .arg(
+            Arg::new("initialize-db")
+                .short('c')
+                .long("initialize-db")
+                .help("(Re-)initializes the database schema. Use with care")
+                .action(clap::ArgAction::SetTrue),
+        )
         .get_matches();
 
     let rpc_url = matches.get_one::<String>("rpc-url").unwrap().to_string();
@@ -98,11 +109,7 @@ async fn main() {
 
     env::set_var("RUST_LOG", log_level);
     env::set_var("RUST_LOG_STYLE", if log_no_color { "never" } else { "always" });
-    env_logger::builder()
-        .target(env_logger::Target::Stdout)
-        .format_target(false)
-        .format_timestamp_millis()
-        .init();
+    env_logger::builder().target(env_logger::Target::Stdout).format_target(false).format_timestamp_millis().init();
 
     if buffer_size < 0.1 || buffer_size > 10.0 {
         panic!("Invalid buffer-size");
@@ -115,8 +122,7 @@ async fn main() {
         .max_size(20)
         .build(ConnectionManager::<PgConnection>::new(database_url))
         .expect("Database pool FAILED");
-    let db_con = &mut db_pool.get()
-        .expect("Database connection FAILED");
+    let db_con = &mut db_pool.get().expect("Database connection FAILED");
     info!("Connected to PostgreSQL {}", db_url_cleaned);
 
     if initialize_db {
@@ -140,10 +146,12 @@ async fn main() {
     start_processing(buffer_size, ignore_checkpoint, db_pool, kaspad_client).await.expect("Unreachable");
 }
 
-async fn start_processing(buffer_size: f64,
-                          ignore_checkpoint: Option<String>,
-                          db_pool: Pool<ConnectionManager<PgConnection>>,
-                          kaspad_client: KaspaRpcClient) -> Result<(), ()> {
+async fn start_processing(
+    buffer_size: f64,
+    ignore_checkpoint: Option<String>,
+    db_pool: Pool<ConnectionManager<PgConnection>>,
+    kaspad_client: KaspaRpcClient,
+) -> Result<(), ()> {
     let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
     let checkpoint_hash;
 
@@ -156,8 +164,10 @@ async fn start_processing(buffer_size: f64,
             checkpoint_hash = block_dag_info.virtual_parent_hashes.get(0).unwrap().to_string();
             info!("Starting from virtual_parent_hash {}", checkpoint_hash);
             if load_block_checkpoint(db_pool.clone()).is_some() {
-                warn!("Ignoring an existing checkpoint and starting from a virtual_parent_hash \
-                is not recommended due to the possibility of gaps in the data!");
+                warn!(
+                    "Ignoring an existing checkpoint and starting from a virtual_parent_hash \
+                is not recommended due to the possibility of gaps in the data!"
+                );
             }
         } else {
             checkpoint_hash = ignore_checkpoint;
@@ -196,12 +206,30 @@ async fn start_processing(buffer_size: f64,
 
     let start_vcp = Arc::new(AtomicBool::new(false));
     let mut tasks = vec![];
-    tasks.push(task::spawn(fetch_blocks(running.clone(), checkpoint_hash.clone(), kaspad_client.clone(), rpc_blocks_queue.clone(), rpc_transactions_queue.clone())));
+    tasks.push(task::spawn(fetch_blocks(
+        running.clone(),
+        checkpoint_hash.clone(),
+        kaspad_client.clone(),
+        rpc_blocks_queue.clone(),
+        rpc_transactions_queue.clone(),
+    )));
     tasks.push(task::spawn(process_blocks(running.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())));
-    tasks.push(task::spawn(process_transactions(running.clone(), rpc_transactions_queue.clone(), db_transactions_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(process_transactions(
+        running.clone(),
+        rpc_transactions_queue.clone(),
+        db_transactions_queue.clone(),
+        db_pool.clone(),
+    )));
     tasks.push(task::spawn(insert_blocks(running.clone(), buffer_size, start_vcp.clone(), db_blocks_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(insert_txs_ins_outs(running.clone(), buffer_size, db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(process_virtual_chain(running.clone(), start_vcp.clone(), buffer_size, checkpoint_hash, kaspad_client.clone(), db_pool.clone())));
+    tasks.push(task::spawn(process_virtual_chain(
+        running.clone(),
+        start_vcp.clone(),
+        buffer_size,
+        checkpoint_hash,
+        kaspad_client.clone(),
+        db_pool.clone(),
+    )));
 
     for task in tasks {
         let _ = task.await.expect("Should not happen");

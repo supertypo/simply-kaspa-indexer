@@ -2,20 +2,22 @@ extern crate diesel;
 
 use std::cmp::min;
 
-use diesel::{Connection, delete, ExpressionMethods, insert_into, PgConnection, RunQueryDsl};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
+use diesel::{delete, insert_into, Connection, ExpressionMethods, PgConnection, RunQueryDsl};
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcHash};
 use log::{debug, info, trace};
 
 use crate::database::models::TransactionAcceptance;
 use crate::database::schema::transactions_acceptances;
 
-pub fn update_transactions(buffer_size: f64,
-                           removed_hashes: Vec<RpcHash>,
-                           accepted_transaction_ids: Vec<RpcAcceptedTransactionIds>,
-                           last_accepted_block_time: Option<u64>,
-                           db_pool: Pool<ConnectionManager<PgConnection>>) {
+pub fn update_transactions(
+    buffer_size: f64,
+    removed_hashes: Vec<RpcHash>,
+    accepted_transaction_ids: Vec<RpcAcceptedTransactionIds>,
+    last_accepted_block_time: Option<u64>,
+    db_pool: Pool<ConnectionManager<PgConnection>>,
+) {
     // ~7500 is the max batch size db supports:
     let batch_insert_size = min((2000f64 * buffer_size) as usize, 7500);
     if log::log_enabled!(log::Level::Debug) {
@@ -56,11 +58,15 @@ pub fn update_transactions(buffer_size: f64,
                 .expect("Commit accepted transactions FAILED");
         }
         Ok::<_, Error>(())
-    }).expect("Commit rejected/accepted transactions FAILED");
+    })
+    .expect("Commit rejected/accepted transactions FAILED");
 
     let mut last_accepted_block_msg = String::from("");
     if let Some(last_accepted_block_timestamp) = last_accepted_block_time {
-        last_accepted_block_msg = format!(". Last accepted timestamp: {}", chrono::DateTime::from_timestamp_millis(last_accepted_block_timestamp as i64 / 1000 * 1000).unwrap());
+        last_accepted_block_msg = format!(
+            ". Last accepted timestamp: {}",
+            chrono::DateTime::from_timestamp_millis(last_accepted_block_timestamp as i64 / 1000 * 1000).unwrap()
+        );
     }
     info!("Committed {} accepted and {} rejected transactions{}", rows_added, rows_removed, last_accepted_block_msg);
 }

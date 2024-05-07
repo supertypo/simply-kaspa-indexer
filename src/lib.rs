@@ -1,6 +1,6 @@
-pub mod database;
-pub mod vars;
-pub mod kaspad;
 pub mod blocks;
+pub mod database;
+pub mod kaspad;
 pub mod transactions;
+pub mod vars;
 pub mod virtual_chain;

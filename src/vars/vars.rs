@@ -1,15 +1,14 @@
-use diesel::{insert_into, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use diesel::expression_methods::ExpressionMethods;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::upsert::excluded;
+use diesel::{insert_into, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use log::trace;
 
 use crate::database::models::{Var, VAR_KEY_BLOCK_CHECKPOINT, VAR_KEY_LEGACY_CHECKPOINT};
 use crate::database::schema::vars;
 
 pub fn load_block_checkpoint(db_pool: Pool<ConnectionManager<PgConnection>>) -> Option<String> {
-    load(String::from(VAR_KEY_BLOCK_CHECKPOINT), db_pool.clone())
-        .or_else(|| load(String::from(VAR_KEY_LEGACY_CHECKPOINT), db_pool))
+    load(String::from(VAR_KEY_BLOCK_CHECKPOINT), db_pool.clone()).or_else(|| load(String::from(VAR_KEY_LEGACY_CHECKPOINT), db_pool))
 }
 
 pub fn save_block_checkpoint(start_point: String, db_pool: Pool<ConnectionManager<PgConnection>>) {

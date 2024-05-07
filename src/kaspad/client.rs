@@ -4,18 +4,18 @@ use std::time::Duration;
 
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::RpcNetworkType;
-use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use kaspa_wrpc_client::client::ConnectOptions;
 use kaspa_wrpc_client::error::Error;
+use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
 use log::{debug, error, info, warn};
 use tokio::time::sleep;
 
 pub async fn with_retry<F, Fut, T, E>(mut f: F) -> Result<T, E>
-    where
-        F: FnMut() -> Fut + Send,
-        Fut: Future<Output=Result<T, E>> + Send,
-        T: Send,
-        E: Debug,
+where
+    F: FnMut() -> Fut + Send,
+    Fut: Future<Output = Result<T, E>> + Send,
+    T: Send,
+    E: Debug,
 {
     const MAX_RETRIES: usize = 10;
     const RETRY_INTERVAL: u64 = 3000;
@@ -43,8 +43,11 @@ pub async fn connect_kaspad(url: String, force_network: String) -> Result<KaspaR
     let client = KaspaRpcClient::new(WrpcEncoding::Borsh, &url, None)?;
     client.connect(ConnectOptions::fallback()).await?;
     let server_info = client.get_server_info().await?;
-    let network = format!("{}{}", server_info.network_id.network_type,
-                          server_info.network_id.suffix.map(|s| format!("-{}", s.to_string())).unwrap_or_default());
+    let network = format!(
+        "{}{}",
+        server_info.network_id.network_type,
+        server_info.network_id.suffix.map(|s| format!("-{}", s.to_string())).unwrap_or_default()
+    );
     info!("Connected to Kaspad {} version: {}, network: {}", url, server_info.server_version, network);
 
     if network != force_network {
