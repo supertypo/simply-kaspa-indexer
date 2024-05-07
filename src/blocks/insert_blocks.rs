@@ -1,7 +1,6 @@
 extern crate diesel;
 
 use std::cmp::min;
-use std::ops::Add;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -82,7 +81,7 @@ pub async fn insert_blocks(running: Arc<AtomicBool>,
                     info!("End of previous run reached, notifying virtual chain processor");
                     start_vcp.store(true, Ordering::Relaxed);
                     vcp_started = true;
-                    checkpoint_last_saved = checkpoint_last_saved.add(Duration::from_secs(CHECKPOINT_SAVE_INTERVAL));
+                    checkpoint_last_saved = Instant::now(); // Give VCP time to catch up
                 }
                 Ok::<_, Error>(())
             }).expect("Commit blocks FAILED");
