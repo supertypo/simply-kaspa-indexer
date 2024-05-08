@@ -1469,6 +1469,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "env_logger",
+ "futures-util",
  "hex",
  "itertools 0.12.1",
  "kaspa-hashes",

@@ -10,6 +10,7 @@ use crossbeam_queue::ArrayQueue;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use futures_util::future::try_join_all;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, info, warn};
@@ -231,8 +232,6 @@ async fn start_processing(
         db_pool.clone(),
     )));
 
-    for task in tasks {
-        let _ = task.await.expect("Should not happen");
-    }
+    try_join_all(tasks).await.unwrap();
     Ok(())
 }
