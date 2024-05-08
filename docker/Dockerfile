@@ -15,8 +15,6 @@ RUN apk --no-cache add \
   openssl-dev \
   postgresql-dev
 
-RUN rustup component add rustfmt
-
 WORKDIR /work
 
 ENV RUSTFLAGS="-C target-feature=-crt-static -C link-args=-s" \
