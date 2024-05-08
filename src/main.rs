@@ -134,12 +134,10 @@ async fn main() {
             info!("All migrations successfully reverted.");
         }
     }
-    if initialize_db || network != "mainnet" {
-        if let Err(e) = db_con.run_pending_migrations(MIGRATIONS) {
-            info!("Unable to apply diesel migrations: {:?}", e);
-        } else {
-            info!("All migrations successfully applied.");
-        }
+    if let Err(e) = db_con.run_pending_migrations(MIGRATIONS) {
+        info!("Unable to apply diesel migrations: {:?}", e);
+    } else {
+        info!("All migrations successfully applied.");
     }
 
     let kaspad_client = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
