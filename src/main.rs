@@ -157,19 +157,13 @@ async fn start_processing(
     let checkpoint_hash;
 
     if let Some(ignore_checkpoint) = ignore_checkpoint {
-        warn!("Checkpoint ignored due to user request (-i)");
+        warn!("Checkpoint ignored due to user request (-i). This might lead to inconsistencies.");
         if ignore_checkpoint == "p" {
             checkpoint_hash = block_dag_info.pruning_point_hash.to_string();
             info!("Starting from pruning_point {}", checkpoint_hash);
         } else if ignore_checkpoint == "v" {
             checkpoint_hash = block_dag_info.virtual_parent_hashes.get(0).unwrap().to_string();
-            info!("Starting from virtual_parent_hash {}", checkpoint_hash);
-            if load_block_checkpoint(db_pool.clone()).is_some() {
-                warn!(
-                    "Ignoring an existing checkpoint and starting from a virtual_parent_hash \
-                is not recommended due to the possibility of gaps in the data!"
-                );
-            }
+            info!("Starting from virtual_parent {}", checkpoint_hash);
         } else {
             checkpoint_hash = ignore_checkpoint;
             info!("Starting from user supplied block {}", checkpoint_hash);
