@@ -9,8 +9,8 @@ use crossbeam_queue::ArrayQueue;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
+use diesel::sql_types::{Array, Bytea, Text};
 use diesel::{insert_into, sql_query, Connection, RunQueryDsl};
-use itertools::Itertools;
 use log::{debug, info, trace};
 use tokio::task;
 use tokio::time::sleep;
@@ -120,16 +120,17 @@ fn insert_input_transaction_addresses(values: Vec<Vec<u8>>, db_pool: Pool<Connec
     let con = &mut db_pool.get().expect("Database connection FAILED");
     for batch_values in values.chunks(BATCH_INSERT_SIZE) {
         con.transaction(|con| {
-            let query = format!(
-                "INSERT INTO addresses_transactions (address, transaction_id, block_time) \
+            let query = "\
+            INSERT INTO addresses_transactions (address, transaction_id, block_time) \
                     SELECT o.script_public_key_address, i.transaction_id, t.block_time \
                         FROM transactions_inputs i \
                         JOIN transactions t ON t.transaction_id = i.transaction_id \
                         JOIN transactions_outputs o ON o.transaction_id = i.previous_outpoint_hash AND o.index = i.previous_outpoint_index \
-                    WHERE i.transaction_id IN ({0}) AND t.transaction_id IN ({0}) \
-                    ON CONFLICT DO NOTHING", batch_values.iter().map(|v| format!("'\\x{}'", hex::encode(v))).join(", "));
+                    WHERE i.transaction_id = ANY($1) AND t.transaction_id = ANY($1) \
+                    ON CONFLICT DO NOTHING";
             trace!("Executing {} query:\n{}", key, query);
             rows_affected += sql_query(query)
+                .bind::<Array<Bytea>, _>(batch_values)
                 .execute(con)
                 .expect(format!("Commit {} FAILED", key).as_str());
             Ok::<_, Error>(())
