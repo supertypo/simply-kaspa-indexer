@@ -57,11 +57,11 @@ pub async fn process_transactions(
         for t in transactions {
             let verbose_data = t.verbose_data.unwrap();
             let subnetwork_id = t.subnetwork_id.to_string();
-            let subnetwork_option = subnetwork_map.get(&subnetwork_id);
 
-            if subnetwork_option.is_none() {
+            if let None = subnetwork_map.get(&subnetwork_id) {
                 let id = insert_into(subnetworks::dsl::subnetworks)
                     .values(SubnetworkInsertable { subnetwork_id: subnetwork_id.clone() })
+                    .on_conflict_do_nothing()
                     .returning(subnetworks::id)
                     .get_results(&mut db_pool.get().expect("Database connection FAILED"))
                     .expect("Commit transactions FAILED")[0];
