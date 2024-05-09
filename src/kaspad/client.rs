@@ -60,5 +60,5 @@ pub async fn connect_kaspad(url: String, force_network: String) -> Result<KaspaR
             sleep(Duration::from_secs(10)).await;
         }
     }
-    return Ok(client);
+    Ok(client)
 }
