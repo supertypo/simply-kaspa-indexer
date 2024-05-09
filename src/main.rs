@@ -77,10 +77,10 @@ async fn main() {
         )
         .arg(Arg::new("log-no-color").long("no-color").help("Disable colored output").action(clap::ArgAction::SetTrue))
         .arg(
-            Arg::new("buffer-size")
+            Arg::new("batch-scale")
                 .short('b')
-                .long("buffer-size")
-                .help("Internal buffer size factor [0.1-10]")
+                .long("batch-scale")
+                .help("Batch size factor [0.1-10]. Affects database batch sizes (as well as internal queue sizes)")
                 .default_value("1.0")
                 .action(clap::ArgAction::Set)
                 .value_parser(clap::value_parser!(f64)),
@@ -106,7 +106,7 @@ async fn main() {
     let database_url = matches.get_one::<String>("database-url").unwrap();
     let log_level = matches.get_one::<String>("log-level").unwrap().to_lowercase();
     let log_no_color = matches.get_flag("log-no-color");
-    let buffer_size = matches.get_one::<f64>("buffer-size").unwrap().to_owned();
+    let batch_scale = matches.get_one::<f64>("batch-scale").unwrap().to_owned();
     let ignore_checkpoint = matches.get_one::<String>("ignore-checkpoint").map(|i| i.to_lowercase());
     let initialize_db = matches.get_flag("initialize-db");
 
@@ -114,8 +114,8 @@ async fn main() {
     env::set_var("RUST_LOG_STYLE", if log_no_color { "never" } else { "always" });
     env_logger::builder().target(env_logger::Target::Stdout).format_target(false).format_timestamp_millis().init();
 
-    if buffer_size < 0.1 || buffer_size > 10.0 {
-        panic!("Invalid buffer-size");
+    if batch_scale < 0.1 || batch_scale > 10.0 {
+        panic!("Invalid batch-scale");
     }
 
     let db_url_cleaned = Regex::new(r"(postgres://postgres:)[^@]+(@)").unwrap().replace(database_url, "$1$2");
@@ -144,11 +144,11 @@ async fn main() {
 
     let kaspad_client = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
 
-    start_processing(buffer_size, ignore_checkpoint, db_pool, kaspad_client).await.expect("Unreachable");
+    start_processing(batch_scale, ignore_checkpoint, db_pool, kaspad_client).await.expect("Unreachable");
 }
 
 async fn start_processing(
-    buffer_size: f64,
+    batch_scale: f64,
     ignore_checkpoint: Option<String>,
     db_pool: Pool<ConnectionManager<PgConnection>>,
     kaspad_client: KaspaRpcClient,
@@ -193,10 +193,10 @@ async fn start_processing(
     });
 
     let base_buffer = 3000f64;
-    let rpc_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
-    let rpc_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
-    let db_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
-    let db_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * buffer_size) as usize));
+    let rpc_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));
+    let rpc_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));
+    let db_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));
+    let db_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));
 
     let start_vcp = Arc::new(AtomicBool::new(false));
     let mut tasks = vec![];
@@ -214,12 +214,12 @@ async fn start_processing(
         db_transactions_queue.clone(),
         db_pool.clone(),
     )));
-    tasks.push(task::spawn(insert_blocks(running.clone(), buffer_size, start_vcp.clone(), db_blocks_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(insert_txs_ins_outs(running.clone(), buffer_size, db_transactions_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(insert_blocks(running.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), db_pool.clone())));
+    tasks.push(task::spawn(insert_txs_ins_outs(running.clone(), batch_scale, db_transactions_queue.clone(), db_pool.clone())));
     tasks.push(task::spawn(process_virtual_chain(
         running.clone(),
         start_vcp.clone(),
-        buffer_size,
+        batch_scale,
         checkpoint,
         kaspad_client.clone(),
         db_pool.clone(),

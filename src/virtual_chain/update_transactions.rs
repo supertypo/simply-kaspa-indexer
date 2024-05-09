@@ -12,14 +12,14 @@ use crate::database::models::TransactionAcceptance;
 use crate::database::schema::transactions_acceptances;
 
 pub fn update_transactions(
-    buffer_size: f64,
+    batch_scale: f64,
     removed_hashes: Vec<RpcHash>,
     accepted_transaction_ids: Vec<RpcAcceptedTransactionIds>,
     last_accepting_time: u64,
     db_pool: Pool<ConnectionManager<PgConnection>>,
 ) {
     // ~7500 is the max batch size db supports:
-    let batch_insert_size = min((2000f64 * buffer_size) as usize, 7500);
+    let batch_insert_size = min((2000f64 * batch_scale) as usize, 7500);
     if log::log_enabled!(log::Level::Debug) {
         let accepted_count = accepted_transaction_ids.iter().map(|t| t.accepted_transaction_ids.len()).sum::<usize>();
         debug!("Received {} accepted transactions and {} removed chain blocks", accepted_count, removed_hashes.len());

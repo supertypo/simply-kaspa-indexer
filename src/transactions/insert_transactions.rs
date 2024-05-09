@@ -23,13 +23,13 @@ const BATCH_MAX_INSERT_SIZE: usize = 3500; // ~3500 is the max batch size db sup
 
 pub async fn insert_txs_ins_outs(
     running: Arc<AtomicBool>,
-    buffer_size: f64,
+    batch_scale: f64,
     db_transactions_queue: Arc<
         ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
     >,
     db_pool: Pool<ConnectionManager<PgConnection>>,
 ) {
-    let max_set_size = (3000f64 * buffer_size) as usize; // Large sets helps us to filter duplicates during catch-up
+    let max_set_size = (3000f64 * batch_scale) as usize; // Large sets helps us to filter duplicates during catch-up
     let mut transactions: HashSet<Transaction> = HashSet::with_capacity(max_set_size);
     let mut block_tx: HashSet<BlockTransaction> = HashSet::with_capacity(max_set_size);
     let mut tx_inputs: HashSet<TransactionInput> = HashSet::with_capacity(max_set_size * 2);

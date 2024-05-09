@@ -20,7 +20,7 @@ use crate::virtual_chain::update_transactions::update_transactions;
 pub async fn process_virtual_chain(
     running: Arc<AtomicBool>,
     start_vcp: Arc<AtomicBool>,
-    buffer_size: f64,
+    batch_scale: f64,
     checkpoint: Hash,
     kaspad: KaspaRpcClient,
     db_pool: Pool<ConnectionManager<PgConnection>>,
@@ -49,7 +49,7 @@ pub async fn process_virtual_chain(
             let removed_chain_block_hashes_clone = response.removed_chain_block_hashes.clone();
             let _ = task::spawn_blocking(move || {
                 update_transactions(
-                    buffer_size,
+                    batch_scale,
                     removed_chain_block_hashes_clone,
                     response.accepted_transaction_ids,
                     last_accepting_time,
@@ -59,7 +59,7 @@ pub async fn process_virtual_chain(
             .await;
             let db_pool_clone = db_pool.clone();
             let _ = task::spawn_blocking(move || {
-                update_chain_blocks(buffer_size, response.added_chain_block_hashes, response.removed_chain_block_hashes, db_pool_clone)
+                update_chain_blocks(batch_scale, response.added_chain_block_hashes, response.removed_chain_block_hashes, db_pool_clone)
             })
             .await;
 

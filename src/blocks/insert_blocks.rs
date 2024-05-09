@@ -21,7 +21,7 @@ use crate::vars::vars::save_block_checkpoint;
 
 pub async fn insert_blocks(
     running: Arc<AtomicBool>,
-    buffer_size: f64,
+    batch_scale: f64,
     start_vcp: Arc<AtomicBool>,
     db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
     db_pool: Pool<ConnectionManager<PgConnection>>,
@@ -30,7 +30,7 @@ pub async fn insert_blocks(
     const NOOP_DELETES_BEFORE_VCP: i32 = 10;
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     const CHECKPOINT_WARN_AFTER: u64 = 5 * CHECKPOINT_SAVE_INTERVAL;
-    let max_queue_size = min((1000f64 * buffer_size) as usize, BATCH_MAX_INSERT_SIZE);
+    let max_queue_size = min((1000f64 * batch_scale) as usize, BATCH_MAX_INSERT_SIZE);
     let mut vcp_started = false;
     let mut insert_queue = vec![];
     let mut last_block_hash = vec![];
