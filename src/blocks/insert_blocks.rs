@@ -26,11 +26,10 @@ pub async fn insert_blocks(
     db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
     db_pool: Pool<ConnectionManager<PgConnection>>,
 ) {
-    const BATCH_MAX_INSERT_SIZE: usize = 3500; // ~3500 is the max batch size db supports
     const NOOP_DELETES_BEFORE_VCP: i32 = 10;
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     const CHECKPOINT_WARN_AFTER: u64 = 5 * CHECKPOINT_SAVE_INTERVAL;
-    let max_queue_size = min((1000f64 * batch_scale) as usize, BATCH_MAX_INSERT_SIZE);
+    let batch_size = min((500f64 * batch_scale) as usize, 3500); // 2^16 / fields in Blocks
     let mut vcp_started = false;
     let mut insert_queue = vec![];
     let mut last_block_hash = vec![];
@@ -51,7 +50,7 @@ pub async fn insert_blocks(
         } else {
             sleep(Duration::from_millis(100)).await;
         }
-        if insert_queue.len() >= max_queue_size
+        if insert_queue.len() >= batch_size
             || (insert_queue.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2)
         {
             let mut cb_cleared = 0;

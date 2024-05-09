@@ -18,8 +18,7 @@ pub fn update_transactions(
     last_accepting_time: u64,
     db_pool: Pool<ConnectionManager<PgConnection>>,
 ) {
-    // ~7500 is the max batch size db supports:
-    let batch_insert_size = min((2000f64 * batch_scale) as usize, 7500);
+    let batch_size = min((1000f64 * batch_scale) as usize, 7500);
     if log::log_enabled!(log::Level::Debug) {
         let accepted_count = accepted_transaction_ids.iter().map(|t| t.accepted_transaction_ids.len()).sum::<usize>();
         debug!("Received {} accepted transactions and {} removed chain blocks", accepted_count, removed_hashes.len());
@@ -33,7 +32,7 @@ pub fn update_transactions(
     let con = &mut db_pool.get().expect("Database connection FAILED");
     con.transaction(|con| {
         let removed_blocks = removed_hashes.into_iter().map(|h| h.as_bytes().to_vec()).collect::<Vec<Vec<u8>>>();
-        for removed_blocks_chunk in removed_blocks.chunks(batch_insert_size) {
+        for removed_blocks_chunk in removed_blocks.chunks(batch_size) {
             debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
             rows_removed += delete(transactions_acceptances::dsl::transactions_acceptances)
                 .filter(transactions_acceptances::block_hash.eq_any(removed_blocks_chunk))
@@ -49,7 +48,7 @@ pub fn update_transactions(
                 });
             }
         }
-        for accepted_transactions_chunk in accepted_transactions.chunks(batch_insert_size) {
+        for accepted_transactions_chunk in accepted_transactions.chunks(batch_size) {
             debug!("Processing {} accepted transactions", accepted_transactions_chunk.len());
             rows_added += insert_into(transactions_acceptances::dsl::transactions_acceptances)
                 .values(accepted_transactions_chunk)

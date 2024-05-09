@@ -46,15 +46,9 @@ pub async fn process_virtual_chain(
                 with_retry(|| kaspad.get_block(last_accepting, false)).await.expect("Error when invoking GetBlock").header.timestamp;
 
             let db_pool_clone = db_pool.clone();
-            let removed_chain_block_hashes_clone = response.removed_chain_block_hashes.clone();
+            let removed_cbs = response.removed_chain_block_hashes.clone();
             let _ = task::spawn_blocking(move || {
-                update_transactions(
-                    batch_scale,
-                    removed_chain_block_hashes_clone,
-                    response.accepted_transaction_ids,
-                    last_accepting_time,
-                    db_pool_clone,
-                )
+                update_transactions(batch_scale, removed_cbs, response.accepted_transaction_ids, last_accepting_time, db_pool_clone)
             })
             .await;
             let db_pool_clone = db_pool.clone();
@@ -63,12 +57,11 @@ pub async fn process_virtual_chain(
             })
             .await;
 
-            start_hash = last_accepting;
-
             if !synced {
                 log_time_to_synced(start_time);
                 synced = true;
             }
+            start_hash = last_accepting;
         }
         sleep(Duration::from_secs(2)).await;
     }

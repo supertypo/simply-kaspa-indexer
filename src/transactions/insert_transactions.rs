@@ -1,5 +1,6 @@
 extern crate diesel;
 
+use std::cmp::min;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -19,8 +20,6 @@ use crate::database::models::{AddressTransaction, BlockTransaction, Transaction,
 use crate::database::schema::transactions;
 use crate::database::schema::{addresses_transactions, blocks_transactions, transactions_inputs, transactions_outputs};
 
-const BATCH_MAX_INSERT_SIZE: usize = 3500; // ~3500 is the max batch size db supports
-
 pub async fn insert_txs_ins_outs(
     run: Arc<AtomicBool>,
     batch_scale: f64,
@@ -29,12 +28,13 @@ pub async fn insert_txs_ins_outs(
     >,
     db_pool: Pool<ConnectionManager<PgConnection>>,
 ) {
-    let max_set_size = (3000f64 * batch_scale) as usize; // Large sets helps us to filter duplicates during catch-up
-    let mut transactions: HashSet<Transaction> = HashSet::with_capacity(max_set_size);
-    let mut block_tx: HashSet<BlockTransaction> = HashSet::with_capacity(max_set_size);
-    let mut tx_inputs: HashSet<TransactionInput> = HashSet::with_capacity(max_set_size * 2);
-    let mut tx_outputs: HashSet<TransactionOutput> = HashSet::with_capacity(max_set_size * 2);
-    let mut tx_addresses: HashSet<AddressTransaction> = HashSet::with_capacity(max_set_size * 2);
+    let batch_size = min((1000f64 * batch_scale) as u16, 7500);
+    let set_size = 3 * batch_size as usize; // Large sets helps us to filter duplicates during catch-up
+    let mut transactions: HashSet<Transaction> = HashSet::with_capacity(set_size);
+    let mut block_tx: HashSet<BlockTransaction> = HashSet::with_capacity(set_size);
+    let mut tx_inputs: HashSet<TransactionInput> = HashSet::with_capacity(set_size * 2);
+    let mut tx_outputs: HashSet<TransactionOutput> = HashSet::with_capacity(set_size * 2);
+    let mut tx_addresses: HashSet<AddressTransaction> = HashSet::with_capacity(set_size * 2);
     let mut last_block_timestamp;
     let mut last_commit_time = Instant::now();
 
@@ -47,7 +47,7 @@ pub async fn insert_txs_ins_outs(
             tx_outputs.extend(outputs.into_iter());
             tx_addresses.extend(addresses.into_iter());
 
-            if block_tx.len() >= max_set_size || (block_tx.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2)
+            if block_tx.len() >= set_size || (block_tx.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2)
             {
                 let start_commit_time = Instant::now();
                 debug!(
@@ -67,21 +67,21 @@ pub async fn insert_txs_ins_outs(
                 let addresses_vec = tx_addresses.into_iter().collect();
 
                 let db_pool_clone = db_pool.clone();
-                let tx_handle = task::spawn_blocking(|| insert_transactions(transactions_vec, db_pool_clone));
+                let tx_handle = task::spawn_blocking(move || insert_txs(batch_size, transactions_vec, db_pool_clone));
                 let db_pool_clone = db_pool.clone();
-                let tx_inputs_handle = task::spawn_blocking(|| insert_transaction_inputs(inputs_vec, db_pool_clone));
+                let tx_inputs_handle = task::spawn_blocking(move || insert_tx_inputs(batch_size, inputs_vec, db_pool_clone));
                 let db_pool_clone = db_pool.clone();
-                let tx_outputs_handle = task::spawn_blocking(|| insert_transaction_outputs(outputs_vec, db_pool_clone));
+                let tx_outputs_handle = task::spawn_blocking(move || insert_tx_outputs(batch_size, outputs_vec, db_pool_clone));
                 let db_pool_clone = db_pool.clone();
-                let tx_out_addr_handle = task::spawn_blocking(|| insert_output_transaction_addresses(addresses_vec, db_pool_clone));
+                let tx_out_addr_handle = task::spawn_blocking(move || insert_output_tx_addr(batch_size, addresses_vec, db_pool_clone));
 
                 let rows_affected_tx = tx_handle.await.unwrap();
                 let rows_affected_tx_inputs = tx_inputs_handle.await.unwrap();
                 let rows_affected_tx_outputs = tx_outputs_handle.await.unwrap();
                 let mut rows_affected_tx_addresses = tx_out_addr_handle.await.unwrap();
-                rows_affected_tx_addresses += insert_input_transaction_addresses(transaction_ids, db_pool.clone());
+                rows_affected_tx_addresses += insert_input_tx_addr(batch_size, transaction_ids, db_pool.clone());
                 // ^Needs to complete first to avoid incomplete block checkpoints
-                let rows_affected_block_tx = insert_block_transaction(block_transactions_vec, db_pool.clone());
+                let rows_affected_block_tx = insert_block_txs(batch_size, block_transactions_vec, db_pool.clone());
 
                 let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                 let tps = transactions_len as f64 / commit_time as f64 * 1000f64;
@@ -97,11 +97,11 @@ pub async fn insert_txs_ins_outs(
                     chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap()
                 );
 
-                transactions = HashSet::with_capacity(BATCH_MAX_INSERT_SIZE);
-                block_tx = HashSet::with_capacity(BATCH_MAX_INSERT_SIZE);
-                tx_inputs = HashSet::with_capacity(BATCH_MAX_INSERT_SIZE * 2);
-                tx_outputs = HashSet::with_capacity(BATCH_MAX_INSERT_SIZE * 2);
-                tx_addresses = HashSet::with_capacity(BATCH_MAX_INSERT_SIZE * 2);
+                transactions = HashSet::with_capacity(set_size);
+                block_tx = HashSet::with_capacity(set_size);
+                tx_inputs = HashSet::with_capacity(set_size * 2);
+                tx_outputs = HashSet::with_capacity(set_size * 2);
+                tx_addresses = HashSet::with_capacity(set_size * 2);
                 last_commit_time = Instant::now();
             }
         } else {
@@ -110,13 +110,13 @@ pub async fn insert_txs_ins_outs(
     }
 }
 
-fn insert_input_transaction_addresses(values: Vec<Vec<u8>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
+fn insert_input_tx_addr(max_batch_size: u16, values: Vec<Vec<u8>>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "input addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} transactions for {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(BATCH_MAX_INSERT_SIZE) {
+    for batch_values in values.chunks(max_batch_size as usize) {
         con.transaction(|con| {
             let query = "\
             INSERT INTO addresses_transactions (address, transaction_id, block_time) \
@@ -138,13 +138,13 @@ fn insert_input_transaction_addresses(values: Vec<Vec<u8>>, db_pool: Pool<Connec
     return rows_affected;
 }
 
-fn insert_output_transaction_addresses(values: Vec<AddressTransaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
+fn insert_output_tx_addr(max_batch_size: u16, values: Vec<AddressTransaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "output addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(BATCH_MAX_INSERT_SIZE) {
+    for batch_values in values.chunks(max_batch_size as usize) {
         con.transaction(|con| {
             rows_affected += insert_into(addresses_transactions::dsl::addresses_transactions)
                 .values(batch_values)
@@ -159,13 +159,13 @@ fn insert_output_transaction_addresses(values: Vec<AddressTransaction>, db_pool:
     return rows_affected;
 }
 
-fn insert_transaction_outputs(values: Vec<TransactionOutput>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
+fn insert_tx_outputs(max_batch_size: u16, values: Vec<TransactionOutput>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "transactions_outputs";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(BATCH_MAX_INSERT_SIZE) {
+    for batch_values in values.chunks(max_batch_size as usize) {
         con.transaction(|con| {
             rows_affected += insert_into(transactions_outputs::dsl::transactions_outputs)
                 .values(batch_values)
@@ -180,13 +180,13 @@ fn insert_transaction_outputs(values: Vec<TransactionOutput>, db_pool: Pool<Conn
     return rows_affected;
 }
 
-fn insert_transaction_inputs(values: Vec<TransactionInput>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
+fn insert_tx_inputs(max_batch_size: u16, values: Vec<TransactionInput>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "transaction_inputs";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(BATCH_MAX_INSERT_SIZE) {
+    for batch_values in values.chunks(max_batch_size as usize) {
         con.transaction(|con| {
             rows_affected += insert_into(transactions_inputs::dsl::transactions_inputs)
                 .values(batch_values)
@@ -201,13 +201,13 @@ fn insert_transaction_inputs(values: Vec<TransactionInput>, db_pool: Pool<Connec
     return rows_affected;
 }
 
-fn insert_transactions(values: Vec<Transaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
+fn insert_txs(max_batch_size: u16, values: Vec<Transaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(BATCH_MAX_INSERT_SIZE) {
+    for batch_values in values.chunks(max_batch_size as usize) {
         con.transaction(|con| {
             rows_affected += insert_into(transactions::dsl::transactions)
                 .values(batch_values)
@@ -222,13 +222,13 @@ fn insert_transactions(values: Vec<Transaction>, db_pool: Pool<ConnectionManager
     return rows_affected;
 }
 
-fn insert_block_transaction(values: Vec<BlockTransaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
+fn insert_block_txs(max_batch_size: u16, values: Vec<BlockTransaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
     let key = "block/transaction mappings";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     let con = &mut db_pool.get().expect("Database connection FAILED");
-    for batch_values in values.chunks(BATCH_MAX_INSERT_SIZE) {
+    for batch_values in values.chunks(max_batch_size as usize) {
         con.transaction(|con| {
             rows_affected = insert_into(blocks_transactions::dsl::blocks_transactions)
                 .values(batch_values)
