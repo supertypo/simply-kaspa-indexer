@@ -9,14 +9,14 @@ use tokio::time::sleep;
 use crate::database::models::Block;
 
 pub async fn process_blocks(
-    running: Arc<AtomicBool>,
+    run: Arc<AtomicBool>,
     rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
     db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
 ) {
-    while running.load(Ordering::Relaxed) {
+    while run.load(Ordering::Relaxed) {
         if let Some(block) = rpc_blocks_queue.pop() {
             let db_block = map_block(&block);
-            while db_blocks_queue.is_full() && running.load(Ordering::Relaxed) {
+            while db_blocks_queue.is_full() && run.load(Ordering::Relaxed) {
                 sleep(Duration::from_millis(100)).await;
             }
             let _ = db_blocks_queue.push((

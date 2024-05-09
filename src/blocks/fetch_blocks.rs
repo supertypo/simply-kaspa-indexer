@@ -17,7 +17,7 @@ use tokio::time::sleep;
 use crate::kaspad::client::with_retry;
 
 pub async fn fetch_blocks(
-    running: Arc<AtomicBool>,
+    run: Arc<AtomicBool>,
     checkpoint: Hash,
     kaspad: KaspaRpcClient,
     rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
@@ -30,7 +30,7 @@ pub async fn fetch_blocks(
     let mut synced = false;
     let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
 
-    while running.load(Ordering::Relaxed) {
+    while run.load(Ordering::Relaxed) {
         let last_fetch_time = Instant::now();
         debug!("Getting blocks with low_hash {}", low_hash.to_string());
         let response = with_retry(|| kaspad.get_blocks(Some(low_hash), true, true)).await.expect("Error when invoking GetBlocks");
@@ -68,7 +68,7 @@ pub async fn fetch_blocks(
                     continue;
                 }
                 let mut last_blocks_warn = Instant::now();
-                while rpc_blocks_queue.is_full() && running.load(Ordering::Relaxed) {
+                while rpc_blocks_queue.is_full() && run.load(Ordering::Relaxed) {
                     if Instant::now().duration_since(last_blocks_warn).as_secs() >= 30 {
                         warn!("RPC blocks queue is full");
                         last_blocks_warn = Instant::now();
@@ -76,7 +76,7 @@ pub async fn fetch_blocks(
                     sleep(Duration::from_secs(1)).await;
                 }
                 let mut last_transactions_warn = Instant::now();
-                while rpc_transactions_queue.is_full() && running.load(Ordering::Relaxed) {
+                while rpc_transactions_queue.is_full() && run.load(Ordering::Relaxed) {
                     if Instant::now().duration_since(last_transactions_warn).as_secs() >= 30 {
                         warn!("RPC transactions queue is full");
                         last_transactions_warn = Instant::now();

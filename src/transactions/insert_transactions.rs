@@ -22,7 +22,7 @@ use crate::database::schema::{addresses_transactions, blocks_transactions, trans
 const BATCH_MAX_INSERT_SIZE: usize = 3500; // ~3500 is the max batch size db supports
 
 pub async fn insert_txs_ins_outs(
-    running: Arc<AtomicBool>,
+    run: Arc<AtomicBool>,
     batch_scale: f64,
     db_transactions_queue: Arc<
         ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
@@ -38,7 +38,7 @@ pub async fn insert_txs_ins_outs(
     let mut last_block_timestamp;
     let mut last_commit_time = Instant::now();
 
-    while running.load(Ordering::Relaxed) {
+    while run.load(Ordering::Relaxed) {
         if let Some((transaction, block_transactions, inputs, outputs, addresses)) = db_transactions_queue.pop() {
             last_block_timestamp = transaction.block_time;
             transactions.insert(transaction);

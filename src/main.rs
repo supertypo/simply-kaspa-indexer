@@ -142,18 +142,18 @@ async fn main() {
         info!("All migrations successfully applied.");
     }
 
-    let kaspad_client = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
+    let kaspad = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
 
-    start_processing(batch_scale, ignore_checkpoint, db_pool, kaspad_client).await.expect("Unreachable");
+    start_processing(batch_scale, ignore_checkpoint, db_pool, kaspad).await.expect("Unreachable");
 }
 
 async fn start_processing(
     batch_scale: f64,
     ignore_checkpoint: Option<String>,
     db_pool: Pool<ConnectionManager<PgConnection>>,
-    kaspad_client: KaspaRpcClient,
+    kaspad: KaspaRpcClient,
 ) -> Result<(), ()> {
-    let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
+    let block_dag_info = kaspad.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
     let checkpoint: Hash;
 
     if let Some(ignore_checkpoint) = ignore_checkpoint {
@@ -178,8 +178,8 @@ async fn start_processing(
         }
     }
 
-    let running = Arc::new(AtomicBool::new(true));
-    let running_clone = running.clone();
+    let run = Arc::new(AtomicBool::new(true));
+    let running_clone = run.clone();
     std::thread::spawn(move || {
         for signal in Signals::new(&[SIGINT, SIGQUIT, SIGTERM]).expect("Signal handler setup FAILED").forever() {
             let signal_name = signal_name(signal).unwrap_or("UNKNOWN");
@@ -194,37 +194,19 @@ async fn start_processing(
 
     let base_buffer = 3000f64;
     let rpc_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));
-    let rpc_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));
+    let rpc_txs_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));
     let db_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));
-    let db_transactions_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));
+    let db_txs_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));
 
     let start_vcp = Arc::new(AtomicBool::new(false));
-    let mut tasks = vec![];
-    tasks.push(task::spawn(fetch_blocks(
-        running.clone(),
-        checkpoint,
-        kaspad_client.clone(),
-        rpc_blocks_queue.clone(),
-        rpc_transactions_queue.clone(),
-    )));
-    tasks.push(task::spawn(process_blocks(running.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())));
-    tasks.push(task::spawn(process_transactions(
-        running.clone(),
-        rpc_transactions_queue.clone(),
-        db_transactions_queue.clone(),
-        db_pool.clone(),
-    )));
-    tasks.push(task::spawn(insert_blocks(running.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(insert_txs_ins_outs(running.clone(), batch_scale, db_transactions_queue.clone(), db_pool.clone())));
-    tasks.push(task::spawn(process_virtual_chain(
-        running.clone(),
-        start_vcp.clone(),
-        batch_scale,
-        checkpoint,
-        kaspad_client.clone(),
-        db_pool.clone(),
-    )));
-
+    let tasks = vec![
+        task::spawn(fetch_blocks(run.clone(), checkpoint, kaspad.clone(), rpc_blocks_queue.clone(), rpc_txs_queue.clone())),
+        task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
+        task::spawn(process_transactions(run.clone(), rpc_txs_queue.clone(), db_txs_queue.clone(), db_pool.clone())),
+        task::spawn(insert_blocks(run.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), db_pool.clone())),
+        task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, db_txs_queue.clone(), db_pool.clone())),
+        task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), db_pool.clone())),
+    ];
     try_join_all(tasks).await.unwrap();
     Ok(())
 }

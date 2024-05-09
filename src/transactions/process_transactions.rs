@@ -19,7 +19,7 @@ use crate::database::models::{
 use crate::database::schema::subnetworks;
 
 pub async fn process_transactions(
-    running: Arc<AtomicBool>,
+    run: Arc<AtomicBool>,
     rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
     db_transactions_queue: Arc<
         ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
@@ -35,14 +35,14 @@ pub async fn process_transactions(
     }
     info!("Loaded {} known subnetworks", subnetwork_map.len());
 
-    while running.load(Ordering::Relaxed) {
+    while run.load(Ordering::Relaxed) {
         if let Some(transactions) = rpc_transactions_queue.pop() {
             if !valid_address {
                 validate_address(&transactions);
                 valid_address = true;
             }
             for transaction in transactions {
-                while db_transactions_queue.is_full() && running.load(Ordering::Relaxed) {
+                while db_transactions_queue.is_full() && run.load(Ordering::Relaxed) {
                     sleep(Duration::from_millis(100)).await;
                 }
                 let _ = db_transactions_queue.push(map_transaction(transaction, &mut subnetwork_map, &db_pool));

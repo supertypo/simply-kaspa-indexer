@@ -18,7 +18,7 @@ use crate::virtual_chain::update_chain_blocks::update_chain_blocks;
 use crate::virtual_chain::update_transactions::update_transactions;
 
 pub async fn process_virtual_chain(
-    running: Arc<AtomicBool>,
+    run: Arc<AtomicBool>,
     start_vcp: Arc<AtomicBool>,
     batch_scale: f64,
     checkpoint: Hash,
@@ -29,12 +29,12 @@ pub async fn process_virtual_chain(
     let mut synced = false;
     let mut start_hash = checkpoint;
 
-    while running.load(Ordering::Relaxed) && !start_vcp.load(Ordering::Relaxed) {
+    while run.load(Ordering::Relaxed) && !start_vcp.load(Ordering::Relaxed) {
         debug!("Waiting for start notification");
         sleep(Duration::from_secs(5)).await;
     }
 
-    while running.load(Ordering::Relaxed) {
+    while run.load(Ordering::Relaxed) {
         debug!("Getting virtual chain from start_hash {}", start_hash.to_string());
         let response = with_retry(|| kaspad.get_virtual_chain_from_block(start_hash, true))
             .await

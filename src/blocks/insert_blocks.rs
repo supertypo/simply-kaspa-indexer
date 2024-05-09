@@ -20,7 +20,7 @@ use crate::database::schema::{blocks, chain_blocks, transactions_acceptances};
 use crate::vars::vars::save_block_checkpoint;
 
 pub async fn insert_blocks(
-    running: Arc<AtomicBool>,
+    run: Arc<AtomicBool>,
     batch_scale: f64,
     start_vcp: Arc<AtomicBool>,
     db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
@@ -42,7 +42,7 @@ pub async fn insert_blocks(
     let mut last_commit_time = Instant::now();
     let mut noop_delete_count = 0;
 
-    while running.load(Ordering::Relaxed) {
+    while run.load(Ordering::Relaxed) {
         if let Some((block, transactions)) = db_blocks_queue.pop() {
             last_block_hash = block.hash.clone();
             last_block_tx_count = transactions.len() as i64;
