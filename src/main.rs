@@ -1,5 +1,6 @@
 extern crate diesel;
 
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,6 +12,7 @@ use diesel::pg::PgConnection;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use futures_util::future::try_join_all;
+use kaspa_hashes::Hash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, info, warn};
@@ -152,27 +154,27 @@ async fn start_processing(
     kaspad_client: KaspaRpcClient,
 ) -> Result<(), ()> {
     let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
-    let checkpoint_hash;
+    let checkpoint: Hash;
 
     if let Some(ignore_checkpoint) = ignore_checkpoint {
         warn!("Checkpoint ignored due to user request (-i). This might lead to inconsistencies.");
         if ignore_checkpoint == "p" {
-            checkpoint_hash = block_dag_info.pruning_point_hash.to_string();
-            info!("Starting from pruning_point {}", checkpoint_hash);
+            checkpoint = block_dag_info.pruning_point_hash;
+            info!("Starting from pruning_point {}", checkpoint);
         } else if ignore_checkpoint == "v" {
-            checkpoint_hash = block_dag_info.virtual_parent_hashes.get(0).unwrap().to_string();
-            info!("Starting from virtual_parent {}", checkpoint_hash);
+            checkpoint = *block_dag_info.virtual_parent_hashes.get(0).unwrap();
+            info!("Starting from virtual_parent {}", checkpoint);
         } else {
-            checkpoint_hash = ignore_checkpoint;
-            info!("Starting from user supplied block {}", checkpoint_hash);
+            checkpoint = Hash::from_str(ignore_checkpoint.as_str()).expect("Supplied block hash is invalid");
+            info!("Starting from user supplied block {}", checkpoint);
         }
     } else {
         if let Some(saved_block_checkpoint) = load_block_checkpoint(db_pool.clone()) {
-            checkpoint_hash = saved_block_checkpoint;
-            info!("Starting from checkpoint {}", checkpoint_hash);
+            checkpoint = Hash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
+            info!("Starting from checkpoint {}", checkpoint);
         } else {
-            checkpoint_hash = block_dag_info.pruning_point_hash.to_string();
-            warn!("Checkpoint not found, starting from pruning point {}", checkpoint_hash);
+            checkpoint = block_dag_info.pruning_point_hash;
+            warn!("Checkpoint not found, starting from pruning point {}", checkpoint);
         }
     }
 
@@ -200,7 +202,7 @@ async fn start_processing(
     let mut tasks = vec![];
     tasks.push(task::spawn(fetch_blocks(
         running.clone(),
-        checkpoint_hash.clone(),
+        checkpoint,
         kaspad_client.clone(),
         rpc_blocks_queue.clone(),
         rpc_transactions_queue.clone(),
@@ -218,7 +220,7 @@ async fn start_processing(
         running.clone(),
         start_vcp.clone(),
         buffer_size,
-        checkpoint_hash,
+        checkpoint,
         kaspad_client.clone(),
         db_pool.clone(),
     )));

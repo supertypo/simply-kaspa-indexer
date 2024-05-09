@@ -18,31 +18,28 @@ use crate::kaspad::client::with_retry;
 
 pub async fn fetch_blocks(
     running: Arc<AtomicBool>,
-    checkpoint_hash: String,
-    kaspad_client: KaspaRpcClient,
+    checkpoint: Hash,
+    kaspad: KaspaRpcClient,
     rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
     rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
 ) {
     const SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(30);
     let start_time = Instant::now();
-    let checkpoint_hash = hex::decode(checkpoint_hash.as_bytes()).unwrap();
-    let mut low_hash = checkpoint_hash;
+    let mut low_hash = checkpoint;
     let mut last_sync_check = Instant::now() - SYNC_CHECK_INTERVAL;
     let mut synced = false;
     let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
 
     while running.load(Ordering::Relaxed) {
         let last_fetch_time = Instant::now();
-        debug!("Getting blocks with low_hash {}", hex::encode(low_hash.clone()));
-        let response = with_retry(|| kaspad_client.get_blocks(Some(Hash::from_slice(low_hash.as_slice())), true, true))
-            .await
-            .expect("Error when invoking GetBlocks");
+        debug!("Getting blocks with low_hash {}", low_hash.to_string());
+        let response = with_retry(|| kaspad.get_blocks(Some(low_hash), true, true)).await.expect("Error when invoking GetBlocks");
         debug!("Received {} blocks", response.blocks.len());
         trace!("Block hashes: \n{:#?}", response.block_hashes);
 
         if !synced && response.blocks.len() < 100 {
             if Instant::now().duration_since(last_sync_check) >= SYNC_CHECK_INTERVAL {
-                let block_dag_info = kaspad_client.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
+                let block_dag_info = kaspad.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
                 info!("Getting tip hashes from BlockDagInfo for sync check");
                 tip_hash = block_dag_info.tip_hashes[0];
                 last_sync_check = Instant::now();
@@ -52,7 +49,7 @@ pub async fn fetch_blocks(
         let blocks_len = response.blocks.len();
         let txs_len: usize = response.blocks.iter().map(|b| b.transactions.len()).sum();
         if blocks_len > 1 {
-            let new_low_hash = response.blocks.last().unwrap().header.hash.as_bytes().to_vec();
+            let new_low_hash = response.blocks.last().unwrap().header.hash;
             for b in response.blocks {
                 let block_hash = b.header.hash;
                 if !synced && block_hash == tip_hash {
@@ -65,8 +62,8 @@ pub async fn fetch_blocks(
                     );
                     synced = true;
                 }
-                if block_hash.as_bytes().to_vec() == low_hash {
-                    trace!("Ignoring low_hash block {}", hex::encode(low_hash.clone()));
+                if block_hash == low_hash {
+                    trace!("Ignoring low_hash block {}", low_hash.to_string());
                     continue;
                 }
                 let mut last_blocks_warn = Instant::now();

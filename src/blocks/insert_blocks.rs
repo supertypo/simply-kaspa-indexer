@@ -95,7 +95,7 @@ pub async fn insert_blocks(
 
             if !vcp_started {
                 info!(
-                    "Committed {} new blocks, cleared {} cb and {} ta. Last block timestamp: {}",
+                    "Committed {} new blocks, cleared {} cb and {} ta. Last block: {}",
                     blocks_inserted,
                     cb_cleared,
                     ta_cleared,
@@ -103,7 +103,7 @@ pub async fn insert_blocks(
                 );
             } else {
                 info!(
-                    "Committed {} new blocks. Last block timestamp: {}",
+                    "Committed {} new blocks. Last block: {}",
                     blocks_inserted,
                     chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap()
                 );

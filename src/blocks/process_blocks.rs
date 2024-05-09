@@ -21,8 +21,7 @@ pub async fn process_blocks(
             }
             let _ = db_blocks_queue.push((
                 db_block,
-                block.verbose_data.map(|vd| vd.transaction_ids.into_iter()
-                    .map(|t| t.as_bytes().to_vec()).collect()).unwrap(),
+                block.verbose_data.map(|vd| vd.transaction_ids.into_iter().map(|t| t.as_bytes().to_vec()).collect()).unwrap(),
             ));
         } else {
             sleep(Duration::from_millis(100)).await;

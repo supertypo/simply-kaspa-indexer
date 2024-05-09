@@ -15,7 +15,7 @@ pub fn update_transactions(
     buffer_size: f64,
     removed_hashes: Vec<RpcHash>,
     accepted_transaction_ids: Vec<RpcAcceptedTransactionIds>,
-    last_accepted_block_time: Option<u64>,
+    last_accepting_time: u64,
     db_pool: Pool<ConnectionManager<PgConnection>>,
 ) {
     // ~7500 is the max batch size db supports:
@@ -61,12 +61,10 @@ pub fn update_transactions(
     })
     .expect("Commit rejected/accepted transactions FAILED");
 
-    let mut last_accepted_block_msg = String::from("");
-    if let Some(last_accepted_block_timestamp) = last_accepted_block_time {
-        last_accepted_block_msg = format!(
-            ". Last accepted timestamp: {}",
-            chrono::DateTime::from_timestamp_millis(last_accepted_block_timestamp as i64 / 1000 * 1000).unwrap()
-        );
-    }
-    info!("Committed {} accepted and {} rejected transactions{}", rows_added, rows_removed, last_accepted_block_msg);
+    info!(
+        "Committed {} accepted and {} rejected transactions. Last accepted: {}",
+        rows_added,
+        rows_removed,
+        chrono::DateTime::from_timestamp_millis(last_accepting_time as i64 / 1000 * 1000).unwrap()
+    );
 }

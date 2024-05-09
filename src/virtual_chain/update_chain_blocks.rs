@@ -17,8 +17,7 @@ pub fn update_chain_blocks(
     removed_hashes: Vec<RpcHash>,
     db_pool: Pool<ConnectionManager<PgConnection>>,
 ) {
-    // ~7500 is the max batch size db supports:
-    let batch_insert_size = min((2000f64 * buffer_size) as usize, 7500);
+    let batch_insert_size = min((2000f64 * buffer_size) as usize, 7500); // ~7500 is the max batch size db supports
     debug!("Received {} added and {} removed chain blocks", added_hashes.len(), removed_hashes.len());
     trace!("Added chain blocks: \n{:#?}", added_hashes);
     trace!("Removed chain blocks: \n{:#?}", removed_hashes);
