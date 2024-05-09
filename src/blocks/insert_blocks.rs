@@ -60,7 +60,7 @@ pub async fn insert_blocks(
             let con = &mut db_pool.get().expect("Database connection FAILED");
             con.transaction(|con| {
                 blocks_inserted = insert_into(blocks::dsl::blocks)
-                    .values(Vec::from_iter(insert_queue.iter()))
+                    .values(&insert_queue)
                     .on_conflict_do_nothing()
                     .execute(con)
                     .expect("Commit blocks FAILED");
