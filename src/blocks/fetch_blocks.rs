@@ -47,10 +47,11 @@ pub async fn fetch_blocks(
         }
 
         let blocks_len = response.blocks.len();
-        let txs_len: usize = response.blocks.iter().map(|b| b.transactions.len()).sum();
+        let mut txs_len = 0;
         if blocks_len > 1 {
-            let new_low_hash = response.blocks.last().unwrap().header.hash;
+            low_hash = response.blocks.last().unwrap().header.hash;
             for b in response.blocks {
+                txs_len += b.transactions.len();
                 let block_hash = b.header.hash;
                 if !synced && block_hash == tip_hash {
                     let time_to_sync = Instant::now().duration_since(start_time);
@@ -85,14 +86,13 @@ pub async fn fetch_blocks(
                 rpc_blocks_queue.push(RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }).unwrap();
                 rpc_transactions_queue.push(b.transactions).unwrap();
             }
-            low_hash = new_low_hash;
         }
         if blocks_len < 50 {
             sleep(Duration::from_secs(2)).await;
         }
         let fetch_time = Instant::now().duration_since(last_fetch_time).as_millis() as f64 / 1000f64;
         debug!(
-            "Fetch blocks BPS: {:.1}, TPS: {:.1} ({:.1} txs/block)",
+            "Fetch blocks bps: {:.1}, tps: {:.1} ({:.1} txs/block)",
             blocks_len as f64 / fetch_time,
             txs_len as f64 / fetch_time,
             txs_len as f64 / blocks_len as f64
