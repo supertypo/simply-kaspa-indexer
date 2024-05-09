@@ -47,8 +47,7 @@ pub async fn insert_txs_ins_outs(
             tx_outputs.extend(outputs.into_iter());
             tx_addresses.extend(addresses.into_iter());
 
-            if block_tx.len() >= set_size || (block_tx.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2)
-            {
+            if block_tx.len() >= set_size || (block_tx.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
                 let start_commit_time = Instant::now();
                 debug!(
                     "Committing {} transactions ({} block/tx, {} inputs, {} outputs)",
@@ -79,9 +78,14 @@ pub async fn insert_txs_ins_outs(
                 let rows_affected_tx_inputs = tx_inputs_handle.await.unwrap();
                 let rows_affected_tx_outputs = tx_outputs_handle.await.unwrap();
                 let mut rows_affected_tx_addresses = tx_out_addr_handle.await.unwrap();
-                rows_affected_tx_addresses += insert_input_tx_addr(batch_size, transaction_ids, db_pool.clone());
-                // ^Needs to complete first to avoid incomplete block checkpoints
-                let rows_affected_block_tx = insert_block_txs(batch_size, block_transactions_vec, db_pool.clone());
+                // ^Input address resolving can only happen after the transaction + inputs + outputs are committed
+                let db_pool_clone = db_pool.clone();
+                let tx_in_addr_handle = task::spawn_blocking(move || insert_input_tx_addr(batch_size, transaction_ids, db_pool_clone));
+                rows_affected_tx_addresses += tx_in_addr_handle.await.unwrap();
+                // ^All other transaction details needs to be committed before linking to blocks, to avoid incomplete checkpoints
+                let db_pool_clone = db_pool.clone();
+                let blk_tx_handle = task::spawn_blocking(move || insert_block_txs(batch_size, block_transactions_vec, db_pool_clone));
+                let rows_affected_block_tx = blk_tx_handle.await.unwrap();
 
                 let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                 let tps = transactions_len as f64 / commit_time as f64 * 1000f64;
@@ -138,7 +142,11 @@ fn insert_input_tx_addr(max_batch_size: u16, values: Vec<Vec<u8>>, db_pool: Pool
     return rows_affected;
 }
 
-fn insert_output_tx_addr(max_batch_size: u16, values: Vec<AddressTransaction>, db_pool: Pool<ConnectionManager<PgConnection>>) -> usize {
+fn insert_output_tx_addr(
+    max_batch_size: u16,
+    values: Vec<AddressTransaction>,
+    db_pool: Pool<ConnectionManager<PgConnection>>,
+) -> usize {
     let key = "output addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);

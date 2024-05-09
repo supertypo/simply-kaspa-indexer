@@ -36,14 +36,13 @@ pub async fn process_virtual_chain(
 
     while run.load(Ordering::Relaxed) {
         debug!("Getting virtual chain from start_hash {}", start_hash.to_string());
-        let response = with_retry(|| kaspad.get_virtual_chain_from_block(start_hash, true))
-            .await
-            .expect("Error when invoking GetVirtualChainFromBlock");
+        let response =
+            with_retry(|| kaspad.get_virtual_chain_from_block(start_hash, true)).await.expect("GetVirtualChainFromBlock failed");
 
         if !response.accepted_transaction_ids.is_empty() {
             let last_accepting = response.accepted_transaction_ids.last().unwrap().accepting_block_hash;
             let last_accepting_time =
-                with_retry(|| kaspad.get_block(last_accepting, false)).await.expect("Error when invoking GetBlock").header.timestamp;
+                with_retry(|| kaspad.get_block(last_accepting, false)).await.expect("GetBlock failed").header.timestamp;
 
             let db_pool_clone = db_pool.clone();
             let removed_cbs = response.removed_chain_block_hashes.clone();
