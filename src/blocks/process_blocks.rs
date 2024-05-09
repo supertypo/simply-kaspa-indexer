@@ -21,7 +21,8 @@ pub async fn process_blocks(
             }
             let _ = db_blocks_queue.push((
                 db_block,
-                block.verbose_data.as_ref().map(|vd| vd.transaction_ids.iter().map(|t| t.as_bytes().to_vec()).collect()).unwrap(),
+                block.verbose_data.map(|vd| vd.transaction_ids.into_iter()
+                    .map(|t| t.as_bytes().to_vec()).collect()).unwrap(),
             ));
         } else {
             sleep(Duration::from_millis(100)).await;
@@ -30,7 +31,7 @@ pub async fn process_blocks(
 }
 
 fn map_block(block: &RpcBlock) -> Block {
-    let db_block = Block {
+    Block {
         hash: block.header.hash.as_bytes().to_vec(),
         accepted_id_merkle_root: Some(block.header.accepted_id_merkle_root.as_bytes().to_vec()),
         difficulty: block.verbose_data.as_ref().map(|v| v.difficulty),
@@ -68,6 +69,5 @@ fn map_block(block: &RpcBlock) -> Block {
         timestamp: Some(block.header.timestamp as i64),
         utxo_commitment: Some(block.header.utxo_commitment.as_bytes().to_vec()),
         version: Some(block.header.version as i16),
-    };
-    db_block
+    }
 }
