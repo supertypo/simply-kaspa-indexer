@@ -133,7 +133,7 @@ fn validate_address(transactions: &Vec<RpcTransaction>) {
         transactions
             .first()
             .and_then(|t| t.outputs.first())
-            .and_then(|o| o.verbose_data.clone())
+            .and_then(|o| o.verbose_data.as_ref())
             .map(|v| v.script_public_key_address.prefix.to_string()),
     );
 }
