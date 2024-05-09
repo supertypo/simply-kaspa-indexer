@@ -167,9 +167,8 @@ async fn start_processing(
             info!("Starting from user supplied block {}", checkpoint_hash);
         }
     } else {
-        let saved_block_checkpoint = load_block_checkpoint(db_pool.clone());
-        if saved_block_checkpoint.is_some() {
-            checkpoint_hash = saved_block_checkpoint.unwrap();
+        if let Some(saved_block_checkpoint) = load_block_checkpoint(db_pool.clone()) {
+            checkpoint_hash = saved_block_checkpoint;
             info!("Starting from checkpoint {}", checkpoint_hash);
         } else {
             checkpoint_hash = block_dag_info.pruning_point_hash.to_string();

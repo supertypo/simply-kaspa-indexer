@@ -24,8 +24,7 @@ pub fn load(key: String, db_pool: Pool<ConnectionManager<PgConnection>>) -> Opti
         .first::<String>(con)
         .optional()
         .expect(format!("Loading var '{}' from database FAILED", key).as_str());
-    if option.is_some() {
-        let value = option.unwrap();
+    if let Some(value) = option {
         trace!("Database var with key '{}' loaded: {}", key, value);
         Some(value)
     } else {
