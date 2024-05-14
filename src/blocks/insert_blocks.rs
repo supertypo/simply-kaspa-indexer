@@ -12,7 +12,6 @@ use log::{error, info};
 use sqlx::{Executor, Pool, Postgres, Row};
 use tokio::time::sleep;
 
-use crate::database::copy_from::{format_binary, format_binary_array};
 use crate::database::models::Block;
 use crate::vars::vars::save_checkpoint;
 
@@ -160,69 +159,6 @@ async fn commit_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u
         query = query.bind(block.version);
     }
     let rows_affected = tx.execute(query).await?.rows_affected();
-    tx.commit().await?;
-    Ok(rows_affected)
-}
-
-async fn bulk_insert_blocks(blocks: &Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
-    const TEMP_TABLE_NAME: &str = "blocks_copy_in";
-
-    let mut tx = db_pool.begin().await?;
-
-    let query = format!(
-        "CREATE TEMPORARY TABLE {} (
-            hash                    BYTEA,
-            accepted_id_merkle_root BYTEA,
-            difficulty              DOUBLE PRECISION,
-            merge_set_blues_hashes  BYTEA[],
-            merge_set_reds_hashes   BYTEA[],
-            selected_parent_hash    BYTEA,
-            bits                    BIGINT,
-            blue_score              BIGINT,
-            blue_work               BYTEA,
-            daa_score               BIGINT,
-            hash_merkle_root        BYTEA,
-            nonce                   BYTEA,
-            parents                 BYTEA[],
-            pruning_point           BYTEA,
-            timestamp               BIGINT,
-            utxo_commitment         BYTEA,
-            version                 SMALLINT
-        ) ON COMMIT DROP",
-        TEMP_TABLE_NAME
-    );
-    tx.execute(sqlx::query(&query)).await?;
-
-    let mut copy_in = tx.copy_in_raw(format!("COPY {} FROM STDIN", TEMP_TABLE_NAME).as_str()).await?;
-
-    for block in blocks {
-        let data = format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
-            format_binary(&block.hash),
-            format_binary(&block.accepted_id_merkle_root),
-            format!("{}", block.difficulty),
-            format_binary_array(&block.merge_set_blues_hashes),
-            format_binary_array(&block.merge_set_reds_hashes),
-            format_binary(&block.selected_parent_hash),
-            format!("{}", block.bits),
-            format!("{}", block.blue_score),
-            format_binary(&block.blue_work),
-            format!("{}", block.daa_score),
-            format_binary(&block.hash_merkle_root),
-            format_binary(&block.nonce),
-            format_binary_array(&block.parents),
-            format_binary(&block.pruning_point),
-            format!("{}", block.timestamp),
-            format_binary(&block.utxo_commitment),
-            format!("{}", block.version),
-        );
-        copy_in.send(data.as_bytes()).await?;
-    }
-    copy_in.finish().await?;
-
-    let query = format!("INSERT INTO blocks SELECT * FROM {} ON CONFLICT DO NOTHING", TEMP_TABLE_NAME);
-    let rows_affected = tx.execute(sqlx::query(&query)).await?.rows_affected();
-
     tx.commit().await?;
     Ok(rows_affected)
 }
