@@ -31,7 +31,8 @@ pub async fn insert_blocks(
     const CHECKPOINT_WARN_AFTER: u64 = 5 * CHECKPOINT_SAVE_INTERVAL;
     let batch_size = min((500f64 * batch_scale) as usize, 3500); // 2^16 / fields in Blocks
     let mut vcp_started = false;
-    let mut insert_queue = vec![];
+    let mut blocks = vec![];
+    let mut block_hashes = vec![];
     let mut checkpoint = None;
     let mut last_block_datetime;
     let mut checkpoint_last_saved = Instant::now();
@@ -47,72 +48,23 @@ pub async fn insert_blocks(
                 }
             }
             last_block_datetime = DateTime::from_timestamp_millis(block.timestamp.unwrap() / 1000 * 1000).unwrap();
-            insert_queue.push(block);
+            if !vcp_started {
+                block_hashes.push(block.hash.clone());
+            }
+            blocks.push(block);
         } else {
             sleep(Duration::from_millis(100)).await;
             continue;
         }
-        if insert_queue.len() >= batch_size
-            || (insert_queue.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2)
-        {
-            let mut con = db_pool.acquire().await.expect("Database connection FAILED");
-            let mut tx = con.begin().await.expect("Transaction begin FAILED");
-
-            let sql = format!(
-                "INSERT INTO blocks (
-                    hash,
-                    accepted_id_merkle_root,
-                    difficulty,
-                    merge_set_blues_hashes,
-                    merge_set_reds_hashes,
-                    selected_parent_hash,
-                    bits,
-                    blue_score,
-                    blue_work,
-                    daa_score,
-                    hash_merkle_root,
-                    nonce,
-                    parents,
-                    pruning_point,
-                    timestamp,
-                    utxo_commitment, 
-                    version
-                ) VALUES {} ON CONFLICT DO NOTHING",
-                (0..insert_queue.len()).map(|i| format!("({})", (1..=17).map(|c| format!("${}", c + i * 17)).join(", "))).join(", ")
-            );
-
-            let mut query = sqlx::query(&sql);
-            let mut block_hashes = vec![];
-            for block in insert_queue {
-                if !vcp_started {
-                    block_hashes.push(block.hash.clone());
-                }
-                query = query.bind(block.hash);
-                query = query.bind(block.accepted_id_merkle_root);
-                query = query.bind(block.difficulty);
-                query = query.bind(block.merge_set_blues_hashes);
-                query = query.bind(block.merge_set_reds_hashes);
-                query = query.bind(block.selected_parent_hash);
-                query = query.bind(block.bits);
-                query = query.bind(block.blue_score);
-                query = query.bind(block.blue_work);
-                query = query.bind(block.daa_score);
-                query = query.bind(block.hash_merkle_root);
-                query = query.bind(block.nonce);
-                query = query.bind(block.parents);
-                query = query.bind(block.pruning_point);
-                query = query.bind(block.timestamp);
-                query = query.bind(block.utxo_commitment);
-                query = query.bind(block.version);
-            }
-            let blocks_inserted = tx.execute(query).await.expect("Insert blocks FAILED").rows_affected();
+        if blocks.len() >= batch_size || (blocks.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
+            let blocks_inserted = commit_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
+            blocks = vec![];
 
             if !vcp_started {
                 checkpoint = None; // Clear the checkpoint block until vcp has been started
-                let query = sqlx::query("DELETE FROM chain_blocks WHERE block_hash = ANY($1)").bind(&block_hashes);
-                let cbs_deleted = tx.execute(query).await.expect("Delete chain_blocks FAILED").rows_affected();
-                let query = sqlx::query("DELETE FROM transactions_acceptances WHERE block_hash = ANY($1)").bind(&block_hashes);
-                let tas_deleted = tx.execute(query).await.expect("Delete transactions_acceptances FAILED").rows_affected();
+                let cbs_deleted = delete_cbs(&block_hashes, &db_pool).await.expect("Delete chain_blocks FAILED");
+                let tas_deleted = delete_tas(&block_hashes, &db_pool).await.expect("Delete transactions_acceptances FAILED");
+                block_hashes = vec![];
                 if blocks_inserted > 0 && tas_deleted == 0 && cbs_deleted == 0 {
                     noop_delete_count += 1;
                 } else {
@@ -122,7 +74,7 @@ pub async fn insert_blocks(
                     info!("Notifying virtual chain processor");
                     start_vcp.store(true, Ordering::Relaxed);
                     vcp_started = true;
-                    checkpoint_last_saved = Instant::now(); // Give VCP time to catch up
+                    checkpoint_last_saved = Instant::now(); // Give VCP time to catch up before complaining
                 }
                 info!(
                     "Committed {} new blocks, cleared {} cb and {} ta. Last block: {}",
@@ -132,23 +84,23 @@ pub async fn insert_blocks(
                 info!("Committed {} new blocks. Last block: {}", blocks_inserted, last_block_datetime);
                 if let Some(c) = checkpoint {
                     // Check if the checkpoint candidate's transactions are present
-                    let query = sqlx::query("SELECT COUNT(*) FROM blocks_transactions WHERE block_hash = $1").bind(&c.block_hash);
-                    let count: i64 = tx.fetch_one(query).await.expect("Get transactions for block FAILED").get(0);
+                    let count: i64 = get_tx_count(&c.block_hash, &db_pool).await.expect("Get tx count FAILED");
                     if count == c.tx_count {
                         // Next, let's check if the VCP has proccessed it
-                        let query = sqlx::query("SELECT COUNT(*) FROM chain_blocks WHERE block_hash = $1").bind(&c.block_hash);
-                        let count: i64 = tx.fetch_one(query).await.expect("Get chain_blocks for block FAILED").get(0);
-                        if count == 1 {
+                        let is_chain_block = get_is_chain_block(&c.block_hash, &db_pool).await.expect("Get is cb FAILED");
+                        if is_chain_block {
                             // All set, the checkpoint block has all transactions present and are marked as a chain block by the VCP
                             let checkpoint_string = hex::encode(c.block_hash);
                             info!("Saving block_checkpoint {}", checkpoint_string);
-                            let query = sqlx::query(
+                            sqlx::query(
                                 "INSERT INTO vars (key, value) VALUES ($1, $2)
                                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
                             )
                             .bind(VAR_KEY_BLOCK_CHECKPOINT)
-                            .bind(checkpoint_string);
-                            tx.execute(query).await.expect(format!("Commit {} FAILED", VAR_KEY_BLOCK_CHECKPOINT).as_str());
+                            .bind(checkpoint_string)
+                            .execute(&db_pool)
+                            .await
+                            .expect(format!("Commit {} FAILED", VAR_KEY_BLOCK_CHECKPOINT).as_str());
                             checkpoint_last_saved = Instant::now();
                         }
                         // Clear the checkpoint candidate either way
@@ -169,9 +121,65 @@ pub async fn insert_blocks(
                     }
                 }
             }
-            tx.commit().await.expect("Commit blocks FAILED");
             last_commit_time = Instant::now();
-            insert_queue = vec![];
         }
     }
+}
+
+async fn commit_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
+    let mut con = db_pool.acquire().await?;
+    let mut tx = con.begin().await?;
+
+    let sql = format!(
+        "INSERT INTO blocks (hash, accepted_id_merkle_root, difficulty, merge_set_blues_hashes, merge_set_reds_hashes,
+            selected_parent_hash, bits, blue_score, blue_work, daa_score, hash_merkle_root, nonce, parents, pruning_point,
+            timestamp, utxo_commitment, version
+        ) VALUES {} ON CONFLICT DO NOTHING",
+        (0..blocks.len()).map(|i| format!("({})", (1..=17).map(|c| format!("${}", c + i * 17)).join(", "))).join(", ")
+    );
+
+    let mut query = sqlx::query(&sql);
+    for block in blocks {
+        query = query.bind(block.hash);
+        query = query.bind(block.accepted_id_merkle_root);
+        query = query.bind(block.difficulty);
+        query = query.bind(block.merge_set_blues_hashes);
+        query = query.bind(block.merge_set_reds_hashes);
+        query = query.bind(block.selected_parent_hash);
+        query = query.bind(block.bits);
+        query = query.bind(block.blue_score);
+        query = query.bind(block.blue_work);
+        query = query.bind(block.daa_score);
+        query = query.bind(block.hash_merkle_root);
+        query = query.bind(block.nonce);
+        query = query.bind(block.parents);
+        query = query.bind(block.pruning_point);
+        query = query.bind(block.timestamp);
+        query = query.bind(block.utxo_commitment);
+        query = query.bind(block.version);
+    }
+    Ok(tx.execute(query).await?.rows_affected())
+}
+
+async fn delete_cbs(block_hashes: &Vec<Vec<u8>>, db_pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
+    Ok(sqlx::query("DELETE FROM chain_blocks WHERE block_hash = ANY($1)").bind(&block_hashes).execute(db_pool).await?.rows_affected())
+}
+
+async fn delete_tas(block_hashes: &Vec<Vec<u8>>, db_pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
+    Ok(sqlx::query("DELETE FROM transactions_acceptances WHERE block_hash = ANY($1)")
+        .bind(&block_hashes)
+        .execute(db_pool)
+        .await?
+        .rows_affected())
+}
+async fn get_tx_count(block_hash: &Vec<u8>, db_pool: &Pool<Postgres>) -> Result<i64, sqlx::Error> {
+    sqlx::query("SELECT COUNT(*) FROM blocks_transactions WHERE block_hash = $1").bind(block_hash).fetch_one(db_pool).await?.try_get(0)
+}
+
+async fn get_is_chain_block(block_hash: &Vec<u8>, db_pool: &Pool<Postgres>) -> Result<bool, sqlx::Error> {
+    sqlx::query("SELECT EXISTS(SELECT 1 FROM chain_blocks WHERE block_hash = $1)")
+        .bind(block_hash)
+        .fetch_one(db_pool)
+        .await?
+        .try_get(0)
 }
