@@ -1,17 +1,18 @@
 extern crate diesel;
 
-use chrono::DateTime;
 use std::cmp::min;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
 use itertools::Itertools;
 use log::{error, info};
 use sqlx::{Executor, Pool, Postgres, Row};
 use tokio::time::sleep;
 
+use crate::database::copy_from::{format_binary, format_binary_array};
 use crate::database::models::Block;
 use crate::vars::vars::save_checkpoint;
 
@@ -48,7 +49,7 @@ pub async fn insert_blocks(
                     checkpoint = Some(Checkpoint { block_hash: block.hash.clone(), tx_count: transactions.len() as i64 })
                 }
             }
-            last_block_datetime = DateTime::from_timestamp_millis(block.timestamp.unwrap() / 1000 * 1000).unwrap();
+            last_block_datetime = DateTime::from_timestamp_millis(block.timestamp / 1000 * 1000).unwrap();
             if !vcp_started {
                 block_hashes.push(block.hash.clone());
             }
@@ -58,8 +59,12 @@ pub async fn insert_blocks(
             continue;
         }
         if blocks.len() >= batch_size || (blocks.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
-            // let blocks_inserted = commit_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
-            let blocks_inserted = bulk_insert_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
+            let start_commit_time = Instant::now();
+            let blocks_len = blocks.len();
+            let blocks_inserted = commit_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
+            // let blocks_inserted = bulk_insert_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
+            let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
+            let tps = blocks_len as f64 / commit_time as f64 * 1000f64;
             blocks = vec![];
 
             if !vcp_started {
@@ -79,11 +84,14 @@ pub async fn insert_blocks(
                     checkpoint_last_saved = Instant::now(); // Give VCP time to catch up before complaining
                 }
                 info!(
-                    "Committed {} new blocks, cleared {} cb and {} ta. Last block: {}",
-                    blocks_inserted, cbs_deleted, tas_deleted, last_block_datetime
+                    "Committed {} new blocks, cleared {} cb and {} ta in {}ms ({:.1} tps). Last block: {}",
+                    blocks_inserted, cbs_deleted, tas_deleted, commit_time, tps, last_block_datetime
                 );
             } else {
-                info!("Committed {} new blocks. Last block: {}", blocks_inserted, last_block_datetime);
+                info!(
+                    "Committed {} new blocks in {}ms ({:.1} tps. Last block: {}",
+                    blocks_inserted, commit_time, tps, last_block_datetime
+                );
                 if let Some(c) = checkpoint {
                     // Check if the checkpoint candidate's transactions are present
                     let count: i64 = get_tx_count(&c.block_hash, &db_pool).await.expect("Get tx count FAILED");
@@ -136,8 +144,8 @@ async fn commit_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u
         query = query.bind(block.hash);
         query = query.bind(block.accepted_id_merkle_root);
         query = query.bind(block.difficulty);
-        query = query.bind(block.merge_set_blues_hashes);
-        query = query.bind(block.merge_set_reds_hashes);
+        query = query.bind(if !block.merge_set_blues_hashes.is_empty() { Some(block.merge_set_blues_hashes) } else { None });
+        query = query.bind(if !block.merge_set_reds_hashes.is_empty() { Some(block.merge_set_reds_hashes) } else { None });
         query = query.bind(block.selected_parent_hash);
         query = query.bind(block.bits);
         query = query.bind(block.blue_score);
@@ -156,7 +164,7 @@ async fn commit_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u
     Ok(rows_affected)
 }
 
-async fn bulk_insert_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
+async fn bulk_insert_blocks(blocks: &Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
     const TEMP_TABLE_NAME: &str = "blocks_copy_in";
 
     let mut tx = db_pool.begin().await?;
@@ -190,32 +198,23 @@ async fn bulk_insert_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Res
     for block in blocks {
         let data = format!(
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
-            format!("\\\\x{}", hex::encode(block.hash)),
-            block.accepted_id_merkle_root.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
-            block.difficulty.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
-            block
-                .merge_set_blues_hashes
-                .map(|v| format!("{{{}}}", v.iter().map(|w| format!("\\\\x{}", hex::encode(w))).join(",")))
-                .unwrap_or("\\N".to_string()),
-            block
-                .merge_set_reds_hashes
-                .map(|v| format!("{{{}}}", v.iter().map(|w| format!("\\\\x{}", hex::encode(w))).join(",")))
-                .unwrap_or("\\N".to_string()),
-            block.selected_parent_hash.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
-            block.bits.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
-            block.blue_score.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
-            block.blue_work.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
-            block.daa_score.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
-            block.hash_merkle_root.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
-            block.nonce.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
-            block
-                .parents
-                .map(|v| format!("{{{}}}", v.iter().map(|w| format!("\\\\x{}", hex::encode(w))).join(",")))
-                .unwrap_or("\\N".to_string()),
-            block.pruning_point.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
-            block.timestamp.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
-            block.utxo_commitment.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
-            block.version.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
+            format_binary(&block.hash),
+            format_binary(&block.accepted_id_merkle_root),
+            format!("{}", block.difficulty),
+            format_binary_array(&block.merge_set_blues_hashes),
+            format_binary_array(&block.merge_set_reds_hashes),
+            format_binary(&block.selected_parent_hash),
+            format!("{}", block.bits),
+            format!("{}", block.blue_score),
+            format_binary(&block.blue_work),
+            format!("{}", block.daa_score),
+            format_binary(&block.hash_merkle_root),
+            format_binary(&block.nonce),
+            format_binary_array(&block.parents),
+            format_binary(&block.pruning_point),
+            format!("{}", block.timestamp),
+            format_binary(&block.utxo_commitment),
+            format!("{}", block.version),
         );
         copy_in.send(data.as_bytes()).await?;
     }
