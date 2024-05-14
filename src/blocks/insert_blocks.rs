@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use crossbeam_queue::ArrayQueue;
 use itertools::Itertools;
 use log::{error, info};
-use sqlx::{Acquire, Executor, Pool, Postgres, Row};
+use sqlx::{Executor, Pool, Postgres, Row};
 use tokio::time::sleep;
 
 use crate::database::models::Block;
@@ -58,7 +58,8 @@ pub async fn insert_blocks(
             continue;
         }
         if blocks.len() >= batch_size || (blocks.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
-            let blocks_inserted = commit_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
+            // let blocks_inserted = commit_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
+            let blocks_inserted = bulk_insert_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
             blocks = vec![];
 
             if !vcp_started {
@@ -120,8 +121,7 @@ pub async fn insert_blocks(
 }
 
 async fn commit_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
-    let mut con = db_pool.acquire().await?;
-    let mut tx = con.begin().await?;
+    let mut tx = db_pool.begin().await?;
 
     let sql = format!(
         "INSERT INTO blocks (hash, accepted_id_merkle_root, difficulty, merge_set_blues_hashes, merge_set_reds_hashes,
@@ -151,7 +151,81 @@ async fn commit_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u
         query = query.bind(block.utxo_commitment);
         query = query.bind(block.version);
     }
-    Ok(tx.execute(query).await?.rows_affected())
+    let rows_affected = tx.execute(query).await?.rows_affected();
+    tx.commit().await?;
+    Ok(rows_affected)
+}
+
+async fn bulk_insert_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
+    const TEMP_TABLE_NAME: &str = "blocks_copy_in";
+
+    let mut tx = db_pool.begin().await?;
+
+    let query = format!(
+        "CREATE TEMPORARY TABLE {} (
+            hash                    BYTEA,
+            accepted_id_merkle_root BYTEA,
+            difficulty              DOUBLE PRECISION,
+            merge_set_blues_hashes  BYTEA[],
+            merge_set_reds_hashes   BYTEA[],
+            selected_parent_hash    BYTEA,
+            bits                    BIGINT,
+            blue_score              BIGINT,
+            blue_work               BYTEA,
+            daa_score               BIGINT,
+            hash_merkle_root        BYTEA,
+            nonce                   BYTEA,
+            parents                 BYTEA[],
+            pruning_point           BYTEA,
+            timestamp               BIGINT,
+            utxo_commitment         BYTEA,
+            version                 SMALLINT
+        ) ON COMMIT DROP",
+        TEMP_TABLE_NAME
+    );
+    tx.execute(sqlx::query(&query)).await?;
+
+    let mut copy_in = tx.copy_in_raw(format!("COPY {} FROM STDIN", TEMP_TABLE_NAME).as_str()).await?;
+
+    for block in blocks {
+        let data = format!(
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            format!("\\\\x{}", hex::encode(block.hash)),
+            block.accepted_id_merkle_root.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
+            block.difficulty.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
+            block
+                .merge_set_blues_hashes
+                .map(|v| format!("{{{}}}", v.iter().map(|w| format!("\\\\x{}", hex::encode(w))).join(",")))
+                .unwrap_or("\\N".to_string()),
+            block
+                .merge_set_reds_hashes
+                .map(|v| format!("{{{}}}", v.iter().map(|w| format!("\\\\x{}", hex::encode(w))).join(",")))
+                .unwrap_or("\\N".to_string()),
+            block.selected_parent_hash.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
+            block.bits.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
+            block.blue_score.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
+            block.blue_work.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
+            block.daa_score.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
+            block.hash_merkle_root.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
+            block.nonce.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
+            block
+                .parents
+                .map(|v| format!("{{{}}}", v.iter().map(|w| format!("\\\\x{}", hex::encode(w))).join(",")))
+                .unwrap_or("\\N".to_string()),
+            block.pruning_point.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
+            block.timestamp.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
+            block.utxo_commitment.map(|v| format!("\\\\x{}", hex::encode(&v))).unwrap_or("\\N".to_string()),
+            block.version.map(|v| format!("{}", v)).unwrap_or("\\N".to_string()),
+        );
+        copy_in.send(data.as_bytes()).await?;
+    }
+    copy_in.finish().await?;
+
+    let query = format!("INSERT INTO blocks SELECT * FROM {} ON CONFLICT DO NOTHING", TEMP_TABLE_NAME);
+    let rows_affected = tx.execute(sqlx::query(&query)).await?.rows_affected();
+
+    tx.commit().await?;
+    Ok(rows_affected)
 }
 
 async fn delete_cbs(block_hashes: &Vec<Vec<u8>>, db_pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
@@ -165,6 +239,7 @@ async fn delete_tas(block_hashes: &Vec<Vec<u8>>, db_pool: &Pool<Postgres>) -> Re
         .await?
         .rows_affected())
 }
+
 async fn get_tx_count(block_hash: &Vec<u8>, db_pool: &Pool<Postgres>) -> Result<i64, sqlx::Error> {
     sqlx::query("SELECT COUNT(*) FROM blocks_transactions WHERE block_hash = $1").bind(block_hash).fetch_one(db_pool).await?.try_get(0)
 }
