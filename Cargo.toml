@@ -31,3 +31,4 @@ itertools = "0.12.1"
 signal-hook = "0.3.17"
 regex = "1.10.4"
 futures-util = { version = "0.3.29", default-features = false }
+sqlx = { version = "0.7.4", features = ["runtime-tokio", "postgres"] }

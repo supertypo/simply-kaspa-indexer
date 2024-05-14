@@ -20,6 +20,8 @@ use regex::Regex;
 use signal_hook::consts::{SIGINT, SIGQUIT, SIGTERM};
 use signal_hook::iterator::Signals;
 use signal_hook::low_level::signal_name;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::Postgres;
 use tokio::task;
 
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
@@ -128,6 +130,13 @@ async fn main() {
     let db_con = &mut db_pool.get().expect("Database connection FAILED");
     info!("Connected to PostgreSQL {}", db_url_cleaned);
 
+    let sqlx_pool = PgPoolOptions::new()
+        .acquire_timeout(Duration::from_secs(10))
+        .max_connections(10)
+        .connect(database_url)
+        .await
+        .expect("SQLX database pool FAILED");
+
     if initialize_db {
         info!("Initializing database");
         if let Err(e) = db_con.revert_all_migrations(MIGRATIONS) {
@@ -144,13 +153,14 @@ async fn main() {
 
     let kaspad = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
 
-    start_processing(batch_scale, ignore_checkpoint, db_pool, kaspad).await.expect("Unreachable");
+    start_processing(batch_scale, ignore_checkpoint, db_pool, sqlx_pool, kaspad).await.expect("Unreachable");
 }
 
 async fn start_processing(
     batch_scale: f64,
     ignore_checkpoint: Option<String>,
     db_pool: Pool<ConnectionManager<PgConnection>>,
+    sqlx_pool: sqlx::Pool<Postgres>,
     kaspad: KaspaRpcClient,
 ) -> Result<(), ()> {
     let block_dag_info = kaspad.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
@@ -203,7 +213,7 @@ async fn start_processing(
         task::spawn(fetch_blocks(run.clone(), checkpoint, kaspad.clone(), rpc_blocks_queue.clone(), rpc_txs_queue.clone())),
         task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
         task::spawn(process_transactions(run.clone(), rpc_txs_queue.clone(), db_txs_queue.clone(), db_pool.clone())),
-        task::spawn(insert_blocks(run.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), db_pool.clone())),
+        task::spawn(insert_blocks(run.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), sqlx_pool.clone())),
         task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, db_txs_queue.clone(), db_pool.clone())),
         task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), db_pool.clone())),
     ];
