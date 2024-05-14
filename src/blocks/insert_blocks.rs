@@ -12,7 +12,8 @@ use log::{error, info};
 use sqlx::{Acquire, Executor, Pool, Postgres, Row};
 use tokio::time::sleep;
 
-use crate::database::models::{Block, VAR_KEY_BLOCK_CHECKPOINT};
+use crate::database::models::Block;
+use crate::vars::vars::save_checkpoint;
 
 struct Checkpoint {
     block_hash: Vec<u8>,
@@ -92,15 +93,7 @@ pub async fn insert_blocks(
                             // All set, the checkpoint block has all transactions present and are marked as a chain block by the VCP
                             let checkpoint_string = hex::encode(c.block_hash);
                             info!("Saving block_checkpoint {}", checkpoint_string);
-                            sqlx::query(
-                                "INSERT INTO vars (key, value) VALUES ($1, $2)
-                                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
-                            )
-                            .bind(VAR_KEY_BLOCK_CHECKPOINT)
-                            .bind(checkpoint_string)
-                            .execute(&db_pool)
-                            .await
-                            .expect(format!("Commit {} FAILED", VAR_KEY_BLOCK_CHECKPOINT).as_str());
+                            save_checkpoint(&checkpoint_string, &db_pool).await;
                             checkpoint_last_saved = Instant::now();
                         }
                         // Clear the checkpoint candidate either way

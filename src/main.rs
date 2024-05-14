@@ -179,7 +179,7 @@ async fn start_processing(
             info!("Starting from user supplied block {}", checkpoint);
         }
     } else {
-        if let Some(saved_block_checkpoint) = load_block_checkpoint(db_pool.clone()) {
+        if let Some(saved_block_checkpoint) = load_block_checkpoint(&sqlx_pool).await {
             checkpoint = Hash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
             info!("Starting from checkpoint {}", checkpoint);
         } else {
