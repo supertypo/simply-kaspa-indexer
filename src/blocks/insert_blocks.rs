@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::database::block::Block;
 use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
 use itertools::Itertools;
@@ -12,7 +13,6 @@ use log::{error, info};
 use sqlx::{Executor, Pool, Postgres, Row};
 use tokio::time::sleep;
 
-use crate::database::models::Block;
 use crate::vars::vars::save_checkpoint;
 
 struct Checkpoint {
@@ -61,9 +61,8 @@ pub async fn insert_blocks(
             let start_commit_time = Instant::now();
             let blocks_len = blocks.len();
             let blocks_inserted = commit_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
-            // let blocks_inserted = bulk_insert_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
             let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
-            let tps = blocks_len as f64 / commit_time as f64 * 1000f64;
+            let bps = blocks_len as f64 / commit_time as f64 * 1000f64;
             blocks = vec![];
 
             if !vcp_started {
@@ -83,13 +82,13 @@ pub async fn insert_blocks(
                     checkpoint_last_saved = Instant::now(); // Give VCP time to catch up before complaining
                 }
                 info!(
-                    "Committed {} new blocks, cleared {} cb and {} ta in {}ms ({:.1} tps). Last block: {}",
-                    blocks_inserted, cbs_deleted, tas_deleted, commit_time, tps, last_block_datetime
+                    "Committed {} new blocks, cleared {} cb and {} ta in {}ms ({:.1} bps). Last block: {}",
+                    blocks_inserted, cbs_deleted, tas_deleted, commit_time, bps, last_block_datetime
                 );
             } else {
                 info!(
-                    "Committed {} new blocks in {}ms ({:.1} tps. Last block: {}",
-                    blocks_inserted, commit_time, tps, last_block_datetime
+                    "Committed {} new blocks in {}ms ({:.1} bps. Last block: {}",
+                    blocks_inserted, commit_time, bps, last_block_datetime
                 );
                 if let Some(c) = checkpoint {
                     // Check if the checkpoint candidate's transactions are present

@@ -2,11 +2,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::database::block::Block;
 use crossbeam_queue::ArrayQueue;
 use kaspa_rpc_core::RpcBlock;
 use tokio::time::sleep;
-
-use crate::database::models::Block;
 
 pub async fn process_blocks(
     run: Arc<AtomicBool>,

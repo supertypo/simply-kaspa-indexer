@@ -16,9 +16,12 @@ use log::{debug, info, trace};
 use tokio::task;
 use tokio::time::sleep;
 
-use crate::database::models::{AddressTransaction, BlockTransaction, Transaction, TransactionInput, TransactionOutput};
-use crate::database::schema::transactions;
-use crate::database::schema::{addresses_transactions, blocks_transactions, transactions_inputs, transactions_outputs};
+use crate::database::address_transaction::AddressTransaction;
+use crate::database::block_transaction::BlockTransaction;
+use crate::database::schema::{addresses_transactions, blocks_transactions, transactions, transactions_inputs, transactions_outputs};
+use crate::database::transaction::Transaction;
+use crate::database::transaction_input::TransactionInput;
+use crate::database::transaction_output::TransactionOutput;
 
 pub async fn insert_txs_ins_outs(
     run: Arc<AtomicBool>,

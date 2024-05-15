@@ -38,9 +38,9 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 #[tokio::main]
 async fn main() {
     println!();
-    println!("******************************************************");
-    println!("***************** Kaspa DB Filler NG *****************");
-    println!("******************************************************");
+    println!("**************************************************************");
+    println!("********************* Kaspa DB Filler NG *********************");
+    println!("**************************************************************");
     println!("https://hub.docker.com/r/supertypo/kaspa-db-filler-ng");
     println!();
     let matches = Command::new(crate_name!())

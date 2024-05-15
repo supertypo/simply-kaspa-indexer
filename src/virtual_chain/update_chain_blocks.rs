@@ -2,13 +2,13 @@ extern crate diesel;
 
 use std::cmp::min;
 
+use crate::database::chain_block::ChainBlock;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
 use diesel::{delete, insert_into, Connection, ExpressionMethods, PgConnection, RunQueryDsl};
 use kaspa_rpc_core::RpcHash;
 use log::{debug, info, trace};
 
-use crate::database::models::ChainBlock;
 use crate::database::schema::chain_blocks;
 
 pub fn update_chain_blocks(

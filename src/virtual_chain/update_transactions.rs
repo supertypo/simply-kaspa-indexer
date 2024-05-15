@@ -8,8 +8,8 @@ use diesel::{delete, insert_into, Connection, ExpressionMethods, PgConnection, R
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcHash};
 use log::{debug, info, trace};
 
-use crate::database::models::TransactionAcceptance;
 use crate::database::schema::transactions_acceptances;
+use crate::database::transaction_acceptance::TransactionAcceptance;
 
 pub fn update_transactions(
     batch_scale: f64,
