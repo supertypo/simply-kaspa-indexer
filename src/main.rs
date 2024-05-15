@@ -215,7 +215,7 @@ async fn start_processing(
         task::spawn(process_transactions(run.clone(), rpc_txs_queue.clone(), db_txs_queue.clone(), db_pool.clone())),
         task::spawn(insert_blocks(run.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), sqlx_pool.clone())),
         task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, db_txs_queue.clone(), db_pool.clone())),
-        task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), db_pool.clone())),
+        task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), sqlx_pool.clone())),
     ];
     try_join_all(tasks).await.unwrap();
     Ok(())

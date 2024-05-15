@@ -9,7 +9,7 @@ use crate::database::block::Block;
 use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
 use itertools::Itertools;
-use log::{error, info};
+use log::{debug, error, info};
 use sqlx::{Executor, Pool, Postgres, Row};
 use tokio::time::sleep;
 
@@ -58,6 +58,7 @@ pub async fn insert_blocks(
             continue;
         }
         if blocks.len() >= batch_size || (blocks.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
+            debug!("Processing {} blocks", blocks.len());
             let start_commit_time = Instant::now();
             let blocks_len = blocks.len();
             let blocks_inserted = commit_blocks(blocks, &db_pool).await.expect("Insert blocks FAILED");
@@ -127,6 +128,7 @@ pub async fn insert_blocks(
 }
 
 async fn commit_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u64, sqlx::Error> {
+    const COLS: usize = 17;
     let mut tx = db_pool.begin().await?;
 
     let sql = format!(
@@ -134,7 +136,7 @@ async fn commit_blocks(blocks: Vec<Block>, db_pool: &Pool<Postgres>) -> Result<u
             selected_parent_hash, bits, blue_score, blue_work, daa_score, hash_merkle_root, nonce, parents, pruning_point,
             timestamp, utxo_commitment, version
         ) VALUES {} ON CONFLICT DO NOTHING",
-        (0..blocks.len()).map(|i| format!("({})", (1..=17).map(|c| format!("${}", c + i * 17)).join(", "))).join(", ")
+        (0..blocks.len()).map(|i| format!("({})", (1..=COLS).map(|c| format!("${}", c + i * COLS)).join(", "))).join(", ")
     );
 
     let mut query = sqlx::query(&sql);
