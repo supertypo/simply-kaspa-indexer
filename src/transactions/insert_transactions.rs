@@ -18,10 +18,10 @@ use tokio::time::sleep;
 
 use crate::database::models::address_transaction::AddressTransaction;
 use crate::database::models::block_transaction::BlockTransaction;
-use crate::database::schema::{addresses_transactions, blocks_transactions, transactions, transactions_inputs, transactions_outputs};
 use crate::database::models::transaction::Transaction;
 use crate::database::models::transaction_input::TransactionInput;
 use crate::database::models::transaction_output::TransactionOutput;
+use crate::database::schema::{addresses_transactions, blocks_transactions, transactions, transactions_inputs, transactions_outputs};
 
 pub async fn insert_txs_ins_outs(
     run: Arc<AtomicBool>,

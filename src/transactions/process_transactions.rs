@@ -15,11 +15,11 @@ use kaspa_rpc_core::RpcTransaction;
 use log::{debug, info};
 use tokio::time::sleep;
 
-use crate::database::schema::subnetworks;
 use crate::database::models::subnetwork::{Subnetwork, SubnetworkInsertable};
 use crate::database::models::transaction::Transaction;
 use crate::database::models::transaction_input::TransactionInput;
 use crate::database::models::transaction_output::TransactionOutput;
+use crate::database::schema::subnetworks;
 
 pub async fn process_transactions(
     run: Arc<AtomicBool>,
