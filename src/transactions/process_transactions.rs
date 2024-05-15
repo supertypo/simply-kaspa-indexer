@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::database::address_transaction::AddressTransaction;
-use crate::database::block_transaction::BlockTransaction;
+use crate::database::models::address_transaction::AddressTransaction;
+use crate::database::models::block_transaction::BlockTransaction;
 use bigdecimal::ToPrimitive;
 use crossbeam_queue::ArrayQueue;
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -16,10 +16,10 @@ use log::{debug, info};
 use tokio::time::sleep;
 
 use crate::database::schema::subnetworks;
-use crate::database::subnetwork::{Subnetwork, SubnetworkInsertable};
-use crate::database::transaction::Transaction;
-use crate::database::transaction_input::TransactionInput;
-use crate::database::transaction_output::TransactionOutput;
+use crate::database::models::subnetwork::{Subnetwork, SubnetworkInsertable};
+use crate::database::models::transaction::Transaction;
+use crate::database::models::transaction_input::TransactionInput;
+use crate::database::models::transaction_output::TransactionOutput;
 
 pub async fn process_transactions(
     run: Arc<AtomicBool>,

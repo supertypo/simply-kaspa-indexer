@@ -7,7 +7,7 @@ use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcHash};
 use log::{debug, info, trace};
 use sqlx::{Pool, Postgres};
 
-use crate::database::transaction_acceptance::TransactionAcceptance;
+use crate::database::models::transaction_acceptance::TransactionAcceptance;
 
 pub async fn update_txs(
     batch_scale: f64,

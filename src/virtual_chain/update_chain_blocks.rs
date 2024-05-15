@@ -7,7 +7,7 @@ use kaspa_rpc_core::RpcHash;
 use log::{debug, info, trace};
 use sqlx::{Pool, Postgres};
 
-use crate::database::chain_block::ChainBlock;
+use crate::database::models::chain_block::ChainBlock;
 
 pub async fn update_chain_blocks(
     batch_scale: f64,

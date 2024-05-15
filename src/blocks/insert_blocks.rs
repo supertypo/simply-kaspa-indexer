@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::database::block::Block;
+use crate::database::models::block::Block;
 use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
 use itertools::Itertools;

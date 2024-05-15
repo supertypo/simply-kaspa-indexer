@@ -1,11 +1,2 @@
-pub mod address_transaction;
-pub mod block;
-pub mod block_transaction;
-pub mod chain_block;
+pub mod models;
 pub mod schema;
-pub mod subnetwork;
-pub mod transaction;
-pub mod transaction_acceptance;
-pub mod transaction_input;
-pub mod transaction_output;
-pub mod var;

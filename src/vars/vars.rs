@@ -1,4 +1,4 @@
-use crate::database::var::{VAR_KEY_BLOCK_CHECKPOINT, VAR_KEY_LEGACY_CHECKPOINT};
+use crate::database::models::var::{VAR_KEY_BLOCK_CHECKPOINT, VAR_KEY_LEGACY_CHECKPOINT};
 use log::trace;
 use sqlx::{Postgres, Row};
 
