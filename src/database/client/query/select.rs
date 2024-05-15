@@ -9,9 +9,5 @@ pub async fn select_tx_count(block_hash: &Vec<u8>, pool: &Pool<Postgres>) -> Res
 }
 
 pub async fn select_is_chain_block(block_hash: &Vec<u8>, pool: &Pool<Postgres>) -> Result<bool, Error> {
-    sqlx::query("SELECT EXISTS(SELECT 1 FROM chain_blocks WHERE block_hash = $1)")
-        .bind(block_hash)
-        .fetch_one(pool)
-        .await?
-        .try_get(0)
+    sqlx::query("SELECT EXISTS(SELECT 1 FROM chain_blocks WHERE block_hash = $1)").bind(block_hash).fetch_one(pool).await?.try_get(0)
 }

@@ -20,13 +20,12 @@ use regex::Regex;
 use signal_hook::consts::{SIGINT, SIGQUIT, SIGTERM};
 use signal_hook::iterator::Signals;
 use signal_hook::low_level::signal_name;
-use sqlx::postgres::PgPoolOptions;
-use sqlx::Postgres;
 use tokio::task;
 
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
 use kaspa_db_filler_ng::blocks::insert_blocks::insert_blocks;
 use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
+use kaspa_db_filler_ng::database::client::client::KaspaDbClient;
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
 use kaspa_db_filler_ng::transactions::insert_transactions::insert_txs_ins_outs;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
@@ -130,12 +129,7 @@ async fn main() {
     let db_con = &mut db_pool.get().expect("Database connection FAILED");
     info!("Connected to PostgreSQL {}", db_url_cleaned);
 
-    let sqlx_pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::from_secs(10))
-        .max_connections(10)
-        .connect(database_url)
-        .await
-        .expect("SQLX database pool FAILED");
+    let database = KaspaDbClient::new(database_url).await.expect("Database connection FAILED");
 
     if initialize_db {
         info!("Initializing database");
@@ -153,14 +147,14 @@ async fn main() {
 
     let kaspad = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
 
-    start_processing(batch_scale, ignore_checkpoint, db_pool, sqlx_pool, kaspad).await.expect("Unreachable");
+    start_processing(batch_scale, ignore_checkpoint, db_pool, database, kaspad).await.expect("Unreachable");
 }
 
 async fn start_processing(
     batch_scale: f64,
     ignore_checkpoint: Option<String>,
     db_pool: Pool<ConnectionManager<PgConnection>>,
-    sqlx_pool: sqlx::Pool<Postgres>,
+    database: KaspaDbClient,
     kaspad: KaspaRpcClient,
 ) -> Result<(), ()> {
     let block_dag_info = kaspad.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
@@ -179,7 +173,7 @@ async fn start_processing(
             info!("Starting from user supplied block {}", checkpoint);
         }
     } else {
-        if let Some(saved_block_checkpoint) = load_block_checkpoint(&sqlx_pool).await {
+        if let Ok(saved_block_checkpoint) = load_block_checkpoint(&database).await {
             checkpoint = Hash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
             info!("Starting from checkpoint {}", checkpoint);
         } else {
@@ -213,9 +207,9 @@ async fn start_processing(
         task::spawn(fetch_blocks(run.clone(), checkpoint, kaspad.clone(), rpc_blocks_queue.clone(), rpc_txs_queue.clone())),
         task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
         task::spawn(process_transactions(run.clone(), rpc_txs_queue.clone(), db_txs_queue.clone(), db_pool.clone())),
-        task::spawn(insert_blocks(run.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), sqlx_pool.clone())),
+        task::spawn(insert_blocks(run.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), database.clone())),
         task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, db_txs_queue.clone(), db_pool.clone())),
-        task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), sqlx_pool.clone())),
+        task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), database.clone())),
     ];
     try_join_all(tasks).await.unwrap();
     Ok(())

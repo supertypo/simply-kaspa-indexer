@@ -3,6 +3,7 @@ use sqlx::{Error, Executor, Pool, Postgres};
 
 use crate::database::models::block::Block;
 use crate::database::models::chain_block::ChainBlock;
+use crate::database::models::transaction_acceptance::TransactionAcceptance;
 
 pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u64, Error> {
     const COLS: usize = 17;
@@ -52,4 +53,18 @@ pub async fn insert_chain_blocks(cbs: &[ChainBlock], pool: &Pool<Postgres>) -> R
         query = query.bind(&cb.block_hash);
     }
     Ok(query.execute(pool).await?.rows_affected())
+}
+
+pub async fn insert_transaction_acceptances(tas: &[TransactionAcceptance], db_pool: &Pool<Postgres>) -> Result<u64, Error> {
+    const COLS: usize = 2;
+    let sql = format!(
+        "INSERT INTO transactions_acceptances (transaction_id, block_hash) VALUES {} ON CONFLICT DO NOTHING",
+        (0..tas.len()).map(|i| format!("({})", (1..=COLS).map(|c| format!("${}", c + i * COLS)).join(", "))).join(", ")
+    );
+    let mut query = sqlx::query(&sql);
+    for ta in tas {
+        query = query.bind(&ta.transaction_id);
+        query = query.bind(&ta.block_hash);
+    }
+    Ok(query.execute(db_pool).await?.rows_affected())
 }

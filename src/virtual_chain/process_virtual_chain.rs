@@ -8,8 +8,8 @@ use kaspa_hashes::Hash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, info};
-use sqlx::{Pool, Postgres};
 use tokio::time::sleep;
+use crate::database::client::client::KaspaDbClient;
 
 use crate::kaspad::client::with_retry;
 use crate::virtual_chain::update_chain_blocks::update_chain_blocks;
@@ -21,7 +21,7 @@ pub async fn process_virtual_chain(
     batch_scale: f64,
     checkpoint: Hash,
     kaspad: KaspaRpcClient,
-    db_pool: Pool<Postgres>,
+    database: KaspaDbClient,
 ) {
     let start_time = Instant::now();
     let mut synced = false;
@@ -39,8 +39,8 @@ pub async fn process_virtual_chain(
         if !res.accepted_transaction_ids.is_empty() {
             let last_accepting = res.accepted_transaction_ids.last().unwrap().accepting_block_hash;
             let timestamp = with_retry(|| kaspad.get_block(last_accepting, false)).await.expect("GetBlock failed").header.timestamp;
-            update_txs(batch_scale, &res.removed_chain_block_hashes, &res.accepted_transaction_ids, timestamp, &db_pool).await;
-            update_chain_blocks(batch_scale, &res.added_chain_block_hashes, &res.removed_chain_block_hashes, &db_pool).await;
+            update_txs(batch_scale, &res.removed_chain_block_hashes, &res.accepted_transaction_ids, timestamp, &database).await;
+            update_chain_blocks(batch_scale, &res.added_chain_block_hashes, &res.removed_chain_block_hashes, &database).await;
             if !synced {
                 log_time_to_synced(start_time);
                 synced = true;
