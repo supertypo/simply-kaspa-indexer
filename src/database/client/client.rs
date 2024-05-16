@@ -6,10 +6,15 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{Error, Pool, Postgres};
 
 use crate::database::client::query;
+use crate::database::models::address_transaction::AddressTransaction;
 use crate::database::models::block::Block;
+use crate::database::models::block_transaction::BlockTransaction;
 use crate::database::models::chain_block::ChainBlock;
 use crate::database::models::subnetwork::Subnetwork;
+use crate::database::models::transaction::Transaction;
 use crate::database::models::transaction_acceptance::TransactionAcceptance;
+use crate::database::models::transaction_input::TransactionInput;
+use crate::database::models::transaction_output::TransactionOutput;
 
 #[derive(Clone)]
 pub struct KaspaDbClient {
@@ -58,12 +63,36 @@ impl KaspaDbClient {
         query::insert::insert_blocks(blocks, &self.pool).await
     }
 
-    pub async fn insert_transaction(&self, tas: &[TransactionAcceptance]) -> Result<u64, Error> {
-        query::insert::insert_transaction_acceptances(tas, &self.pool).await
+    pub async fn insert_transactions(&self, transactions: &[Transaction]) -> Result<u64, Error> {
+        query::insert::insert_transactions(transactions, &self.pool).await
     }
 
-    pub async fn insert_chain_blocks(&self, cbs: &[ChainBlock]) -> Result<u64, Error> {
-        query::insert::insert_chain_blocks(cbs, &self.pool).await
+    pub async fn insert_transaction_inputs(&self, transaction_inputs: &[TransactionInput]) -> Result<u64, Error> {
+        query::insert::insert_transaction_inputs(transaction_inputs, &self.pool).await
+    }
+
+    pub async fn insert_transaction_outputs(&self, transaction_outputs: &[TransactionOutput]) -> Result<u64, Error> {
+        query::insert::insert_transaction_outputs(transaction_outputs, &self.pool).await
+    }
+
+    pub async fn insert_address_transactions(&self, address_transactions: &[AddressTransaction]) -> Result<u64, Error> {
+        query::insert::insert_address_transactions(address_transactions, &self.pool).await
+    }
+
+    pub async fn insert_address_transactions_from_inputs(&self, transaction_ids: &[Vec<u8>]) -> Result<u64, Error> {
+        query::insert::insert_address_transactions_from_inputs(transaction_ids, &self.pool).await
+    }
+
+    pub async fn insert_block_transactions(&self, block_transactions: &[BlockTransaction]) -> Result<u64, Error> {
+        query::insert::insert_block_transactions(block_transactions, &self.pool).await
+    }
+
+    pub async fn insert_transaction_acceptances(&self, transaction_acceptances: &[TransactionAcceptance]) -> Result<u64, Error> {
+        query::insert::insert_transaction_acceptances(transaction_acceptances, &self.pool).await
+    }
+
+    pub async fn insert_chain_blocks(&self, chain_blocks: &[ChainBlock]) -> Result<u64, Error> {
+        query::insert::insert_chain_blocks(chain_blocks, &self.pool).await
     }
 
     pub async fn upsert_var(&self, key: &str, value: &String) -> Result<u64, Error> {

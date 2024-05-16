@@ -43,7 +43,8 @@ pub async fn update_txs(
     }
     for accepted_transactions_chunk in accepted_transactions.chunks(batch_size) {
         debug!("Processing {} accepted transactions", accepted_transactions_chunk.len());
-        rows_added += database.insert_transaction(accepted_transactions_chunk).await.expect("Insert accepted transactions FAILED");
+        rows_added +=
+            database.insert_transaction_acceptances(accepted_transactions_chunk).await.expect("Insert accepted transactions FAILED");
     }
 
     info!(

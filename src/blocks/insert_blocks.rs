@@ -88,7 +88,7 @@ pub async fn insert_blocks(
                 );
             } else {
                 info!(
-                    "Committed {} new blocks in {}ms ({:.1} bps. Last block: {}",
+                    "Committed {} new blocks in {}ms ({:.1} bps). Last block: {}",
                     blocks_inserted, commit_time, bps, last_block_datetime
                 );
                 if let Some(c) = checkpoint {

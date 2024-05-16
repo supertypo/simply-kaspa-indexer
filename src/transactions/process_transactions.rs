@@ -1,8 +1,8 @@
 extern crate diesel;
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use bigdecimal::ToPrimitive;

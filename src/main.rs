@@ -147,15 +147,14 @@ async fn main() {
 
     let kaspad = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
 
-    start_processing(batch_scale, ignore_checkpoint, db_pool, database, kaspad).await.expect("Unreachable");
+    start_processing(batch_scale, ignore_checkpoint, kaspad, database).await.expect("Unreachable");
 }
 
 async fn start_processing(
     batch_scale: f64,
     ignore_checkpoint: Option<String>,
-    db_pool: Pool<ConnectionManager<PgConnection>>,
-    database: KaspaDbClient,
     kaspad: KaspaRpcClient,
+    database: KaspaDbClient,
 ) -> Result<(), ()> {
     let block_dag_info = kaspad.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
     let checkpoint: Hash;
@@ -208,7 +207,7 @@ async fn start_processing(
         task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
         task::spawn(process_transactions(run.clone(), rpc_txs_queue.clone(), db_txs_queue.clone(), database.clone())),
         task::spawn(insert_blocks(run.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), database.clone())),
-        task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, db_txs_queue.clone(), db_pool.clone())),
+        task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, db_txs_queue.clone(), database.clone())),
         task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), database.clone())),
     ];
     try_join_all(tasks).await.unwrap();
