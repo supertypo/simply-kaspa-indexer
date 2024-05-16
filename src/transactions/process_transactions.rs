@@ -1,25 +1,22 @@
 extern crate diesel;
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use crate::database::models::address_transaction::AddressTransaction;
-use crate::database::models::block_transaction::BlockTransaction;
 use bigdecimal::ToPrimitive;
 use crossbeam_queue::ArrayQueue;
-use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::{insert_into, PgConnection, RunQueryDsl};
 use kaspa_rpc_core::RpcTransaction;
-use log::{debug, info};
+use log::info;
 use tokio::time::sleep;
 
-use crate::database::models::subnetwork::{Subnetwork, SubnetworkInsertable};
+use crate::database::client::client::KaspaDbClient;
+use crate::database::models::address_transaction::AddressTransaction;
+use crate::database::models::block_transaction::BlockTransaction;
 use crate::database::models::transaction::Transaction;
 use crate::database::models::transaction_input::TransactionInput;
 use crate::database::models::transaction_output::TransactionOutput;
-use crate::database::schema::subnetworks;
 
 pub async fn process_transactions(
     run: Arc<AtomicBool>,
@@ -27,12 +24,11 @@ pub async fn process_transactions(
     db_transactions_queue: Arc<
         ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
     >,
-    db_pool: Pool<ConnectionManager<PgConnection>>,
+    database: KaspaDbClient,
 ) {
     let mut subnetwork_map: HashMap<String, i16> = HashMap::new();
     let mut valid_address = false;
-    let con = &mut db_pool.get().expect("Database connection FAILED");
-    let results: Vec<Subnetwork> = subnetworks::dsl::subnetworks.load::<Subnetwork>(con).unwrap();
+    let results = database.select_subnetworks().await.expect("Select subnetworks FAILED");
     for s in results {
         subnetwork_map.insert(s.subnetwork_id, s.id);
     }
@@ -48,7 +44,7 @@ pub async fn process_transactions(
                 while db_transactions_queue.is_full() && run.load(Ordering::Relaxed) {
                     sleep(Duration::from_millis(100)).await;
                 }
-                let _ = db_transactions_queue.push(map_transaction(transaction, &mut subnetwork_map, &db_pool));
+                let _ = db_transactions_queue.push(map_transaction(transaction, &mut subnetwork_map, &database).await);
             }
         } else {
             sleep(Duration::from_millis(100)).await;
@@ -56,23 +52,18 @@ pub async fn process_transactions(
     }
 }
 
-fn map_transaction(
+async fn map_transaction(
     t: RpcTransaction,
     subnetwork_map: &mut HashMap<String, i16>,
-    db_pool: &Pool<ConnectionManager<PgConnection>>,
+    database: &KaspaDbClient,
 ) -> (Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>) {
     let verbose_data = t.verbose_data.unwrap();
     let subnetwork_id = t.subnetwork_id.to_string();
 
     if let None = subnetwork_map.get(&subnetwork_id) {
-        let id = insert_into(subnetworks::dsl::subnetworks)
-            .values(SubnetworkInsertable { subnetwork_id: subnetwork_id.clone() })
-            .on_conflict_do_nothing()
-            .returning(subnetworks::id)
-            .get_results(&mut db_pool.get().expect("Database connection FAILED"))
-            .expect("Commit transactions FAILED")[0];
+        let id = database.insert_subnetwork(&subnetwork_id).await.expect("Insert subnetwork FAILED");
         subnetwork_map.insert(subnetwork_id.clone(), id);
-        debug!("Inserted new subnetwork, id: {} subnetwork_id: {}", id, subnetwork_id)
+        info!("Inserted new subnetwork, id: {} subnetwork_id: {}", id, subnetwork_id)
     }
 
     // Create transaction

@@ -29,7 +29,8 @@ pub async fn update_txs(
     let removed_blocks = removed_hashes.into_iter().map(|h| h.as_bytes().to_vec()).collect::<Vec<Vec<u8>>>();
     for removed_blocks_chunk in removed_blocks.chunks(batch_size) {
         debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
-        rows_removed += database.delete_transaction_acceptances(removed_blocks_chunk).await.expect("Delete accepted transactions FAILED");
+        rows_removed +=
+            database.delete_transaction_acceptances(removed_blocks_chunk).await.expect("Delete accepted transactions FAILED");
     }
     let mut accepted_transactions = vec![];
     for accepted_id in accepted_transaction_ids {

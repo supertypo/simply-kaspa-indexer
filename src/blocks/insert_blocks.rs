@@ -1,8 +1,8 @@
 extern crate diesel;
 
 use std::cmp::min;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::DateTime;

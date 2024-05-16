@@ -4,12 +4,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::database::client::client::KaspaDbClient;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, info};
 use tokio::time::sleep;
-use crate::database::client::client::KaspaDbClient;
 
 use crate::kaspad::client::with_retry;
 use crate::virtual_chain::update_chain_blocks::update_chain_blocks;

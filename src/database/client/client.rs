@@ -2,12 +2,13 @@ use std::time::Duration;
 
 use log::{debug, info};
 use regex::Regex;
-use sqlx::{Error, Pool, Postgres};
 use sqlx::postgres::PgPoolOptions;
+use sqlx::{Error, Pool, Postgres};
 
 use crate::database::client::query;
 use crate::database::models::block::Block;
 use crate::database::models::chain_block::ChainBlock;
+use crate::database::models::subnetwork::Subnetwork;
 use crate::database::models::transaction_acceptance::TransactionAcceptance;
 
 #[derive(Clone)]
@@ -37,12 +38,20 @@ impl KaspaDbClient {
         query::select::select_var(key, &self.pool).await
     }
 
+    pub async fn select_subnetworks(&self) -> Result<Vec<Subnetwork>, Error> {
+        query::select::select_subnetworks(&self.pool).await
+    }
+
     pub async fn select_tx_count(&self, block_hash: &Vec<u8>) -> Result<i64, Error> {
         query::select::select_tx_count(block_hash, &self.pool).await
     }
 
     pub async fn select_is_chain_block(&self, block_hash: &Vec<u8>) -> Result<bool, Error> {
         query::select::select_is_chain_block(block_hash, &self.pool).await
+    }
+
+    pub async fn insert_subnetwork(&self, subnetwork_id: &String) -> Result<i16, Error> {
+        query::insert::insert_subnetwork(subnetwork_id, &self.pool).await
     }
 
     pub async fn insert_blocks(&self, blocks: &[Block]) -> Result<u64, Error> {

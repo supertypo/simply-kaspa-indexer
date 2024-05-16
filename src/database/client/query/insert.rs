@@ -1,9 +1,17 @@
 use itertools::Itertools;
-use sqlx::{Error, Executor, Pool, Postgres};
+use sqlx::{Error, Executor, Pool, Postgres, Row};
 
 use crate::database::models::block::Block;
 use crate::database::models::chain_block::ChainBlock;
 use crate::database::models::transaction_acceptance::TransactionAcceptance;
+
+pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i16, Error> {
+    sqlx::query("INSERT INTO subnetworks (subnetwork_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id")
+        .bind(&subnetwork_id)
+        .fetch_one(pool)
+        .await?
+        .try_get(0)
+}
 
 pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u64, Error> {
     const COLS: usize = 17;

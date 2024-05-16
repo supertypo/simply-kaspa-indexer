@@ -206,7 +206,7 @@ async fn start_processing(
     let tasks = vec![
         task::spawn(fetch_blocks(run.clone(), checkpoint, kaspad.clone(), rpc_blocks_queue.clone(), rpc_txs_queue.clone())),
         task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
-        task::spawn(process_transactions(run.clone(), rpc_txs_queue.clone(), db_txs_queue.clone(), db_pool.clone())),
+        task::spawn(process_transactions(run.clone(), rpc_txs_queue.clone(), db_txs_queue.clone(), database.clone())),
         task::spawn(insert_blocks(run.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), database.clone())),
         task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, db_txs_queue.clone(), db_pool.clone())),
         task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), database.clone())),
