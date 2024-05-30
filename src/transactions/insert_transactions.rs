@@ -1,5 +1,3 @@
-extern crate diesel;
-
 use std::cmp::min;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};

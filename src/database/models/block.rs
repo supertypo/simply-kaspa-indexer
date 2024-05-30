@@ -1,10 +1,5 @@
 use std::hash::{Hash, Hasher};
 
-use diesel::prelude::*;
-
-#[derive(Queryable, Selectable, Insertable)]
-#[diesel(table_name = crate::database::schema::blocks)]
-#[diesel(primary_key(hash))]
 pub struct Block {
     pub hash: Vec<u8>,
     pub accepted_id_merkle_root: Vec<u8>,

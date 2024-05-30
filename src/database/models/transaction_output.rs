@@ -1,11 +1,7 @@
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
-use diesel::prelude::*;
-
-#[derive(Queryable, Selectable, Insertable, Identifiable, Clone, Debug)]
-#[diesel(table_name = crate::database::schema::transactions_outputs)]
-#[diesel(primary_key(transaction_id, index))]
+#[derive(Clone, Debug)]
 pub struct TransactionOutput {
     pub transaction_id: Vec<u8>,
     pub index: i16,

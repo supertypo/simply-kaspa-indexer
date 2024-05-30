@@ -1,10 +1,6 @@
 use std::hash::{Hash, Hasher};
 
-use diesel::prelude::*;
-
-#[derive(Queryable, Selectable, Insertable, Identifiable, Clone)]
-#[diesel(table_name = crate::database::schema::transactions_inputs)]
-#[diesel(primary_key(transaction_id, index))]
+#[derive(Clone)]
 pub struct TransactionInput {
     pub transaction_id: Vec<u8>,
     pub index: i16,

@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use log::{debug, info};
 use regex::Regex;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::{Error, Pool, Postgres};
+use sqlx::postgres::PgPoolOptions;
 
 use crate::database::client::query;
 use crate::database::models::address_transaction::AddressTransaction;
@@ -22,6 +22,8 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
+    const SCHEMA_VERSION: u8 = 1;
+
     pub async fn new(url: &String) -> Result<KaspaDbClient, Error> {
         Self::new_with_args(url, 10).await
     }
@@ -37,6 +39,31 @@ impl KaspaDbClient {
     pub async fn close(&mut self) -> Result<(), Error> {
         self.pool.close().await;
         Ok(())
+    }
+
+    pub async fn create_schema(&self) -> Result<(), Error> {
+        match &self.select_var("schema_version").await {
+            Ok(v) => {
+                let version = v.parse::<u8>().expect("Existing schema is unknown");
+                if Self::SCHEMA_VERSION < version {
+                    panic!("Found newer & unsupported schema schema (version={})", version)
+                } else if Self::SCHEMA_VERSION > version {
+                    panic!("Found outdated & unsupported schema schema (version={})", version)
+                } else {
+                    info!("Existing schema is up to date (version={})", version)
+                }
+            }
+            Err(_) => {
+                info!("Applying schema (version={})", Self::SCHEMA_VERSION);
+                query::misc::execute_ddl_from_file("migrations/schema/up.sql", &self.pool).await.unwrap();
+                self.upsert_var("schema_version", &Self::SCHEMA_VERSION.to_string()).await.expect("Unable to save schema version");
+            }
+        };
+        Ok(())
+    }
+
+    pub async fn drop_schema(&self) -> Result<(), Error> {
+        query::misc::execute_ddl_from_file("migrations/schema/down.sql", &self.pool).await
     }
 
     pub async fn select_var(&self, key: &str) -> Result<String, Error> {

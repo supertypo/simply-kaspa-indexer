@@ -1,5 +1,3 @@
-extern crate diesel;
-
 use std::cmp::min;
 
 use kaspa_rpc_core::RpcHash;

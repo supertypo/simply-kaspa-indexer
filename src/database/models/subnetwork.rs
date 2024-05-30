@@ -1,18 +1,8 @@
 use std::hash::{Hash, Hasher};
 
-use diesel::prelude::*;
-
-#[derive(Queryable, Selectable, Clone)]
-#[diesel(table_name = crate::database::schema::subnetworks)]
-#[diesel(primary_key(id))]
+#[derive(Clone)]
 pub struct Subnetwork {
     pub id: i16,
-    pub subnetwork_id: String,
-}
-
-#[derive(Insertable)]
-#[diesel(table_name = crate::database::schema::subnetworks)]
-pub struct SubnetworkInsertable {
     pub subnetwork_id: String,
 }
 
