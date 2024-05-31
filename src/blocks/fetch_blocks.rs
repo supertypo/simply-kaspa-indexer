@@ -1,5 +1,3 @@
-extern crate diesel;
-
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

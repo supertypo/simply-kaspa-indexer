@@ -1,156 +1,126 @@
-extern crate diesel;
-
 use std::cmp::min;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
-use diesel::dsl::exists;
-use diesel::pg::PgConnection;
-use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::result::Error;
-use diesel::{delete, insert_into, select, Connection, ExpressionMethods, QueryDsl, RunQueryDsl};
-use log::{error, info};
+use log::{debug, error, info};
 use tokio::time::sleep;
 
-use crate::database::models::Block;
-use crate::database::schema::blocks_transactions;
-use crate::database::schema::{blocks, chain_blocks, transactions_acceptances};
-use crate::vars::vars::save_block_checkpoint;
+use crate::database::client::client::KaspaDbClient;
+use crate::database::models::block::Block;
+use crate::vars::vars::save_checkpoint;
+
+struct Checkpoint {
+    block_hash: Vec<u8>,
+    tx_count: i64,
+}
 
 pub async fn insert_blocks(
     run: Arc<AtomicBool>,
     batch_scale: f64,
     start_vcp: Arc<AtomicBool>,
     db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
-    db_pool: Pool<ConnectionManager<PgConnection>>,
+    database: KaspaDbClient,
 ) {
     const NOOP_DELETES_BEFORE_VCP: i32 = 10;
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     const CHECKPOINT_WARN_AFTER: u64 = 5 * CHECKPOINT_SAVE_INTERVAL;
     let batch_size = min((500f64 * batch_scale) as usize, 3500); // 2^16 / fields in Blocks
     let mut vcp_started = false;
-    let mut insert_queue = vec![];
-    let mut last_block_hash = vec![];
-    let mut last_block_tx_count = 0;
-    let mut last_block_timestamp = 0;
-    let mut checkpoint_hash = vec![];
-    let mut checkpoint_hash_tx_expected_count = 0;
+    let mut blocks = vec![];
+    let mut block_hashes = vec![];
+    let mut checkpoint = None;
+    let mut last_block_datetime;
     let mut checkpoint_last_saved = Instant::now();
     let mut last_commit_time = Instant::now();
     let mut noop_delete_count = 0;
 
     while run.load(Ordering::Relaxed) {
         if let Some((block, transactions)) = db_blocks_queue.pop() {
-            last_block_hash = block.hash.clone();
-            last_block_tx_count = transactions.len() as i64;
-            last_block_timestamp = block.timestamp.unwrap();
-            insert_queue.push(block);
+            if Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_SAVE_INTERVAL {
+                if let None = checkpoint {
+                    // Select the current block as checkpoint if none is set
+                    checkpoint = Some(Checkpoint { block_hash: block.hash.clone(), tx_count: transactions.len() as i64 })
+                }
+            }
+            last_block_datetime = DateTime::from_timestamp_millis(block.timestamp / 1000 * 1000).unwrap();
+            if !vcp_started {
+                block_hashes.push(block.hash.clone());
+            }
+            blocks.push(block);
         } else {
             sleep(Duration::from_millis(100)).await;
+            continue;
         }
-        if insert_queue.len() >= batch_size
-            || (insert_queue.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2)
-        {
-            let mut cb_cleared = 0;
-            let mut ta_cleared = 0;
-            let mut blocks_inserted = 0;
-            let con = &mut db_pool.get().expect("Database connection FAILED");
-            con.transaction(|con| {
-                blocks_inserted = insert_into(blocks::dsl::blocks)
-                    .values(&insert_queue)
-                    .on_conflict_do_nothing()
-                    .execute(con)
-                    .expect("Commit blocks FAILED");
-
-                if !vcp_started {
-                    let delete_block_hashes: Vec<Vec<u8>> = insert_queue.iter().map(|b| b.hash.clone()).collect();
-                    ta_cleared = delete(transactions_acceptances::dsl::transactions_acceptances)
-                        .filter(transactions_acceptances::block_hash.eq_any(&delete_block_hashes))
-                        .execute(con)
-                        .expect("Commit rejected transactions FAILED");
-                    cb_cleared = delete(chain_blocks::dsl::chain_blocks)
-                        .filter(chain_blocks::block_hash.eq_any(&delete_block_hashes))
-                        .execute(con)
-                        .expect("Commit removed chain blocks FAILED");
-                    if blocks_inserted > 0 && cb_cleared == 0 && ta_cleared == 0 {
-                        noop_delete_count += 1;
-                    } else {
-                        noop_delete_count = 0;
-                    }
-                }
-
-                if !vcp_started && noop_delete_count >= NOOP_DELETES_BEFORE_VCP {
-                    info!("End of previous run reached, notifying virtual chain processor");
-                    start_vcp.store(true, Ordering::Relaxed);
-                    vcp_started = true;
-                    checkpoint_last_saved = Instant::now(); // Give VCP time to catch up
-                }
-                Ok::<_, Error>(())
-            })
-            .expect("Commit blocks FAILED");
-            last_commit_time = Instant::now();
+        if blocks.len() >= batch_size || (blocks.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
+            debug!("Processing {} blocks", blocks.len());
+            let start_commit_time = Instant::now();
+            let blocks_len = blocks.len();
+            let blocks_inserted = database.insert_blocks(&blocks).await.expect("Insert blocks FAILED");
+            let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
+            let bps = blocks_len as f64 / commit_time as f64 * 1000f64;
+            blocks = vec![];
 
             if !vcp_started {
+                checkpoint = None; // Clear the checkpoint block until vcp has been started
+                let cbs_deleted = database.delete_chain_blocks(&block_hashes).await.expect("Delete chain_blocks FAILED");
+                let tas_deleted =
+                    database.delete_transaction_acceptances(&block_hashes).await.expect("Delete transactions_acceptances FAILED");
+                block_hashes = vec![];
+                if blocks_inserted > 0 && tas_deleted == 0 && cbs_deleted == 0 {
+                    noop_delete_count += 1;
+                } else {
+                    noop_delete_count = 0;
+                }
+                if noop_delete_count >= NOOP_DELETES_BEFORE_VCP {
+                    info!("Notifying virtual chain processor");
+                    start_vcp.store(true, Ordering::Relaxed);
+                    vcp_started = true;
+                    checkpoint_last_saved = Instant::now(); // Give VCP time to catch up before complaining
+                }
                 info!(
-                    "Committed {} new blocks, cleared {} cb and {} ta. Last block: {}",
-                    blocks_inserted,
-                    cb_cleared,
-                    ta_cleared,
-                    chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap()
+                    "Committed {} new blocks, cleared {} cb and {} ta in {}ms ({:.1} bps). Last block: {}",
+                    blocks_inserted, cbs_deleted, tas_deleted, commit_time, bps, last_block_datetime
                 );
             } else {
                 info!(
-                    "Committed {} new blocks. Last block: {}",
-                    blocks_inserted,
-                    chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap()
+                    "Committed {} new blocks in {}ms ({:.1} bps). Last block: {}",
+                    blocks_inserted, commit_time, bps, last_block_datetime
                 );
-            }
-
-            if vcp_started && Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_SAVE_INTERVAL {
-                if checkpoint_hash.is_empty() {
-                    // Pick the last block as a checkpoint candidate
-                    checkpoint_hash = last_block_hash.clone();
-                    checkpoint_hash_tx_expected_count = last_block_tx_count;
-                } else {
+                if let Some(c) = checkpoint {
                     // Check if the checkpoint candidate's transactions are present
-                    let checkpoint_hash_tx_committed_count = blocks_transactions::dsl::blocks_transactions
-                        .filter(blocks_transactions::block_hash.eq(&checkpoint_hash))
-                        .count()
-                        .get_result::<i64>(con)
-                        .unwrap();
-                    if checkpoint_hash_tx_committed_count == checkpoint_hash_tx_expected_count {
+                    let count: i64 = database.select_tx_count(&c.block_hash).await.expect("Get tx count FAILED");
+                    if count == c.tx_count {
                         // Next, let's check if the VCP has proccessed it
-                        if select(exists(chain_blocks::dsl::chain_blocks.filter(chain_blocks::block_hash.eq(&checkpoint_hash))))
-                            .get_result::<bool>(con)
-                            .unwrap()
-                        {
+                        let is_chain_block = database.select_is_chain_block(&c.block_hash).await.expect("Get is cb FAILED");
+                        if is_chain_block {
                             // All set, the checkpoint block has all transactions present and are marked as a chain block by the VCP
-                            let checkpoint = hex::encode(checkpoint_hash);
-                            info!("Saving block_checkpoint {}", checkpoint);
-                            save_block_checkpoint(checkpoint, db_pool.clone());
+                            let checkpoint_string = hex::encode(c.block_hash);
+                            info!("Saving block_checkpoint {}", checkpoint_string);
+                            save_checkpoint(&checkpoint_string, &database).await.expect("Checkpoint saving FAILED");
                             checkpoint_last_saved = Instant::now();
                         }
-                        checkpoint_hash = vec![]; // Clear the candidate either way
-                    } else if checkpoint_hash_tx_committed_count > checkpoint_hash_tx_expected_count {
-                        panic!(
-                            "Expected {}, but found {} transactions on block {}!",
-                            checkpoint_hash_tx_expected_count,
-                            checkpoint_hash_tx_committed_count,
-                            hex::encode(&checkpoint_hash)
-                        )
+                        // Clear the checkpoint candidate either way
+                        checkpoint = None;
+                    } else if count > c.tx_count {
+                        panic!("Expected {}, but found {} transactions on block {}!", &c.tx_count, count, hex::encode(&c.block_hash))
                     } else if Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_WARN_AFTER {
                         error!(
                             "Still unable to save block_checkpoint {}. Expected {} txs, committed {}",
-                            hex::encode(&checkpoint_hash),
-                            checkpoint_hash_tx_expected_count,
-                            checkpoint_hash_tx_committed_count
-                        )
+                            hex::encode(&c.block_hash),
+                            &c.tx_count,
+                            count
+                        );
+                        checkpoint = Some(c);
+                    } else {
+                        // Let's wait one round and check again
+                        checkpoint = Some(c);
                     }
                 }
             }
-            insert_queue = vec![];
+            last_commit_time = Instant::now();
         }
     }
 }
