@@ -149,8 +149,8 @@ async fn start_processing(
             checkpoint = Hash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
             info!("Starting from checkpoint {}", checkpoint);
         } else {
-            checkpoint = block_dag_info.pruning_point_hash;
-            warn!("Checkpoint not found, starting from pruning point {}", checkpoint);
+            checkpoint = *block_dag_info.virtual_parent_hashes.get(0).unwrap();
+            warn!("Checkpoint not found, starting from virtual_parent {}", checkpoint);
         }
     }
 
