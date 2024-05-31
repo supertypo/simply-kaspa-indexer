@@ -17,7 +17,7 @@ kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag =
 kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.13.6" }
 kaspa-hashes = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.13.6" }
 hex = "0.4.3"
-tokio = "1.37.0"
+tokio = { version = "1.37.0" , features = ["default", "signal"]}
 serde = "1.0.197"
 crossbeam-queue = "0.3.11"
 bigdecimal = "0.4.3"
@@ -26,7 +26,6 @@ log = "0.4.21"
 chrono = { version = "0.4.37", features = ["std"] }
 clap = { version = "4.5.4", features = ["cargo"] }
 itertools = "0.12.1"
-signal-hook = "0.3.17"
 regex = "1.10.4"
 futures-util = { version = "0.3.29", default-features = false }
 sqlx = { version = "0.7.4", features = ["runtime-tokio", "postgres"] }

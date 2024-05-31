@@ -27,7 +27,7 @@ pub async fn process_virtual_chain(
 
     while run.load(Ordering::Relaxed) {
         if !start_vcp.load(Ordering::Relaxed) {
-            debug!("Waiting for start notification");
+            debug!("Virtual chain processor waiting for start notification");
             sleep(Duration::from_secs(5)).await;
             continue;
         }

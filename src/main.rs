@@ -1,18 +1,15 @@
-use std::{env, process};
+use std::env;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
-use clap::{Arg, Command, crate_description, crate_name};
+use clap::{crate_description, crate_name, Arg, Command};
 use crossbeam_queue::ArrayQueue;
 use futures_util::future::try_join_all;
 use kaspa_hashes::Hash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{info, warn};
-use signal_hook::consts::{SIGINT, SIGQUIT, SIGTERM};
-use signal_hook::iterator::Signals;
-use signal_hook::low_level::signal_name;
 use tokio::task;
 
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
@@ -20,6 +17,7 @@ use kaspa_db_filler_ng::blocks::insert_blocks::insert_blocks;
 use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
 use kaspa_db_filler_ng::database::client::client::KaspaDbClient;
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
+use kaspa_db_filler_ng::signal::signal_handler::notify_on_signals;
 use kaspa_db_filler_ng::transactions::insert_transactions::insert_txs_ins_outs;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
 use kaspa_db_filler_ng::vars::vars::load_block_checkpoint;
@@ -138,7 +136,7 @@ async fn start_processing(
             checkpoint = block_dag_info.pruning_point_hash;
             info!("Starting from pruning_point {}", checkpoint);
         } else if ignore_checkpoint == "v" {
-            checkpoint = *block_dag_info.virtual_parent_hashes.get(0).unwrap();
+            checkpoint = *block_dag_info.virtual_parent_hashes.get(0).expect("Virtual parent not found");
             info!("Starting from virtual_parent {}", checkpoint);
         } else {
             checkpoint = Hash::from_str(ignore_checkpoint.as_str()).expect("Supplied block hash is invalid");
@@ -149,24 +147,13 @@ async fn start_processing(
             checkpoint = Hash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
             info!("Starting from checkpoint {}", checkpoint);
         } else {
-            checkpoint = *block_dag_info.virtual_parent_hashes.get(0).unwrap();
+            checkpoint = *block_dag_info.virtual_parent_hashes.get(0).expect("Virtual parent not found");
             warn!("Checkpoint not found, starting from virtual_parent {}", checkpoint);
         }
     }
 
     let run = Arc::new(AtomicBool::new(true));
-    let running_clone = run.clone();
-    std::thread::spawn(move || {
-        for signal in Signals::new(&[SIGINT, SIGQUIT, SIGTERM]).expect("Signal handler setup FAILED").forever() {
-            let signal_name = signal_name(signal).unwrap_or("UNKNOWN");
-            if !running_clone.load(Ordering::Relaxed) {
-                warn!("{} received, terminating...", signal_name);
-                process::exit(1);
-            }
-            running_clone.store(false, Ordering::Relaxed);
-            warn!("{} received, stopping... (repeat for forced close)", signal_name);
-        }
-    });
+    task::spawn(notify_on_signals(run.clone()));
 
     let base_buffer = 3000f64;
     let rpc_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * batch_scale) as usize));

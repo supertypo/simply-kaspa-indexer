@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use log::{debug, info, LevelFilter};
 use regex::Regex;
-use sqlx::{ConnectOptions, Error, Pool, Postgres};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::{ConnectOptions, Error, Pool, Postgres};
 
 use crate::database::client::query;
 use crate::database::models::address_transaction::AddressTransaction;
@@ -32,12 +32,12 @@ impl KaspaDbClient {
     pub async fn new_with_args(url: &String, pool_size: u32) -> Result<KaspaDbClient, Error> {
         let url_cleaned = Regex::new(r"(postgres://postgres:)[^@]+(@)").expect("Failed to parse url").replace(url, "$1$2");
         debug!("Connecting to PostgreSQL {}", url_cleaned);
-        let connect_opts = PgConnectOptions::from_str(&url)?
-            .log_slow_statements(LevelFilter::Warn, Duration::from_secs(60));
+        let connect_opts = PgConnectOptions::from_str(&url)?.log_slow_statements(LevelFilter::Warn, Duration::from_secs(60));
         let pool = PgPoolOptions::new()
             .acquire_timeout(Duration::from_secs(10))
             .max_connections(pool_size)
-            .connect_with(connect_opts).await?;
+            .connect_with(connect_opts)
+            .await?;
         info!("Connected to PostgreSQL {}", url_cleaned);
         Ok(KaspaDbClient { pool })
     }
