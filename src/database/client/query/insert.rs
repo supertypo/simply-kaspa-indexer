@@ -149,8 +149,8 @@ pub async fn insert_block_transactions(block_transactions: &[BlockTransaction], 
     );
     let mut query = sqlx::query(&sql);
     for block_transaction in block_transactions {
-        query = query.bind(&block_transaction.transaction_id);
         query = query.bind(&block_transaction.block_hash);
+        query = query.bind(&block_transaction.transaction_id);
     }
     Ok(query.execute(pool).await?.rows_affected())
 }
