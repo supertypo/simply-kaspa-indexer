@@ -66,17 +66,17 @@ async fn map_transaction(
 
     // Create transaction
     let db_transaction = Transaction {
-        transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
+        transaction_id: verbose_data.transaction_id.as_bytes(),
         subnetwork_id: subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone(),
-        hash: verbose_data.hash.as_bytes().to_vec(),
-        mass: if verbose_data.mass != 0 { Some(verbose_data.mass as i32) } else { None },
+        hash: verbose_data.hash.as_bytes(),
+        mass: verbose_data.mass as i32,
         block_time: verbose_data.block_time as i64,
     };
 
     // Create block to transaction relation
     let db_block_transaction = BlockTransaction {
-        block_hash: verbose_data.block_hash.as_bytes().to_vec(),
-        transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
+        block_hash: verbose_data.block_hash.as_bytes(),
+        transaction_id: verbose_data.transaction_id.as_bytes(),
     };
 
     // Process transactions inputs
@@ -85,9 +85,9 @@ async fn map_transaction(
         .into_iter()
         .enumerate()
         .map(|(i, input)| TransactionInput {
-            transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
+            transaction_id: verbose_data.transaction_id.as_bytes(),
             index: i as i16,
-            previous_outpoint_hash: input.previous_outpoint.transaction_id.as_bytes().to_vec(),
+            previous_outpoint_hash: input.previous_outpoint.transaction_id.as_bytes(),
             previous_outpoint_index: input.previous_outpoint.index.to_i16().unwrap(),
             signature_script: input.signature_script.clone(),
             sig_op_count: input.sig_op_count.to_i16().unwrap(),
@@ -102,7 +102,7 @@ async fn map_transaction(
         .enumerate()
         .map(|(i, output)| {
             let o = TransactionOutput {
-                transaction_id: verbose_data.transaction_id.as_bytes().to_vec(),
+                transaction_id: verbose_data.transaction_id.as_bytes(),
                 index: i as i16,
                 amount: output.value as i64,
                 script_public_key: output.script_public_key.script().to_vec(),

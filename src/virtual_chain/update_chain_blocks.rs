@@ -21,12 +21,12 @@ pub async fn update_chain_blocks(
     let mut rows_removed = 0;
     let mut rows_added = 0;
 
-    let removed_blocks = removed_hashes.into_iter().map(|h| h.as_bytes().to_vec()).collect::<Vec<Vec<u8>>>();
+    let removed_blocks = removed_hashes.into_iter().map(|h| h.as_bytes()).collect::<Vec<[u8; 32]>>();
     for removed_blocks_chunk in removed_blocks.chunks(batch_size) {
         debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
         rows_removed += database.delete_chain_blocks(removed_blocks_chunk).await.expect("Delete chain blocks FAILED");
     }
-    let added_blocks = added_hashes.into_iter().map(|h| ChainBlock { block_hash: h.as_bytes().to_vec() }).collect::<Vec<ChainBlock>>();
+    let added_blocks = added_hashes.into_iter().map(|h| ChainBlock { block_hash: h.as_bytes() }).collect::<Vec<ChainBlock>>();
     for added_blocks_chunk in added_blocks.chunks(batch_size) {
         debug!("Processing {} added chain blocks", added_blocks_chunk.len());
         rows_added += database.insert_chain_blocks(added_blocks_chunk).await.expect("Insert chain blocks FAILED");

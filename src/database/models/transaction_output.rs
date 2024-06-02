@@ -1,9 +1,7 @@
-use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Debug)]
 pub struct TransactionOutput {
-    pub transaction_id: Vec<u8>,
+    pub transaction_id: [u8; 32],
     pub index: i16,
     pub amount: i64,
     pub script_public_key: Vec<u8>,

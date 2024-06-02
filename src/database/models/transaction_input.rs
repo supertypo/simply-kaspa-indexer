@@ -1,10 +1,9 @@
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone)]
 pub struct TransactionInput {
-    pub transaction_id: Vec<u8>,
+    pub transaction_id: [u8; 32],
     pub index: i16,
-    pub previous_outpoint_hash: Vec<u8>,
+    pub previous_outpoint_hash: [u8; 32],
     pub previous_outpoint_index: i16,
     pub signature_script: Vec<u8>,
     pub sig_op_count: i16,

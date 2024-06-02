@@ -1,22 +1,22 @@
 use std::hash::{Hash, Hasher};
 
 pub struct Block {
-    pub hash: Vec<u8>,
-    pub accepted_id_merkle_root: Vec<u8>,
+    pub hash: [u8; 32],
+    pub accepted_id_merkle_root: [u8; 32],
     pub difficulty: f64,
-    pub merge_set_blues_hashes: Vec<Vec<u8>>,
-    pub merge_set_reds_hashes: Vec<Vec<u8>>,
-    pub selected_parent_hash: Vec<u8>,
+    pub merge_set_blues_hashes: Vec<[u8; 32]>,
+    pub merge_set_reds_hashes: Vec<[u8; 32]>,
+    pub selected_parent_hash: [u8; 32],
     pub bits: i64,
     pub blue_score: i64,
-    pub blue_work: Vec<u8>,
+    pub blue_work: [u8; 24],
     pub daa_score: i64,
-    pub hash_merkle_root: Vec<u8>,
-    pub nonce: Vec<u8>,
-    pub parents: Vec<Vec<u8>>,
-    pub pruning_point: Vec<u8>,
+    pub hash_merkle_root: [u8; 32],
+    pub nonce: [u8; 8],
+    pub parents: Vec<[u8; 32]>,
+    pub pruning_point: [u8; 32],
     pub timestamp: i64,
-    pub utxo_commitment: Vec<u8>,
+    pub utxo_commitment: [u8; 32],
     pub version: i16,
 }
 

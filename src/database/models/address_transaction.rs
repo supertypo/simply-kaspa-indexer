@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 #[derive(Clone, Debug)]
 pub struct AddressTransaction {
     pub address: String,
-    pub transaction_id: Vec<u8>,
+    pub transaction_id: [u8; 32],
     pub block_time: i64,
 }
 

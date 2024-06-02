@@ -13,7 +13,7 @@ use crate::database::models::block::Block;
 use crate::vars::vars::save_checkpoint;
 
 struct Checkpoint {
-    block_hash: Vec<u8>,
+    block_hash: [u8; 32],
     tx_count: i64,
 }
 

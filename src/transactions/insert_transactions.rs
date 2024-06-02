@@ -55,7 +55,7 @@ pub async fn insert_txs_ins_outs(
                 // We used a HashSet first to filter some amount of duplicates locally, now we can switch back to vector:
                 let transactions_len = transactions.len();
                 let transactions_vec: Vec<Transaction> = transactions.into_iter().collect();
-                let transaction_ids = transactions_vec.iter().map(|t| t.transaction_id.clone()).collect();
+                let transaction_ids = transactions_vec.iter().map(|t| t.transaction_id).collect();
                 let block_transactions_vec = block_tx.into_iter().collect();
                 let inputs_vec = tx_inputs.into_iter().collect();
                 let outputs_vec = tx_outputs.into_iter().collect();
@@ -138,7 +138,7 @@ async fn insert_tx_outputs(max_batch_size: u16, values: Vec<TransactionOutput>, 
     return rows_affected;
 }
 
-async fn insert_input_tx_addr(max_batch_size: u16, values: Vec<Vec<u8>>, database: KaspaDbClient) -> u64 {
+async fn insert_input_tx_addr(max_batch_size: u16, values: Vec<[u8; 32]>, database: KaspaDbClient) -> u64 {
     let key = "input addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} transactions for {}", values.len(), key);

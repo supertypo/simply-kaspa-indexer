@@ -12,10 +12,10 @@ pub async fn select_subnetworks(pool: &Pool<Postgres>) -> Result<Vec<Subnetwork>
     Ok(subnetworks)
 }
 
-pub async fn select_tx_count(block_hash: &Vec<u8>, pool: &Pool<Postgres>) -> Result<i64, Error> {
+pub async fn select_tx_count(block_hash: &[u8; 32], pool: &Pool<Postgres>) -> Result<i64, Error> {
     sqlx::query("SELECT COUNT(*) FROM blocks_transactions WHERE block_hash = $1").bind(block_hash).fetch_one(pool).await?.try_get(0)
 }
 
-pub async fn select_is_chain_block(block_hash: &Vec<u8>, pool: &Pool<Postgres>) -> Result<bool, Error> {
+pub async fn select_is_chain_block(block_hash: &[u8; 32], pool: &Pool<Postgres>) -> Result<bool, Error> {
     sqlx::query("SELECT EXISTS(SELECT 1 FROM chain_blocks WHERE block_hash = $1)").bind(block_hash).fetch_one(pool).await?.try_get(0)
 }

@@ -35,8 +35,8 @@ pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u6
         query = query.bind(&block.hash);
         query = query.bind(&block.accepted_id_merkle_root);
         query = query.bind(&block.difficulty);
-        query = query.bind(if !&block.merge_set_blues_hashes.is_empty() { Some(&block.merge_set_blues_hashes) } else { None });
-        query = query.bind(if !&block.merge_set_reds_hashes.is_empty() { Some(&block.merge_set_reds_hashes) } else { None });
+        query = query.bind((!&block.merge_set_blues_hashes.is_empty()).then_some(&block.merge_set_blues_hashes));
+        query = query.bind((!&block.merge_set_reds_hashes.is_empty()).then_some(&block.merge_set_reds_hashes));
         query = query.bind(&block.selected_parent_hash);
         query = query.bind(&block.bits);
         query = query.bind(&block.blue_score);
@@ -67,7 +67,7 @@ pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postg
         query = query.bind(&tx.transaction_id);
         query = query.bind(&tx.subnetwork_id);
         query = query.bind(&tx.hash);
-        query = query.bind(&tx.mass);
+        query = query.bind((tx.mass != 0).then_some(tx.mass));
         query = query.bind(&tx.block_time);
     }
     Ok(query.execute(pool).await?.rows_affected())
@@ -127,7 +127,7 @@ pub async fn insert_address_transactions(address_transactions: &[AddressTransact
     Ok(query.execute(pool).await?.rows_affected())
 }
 
-pub async fn insert_address_transactions_from_inputs(transaction_ids: &[Vec<u8>], pool: &Pool<Postgres>) -> Result<u64, Error> {
+pub async fn insert_address_transactions_from_inputs(transaction_ids: &[[u8; 32]], pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "
     INSERT INTO addresses_transactions (address, transaction_id, block_time)
         SELECT o.script_public_key_address, i.transaction_id, t.block_time

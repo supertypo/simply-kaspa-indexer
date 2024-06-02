@@ -24,7 +24,7 @@ pub async fn update_txs(
     let mut rows_removed = 0;
     let mut rows_added = 0;
 
-    let removed_blocks = removed_hashes.into_iter().map(|h| h.as_bytes().to_vec()).collect::<Vec<Vec<u8>>>();
+    let removed_blocks = removed_hashes.into_iter().map(|h| h.as_bytes()).collect::<Vec<[u8; 32]>>();
     for removed_blocks_chunk in removed_blocks.chunks(batch_size) {
         debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
         rows_removed +=
@@ -34,8 +34,8 @@ pub async fn update_txs(
     for accepted_id in accepted_transaction_ids {
         for transaction_id in accepted_id.accepted_transaction_ids.iter() {
             accepted_transactions.push(TransactionAcceptance {
-                transaction_id: transaction_id.as_bytes().to_vec(),
-                block_hash: accepted_id.accepting_block_hash.as_bytes().to_vec(),
+                transaction_id: transaction_id.as_bytes(),
+                block_hash: accepted_id.accepting_block_hash.as_bytes(),
             });
         }
     }

@@ -1,11 +1,10 @@
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone)]
 pub struct Transaction {
-    pub transaction_id: Vec<u8>,
+    pub transaction_id: [u8; 32],
     pub subnetwork_id: i16,
-    pub hash: Vec<u8>,
-    pub mass: Option<i32>,
+    pub hash: [u8; 32],
+    pub mass: i32,
     pub block_time: i64,
 }
 
