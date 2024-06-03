@@ -18,7 +18,7 @@ pub async fn fetch_blocks(
     run: Arc<AtomicBool>,
     checkpoint: Hash,
     kaspad: KaspaRpcClient,
-    rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
+    rpc_blocks_queue: Arc<ArrayQueue<(RpcBlock, bool)>>,
     rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
 ) {
     const SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(30);
@@ -81,7 +81,9 @@ pub async fn fetch_blocks(
                     }
                     sleep(Duration::from_secs(1)).await;
                 }
-                rpc_blocks_queue.push(RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }).unwrap();
+                rpc_blocks_queue
+                    .push((RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }, synced))
+                    .unwrap();
                 rpc_transactions_queue.push(b.transactions).unwrap();
             }
         }

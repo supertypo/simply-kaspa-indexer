@@ -74,10 +74,8 @@ async fn map_transaction(
     };
 
     // Create block to transaction relation
-    let db_block_transaction = BlockTransaction {
-        block_hash: verbose_data.block_hash.as_bytes(),
-        transaction_id: verbose_data.transaction_id.as_bytes(),
-    };
+    let db_block_transaction =
+        BlockTransaction { block_hash: verbose_data.block_hash.as_bytes(), transaction_id: verbose_data.transaction_id.as_bytes() };
 
     // Process transactions inputs
     let db_transaction_inputs = t

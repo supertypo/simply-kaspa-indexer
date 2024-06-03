@@ -9,18 +9,19 @@ use tokio::time::sleep;
 
 pub async fn process_blocks(
     run: Arc<AtomicBool>,
-    rpc_blocks_queue: Arc<ArrayQueue<RpcBlock>>,
-    db_blocks_queue: Arc<ArrayQueue<(Block, Vec<Vec<u8>>)>>,
+    rpc_blocks_queue: Arc<ArrayQueue<(RpcBlock, bool)>>,
+    db_blocks_queue: Arc<ArrayQueue<(Block, Vec<[u8; 32]>, bool)>>,
 ) {
     while run.load(Ordering::Relaxed) {
-        if let Some(block) = rpc_blocks_queue.pop() {
+        if let Some((block, synced)) = rpc_blocks_queue.pop() {
             let db_block = map_block(&block);
             while db_blocks_queue.is_full() && run.load(Ordering::Relaxed) {
                 sleep(Duration::from_millis(100)).await;
             }
             let _ = db_blocks_queue.push((
                 db_block,
-                block.verbose_data.map(|vd| vd.transaction_ids.into_iter().map(|t| t.as_bytes().to_vec()).collect()).unwrap(),
+                block.verbose_data.map(|vd| vd.transaction_ids.into_iter().map(|t| t.as_bytes()).collect()).unwrap(),
+                synced,
             ));
         } else {
             sleep(Duration::from_millis(100)).await;
