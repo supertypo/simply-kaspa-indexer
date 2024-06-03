@@ -1,10 +1,10 @@
-use std::fmt::Debug;
+use crate::database::models::sql_hash::SqlHash;
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AddressTransaction {
     pub address: String,
-    pub transaction_id: [u8; 32],
+    pub transaction_id: SqlHash,
     pub block_time: i64,
 }
 

@@ -1,9 +1,10 @@
+use crate::database::models::sql_hash::SqlHash;
 use std::hash::{Hash, Hasher};
 
 pub struct Transaction {
-    pub transaction_id: [u8; 32],
+    pub transaction_id: SqlHash,
     pub subnetwork_id: i16,
-    pub hash: [u8; 32],
+    pub hash: SqlHash,
     pub mass: i32,
     pub block_time: i64,
 }

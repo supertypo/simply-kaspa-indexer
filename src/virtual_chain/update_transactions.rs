@@ -4,6 +4,7 @@ use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcHash};
 use log::{debug, info, trace};
 
 use crate::database::client::client::KaspaDbClient;
+use crate::database::models::sql_hash::SqlHash;
 use crate::database::models::transaction_acceptance::TransactionAcceptance;
 
 pub async fn update_txs(
@@ -24,7 +25,7 @@ pub async fn update_txs(
     let mut rows_removed = 0;
     let mut rows_added = 0;
 
-    let removed_blocks = removed_hashes.into_iter().map(|h| h.as_bytes()).collect::<Vec<[u8; 32]>>();
+    let removed_blocks = removed_hashes.into_iter().map(|h| SqlHash::from(*h)).collect::<Vec<_>>();
     for removed_blocks_chunk in removed_blocks.chunks(batch_size) {
         debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
         rows_removed +=
@@ -34,8 +35,8 @@ pub async fn update_txs(
     for accepted_id in accepted_transaction_ids {
         for transaction_id in accepted_id.accepted_transaction_ids.iter() {
             accepted_transactions.push(TransactionAcceptance {
-                transaction_id: transaction_id.as_bytes(),
-                block_hash: accepted_id.accepting_block_hash.as_bytes(),
+                transaction_id: SqlHash::from(*transaction_id),
+                block_hash: SqlHash::from(accepted_id.accepting_block_hash),
             });
         }
     }

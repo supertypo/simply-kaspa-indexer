@@ -2,6 +2,7 @@ pub mod address_transaction;
 pub mod block;
 pub mod block_transaction;
 pub mod chain_block;
+pub mod sql_hash;
 pub mod subnetwork;
 pub mod transaction;
 pub mod transaction_acceptance;

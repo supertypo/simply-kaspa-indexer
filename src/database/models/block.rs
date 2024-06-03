@@ -1,22 +1,23 @@
+use crate::database::models::sql_hash::SqlHash;
 use std::hash::{Hash, Hasher};
 
 pub struct Block {
-    pub hash: [u8; 32],
-    pub accepted_id_merkle_root: [u8; 32],
+    pub hash: SqlHash,
+    pub accepted_id_merkle_root: SqlHash,
     pub difficulty: f64,
-    pub merge_set_blues_hashes: Vec<[u8; 32]>,
-    pub merge_set_reds_hashes: Vec<[u8; 32]>,
-    pub selected_parent_hash: [u8; 32],
+    pub merge_set_blues_hashes: Vec<SqlHash>,
+    pub merge_set_reds_hashes: Vec<SqlHash>,
+    pub selected_parent_hash: SqlHash,
     pub bits: i64,
     pub blue_score: i64,
     pub blue_work: [u8; 24],
     pub daa_score: i64,
-    pub hash_merkle_root: [u8; 32],
+    pub hash_merkle_root: SqlHash,
     pub nonce: [u8; 8],
-    pub parents: Vec<[u8; 32]>,
-    pub pruning_point: [u8; 32],
+    pub parents: Vec<SqlHash>,
+    pub pruning_point: SqlHash,
     pub timestamp: i64,
-    pub utxo_commitment: [u8; 32],
+    pub utxo_commitment: SqlHash,
     pub version: i16,
 }
 

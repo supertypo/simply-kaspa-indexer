@@ -5,6 +5,7 @@ use crate::database::models::address_transaction::AddressTransaction;
 use crate::database::models::block::Block;
 use crate::database::models::block_transaction::BlockTransaction;
 use crate::database::models::chain_block::ChainBlock;
+use crate::database::models::sql_hash::SqlHash;
 use crate::database::models::transaction::Transaction;
 use crate::database::models::transaction_acceptance::TransactionAcceptance;
 use crate::database::models::transaction_input::TransactionInput;
@@ -127,7 +128,7 @@ pub async fn insert_address_transactions(address_transactions: &[AddressTransact
     Ok(query.execute(pool).await?.rows_affected())
 }
 
-pub async fn insert_address_transactions_from_inputs(transaction_ids: &[[u8; 32]], pool: &Pool<Postgres>) -> Result<u64, Error> {
+pub async fn insert_address_transactions_from_inputs(transaction_ids: &[SqlHash], pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "
     INSERT INTO addresses_transactions (address, transaction_id, block_time)
         SELECT o.script_public_key_address, i.transaction_id, t.block_time

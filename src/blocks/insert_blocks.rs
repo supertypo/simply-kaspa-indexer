@@ -10,10 +10,11 @@ use tokio::time::sleep;
 
 use crate::database::client::client::KaspaDbClient;
 use crate::database::models::block::Block;
+use crate::database::models::sql_hash::SqlHash;
 use crate::vars::vars::save_checkpoint;
 
 struct Checkpoint {
-    block_hash: [u8; 32],
+    block_hash: SqlHash,
     tx_count: i64,
 }
 
@@ -21,7 +22,7 @@ pub async fn insert_blocks(
     run: Arc<AtomicBool>,
     batch_scale: f64,
     start_vcp: Arc<AtomicBool>,
-    db_blocks_queue: Arc<ArrayQueue<(Block, Vec<[u8; 32]>, bool)>>,
+    db_blocks_queue: Arc<ArrayQueue<(Block, Vec<SqlHash>, bool)>>,
     database: KaspaDbClient,
 ) {
     const NOOP_DELETES_BEFORE_VCP: i32 = 10;
@@ -94,7 +95,7 @@ pub async fn insert_blocks(
                             let is_chain_block = database.select_is_chain_block(&c.block_hash).await.expect("Get is cb FAILED");
                             if is_chain_block {
                                 // All set, the checkpoint block has all transactions present and are marked as a chain block by the VCP
-                                let checkpoint_string = hex::encode(c.block_hash);
+                                let checkpoint_string = hex::encode(c.block_hash.as_bytes());
                                 info!("Saving block_checkpoint {}", checkpoint_string);
                                 save_checkpoint(&checkpoint_string, &database).await.expect("Checkpoint saving FAILED");
                                 checkpoint_last_saved = Instant::now();
@@ -106,12 +107,12 @@ pub async fn insert_blocks(
                                 "Expected {}, but found {} transactions on block {}!",
                                 &c.tx_count,
                                 count,
-                                hex::encode(&c.block_hash)
+                                hex::encode(c.block_hash.as_bytes())
                             )
                         } else if Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_WARN_AFTER {
                             error!(
                                 "Still unable to save block_checkpoint {}. Expected {} txs, committed {}",
-                                hex::encode(&c.block_hash),
+                                hex::encode(c.block_hash.as_bytes()),
                                 &c.tx_count,
                                 count
                             );
