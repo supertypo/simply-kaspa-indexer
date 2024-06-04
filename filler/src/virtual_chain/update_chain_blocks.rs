@@ -1,10 +1,10 @@
 use std::cmp::min;
 
-use kaspa_rpc_core::RpcHash;
-use log::{debug, info, trace};
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::chain_block::ChainBlock;
 use kaspa_database::models::types::hash::Hash as SqlHash;
+use kaspa_rpc_core::RpcHash;
+use log::{debug, info, trace};
 
 pub async fn update_chain_blocks(
     batch_scale: f64,

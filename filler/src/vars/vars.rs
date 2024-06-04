@@ -1,5 +1,5 @@
-use sqlx::Error;
 use kaspa_database::client::client::KaspaDbClient;
+use sqlx::Error;
 
 pub const VAR_KEY_BLOCK_CHECKPOINT: &str = "block_checkpoint";
 pub const VAR_KEY_LEGACY_CHECKPOINT: &str = "vspc_last_start_hash";

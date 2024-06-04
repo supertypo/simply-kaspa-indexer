@@ -5,11 +5,11 @@ use std::time::{Duration, Instant};
 
 use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
-use log::{debug, error, info};
-use tokio::time::sleep;
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::block::Block;
 use kaspa_database::models::types::hash::Hash as SqlHash;
+use log::{debug, error, info};
+use tokio::time::sleep;
 
 use crate::vars::vars::save_checkpoint;
 

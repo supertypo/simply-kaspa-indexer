@@ -1,6 +1,6 @@
-use sqlx::{Error, Pool, Postgres, Row};
-use crate::models::types::hash::Hash;
 use crate::models::subnetwork::Subnetwork;
+use crate::models::types::hash::Hash;
+use sqlx::{Error, Pool, Postgres, Row};
 
 pub async fn select_var(key: &str, pool: &Pool<Postgres>) -> Result<String, Error> {
     return sqlx::query("SELECT value FROM vars WHERE key = $1").bind(key).fetch_one(pool).await?.try_get(0);

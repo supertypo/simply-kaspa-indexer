@@ -1,10 +1,6 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use log::{debug, info, LevelFilter};
-use regex::Regex;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{ConnectOptions, Error, Pool, Postgres};
 use crate::client::query;
 use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
@@ -16,6 +12,10 @@ use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::transaction_input::TransactionInput;
 use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
+use log::{debug, info, LevelFilter};
+use regex::Regex;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::{ConnectOptions, Error, Pool, Postgres};
 
 #[derive(Clone)]
 pub struct KaspaDbClient {
@@ -61,7 +61,9 @@ impl KaspaDbClient {
             }
             Err(_) => {
                 info!("Applying schema (version={})", Self::SCHEMA_VERSION);
-                query::misc::execute_ddl(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/up.sql")), &self.pool).await.unwrap();
+                query::misc::execute_ddl(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/up.sql")), &self.pool)
+                    .await
+                    .unwrap();
                 self.upsert_var("schema_version", &Self::SCHEMA_VERSION.to_string()).await.expect("Unable to save schema version");
             }
         };

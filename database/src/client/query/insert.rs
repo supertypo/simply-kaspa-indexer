@@ -1,14 +1,14 @@
-use itertools::Itertools;
-use sqlx::{Error, Executor, Pool, Postgres, Row};
 use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
 use crate::models::block_transaction::BlockTransaction;
 use crate::models::chain_block::ChainBlock;
-use crate::models::types::hash::Hash;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::transaction_input::TransactionInput;
 use crate::models::transaction_output::TransactionOutput;
+use crate::models::types::hash::Hash;
+use itertools::Itertools;
+use sqlx::{Error, Executor, Pool, Postgres, Row};
 
 pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i16, Error> {
     sqlx::query("INSERT INTO subnetworks (subnetwork_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id")

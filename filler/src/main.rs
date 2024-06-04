@@ -6,11 +6,6 @@ use std::sync::Arc;
 use clap::{crate_description, crate_name, Arg, Command};
 use crossbeam_queue::ArrayQueue;
 use futures_util::future::try_join_all;
-use kaspa_hashes::Hash;
-use kaspa_rpc_core::api::rpc::RpcApi;
-use kaspa_wrpc_client::KaspaRpcClient;
-use log::{info, warn};
-use tokio::task;
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
 use kaspa_db_filler_ng::blocks::insert_blocks::insert_blocks;
@@ -21,6 +16,11 @@ use kaspa_db_filler_ng::transactions::insert_transactions::insert_txs_ins_outs;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
 use kaspa_db_filler_ng::vars::vars::load_block_checkpoint;
 use kaspa_db_filler_ng::virtual_chain::process_virtual_chain::process_virtual_chain;
+use kaspa_hashes::Hash;
+use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_wrpc_client::KaspaRpcClient;
+use log::{info, warn};
+use tokio::task;
 
 #[tokio::main]
 async fn main() {
