@@ -1,1 +1,1 @@
-pub type BlueWork = [u8; 24];
+pub type BlueWork = Vec<u8>; // Vec<u8> is more space efficient than [u8; 24]
