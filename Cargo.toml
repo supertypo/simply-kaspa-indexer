@@ -1,23 +1,32 @@
+[workspace]
+resolver = "2"
+members = [
+    "database",
+    "filler"
+]
+
 [profile.dev]
 panic = "abort"
 
 [profile.release]
 lto = "thin"
+strip = true
+overflow-checks = true
 panic = "abort"
 
-[package]
-name = "kaspa-db-filler-ng"
-description = "Feed block and transaction data from Kaspad to a database"
+[workspace.package]
+rust-version = "1.77.2"
 authors = ["suprtypo@pm.me"]
 license-file = "LICENSE"
 edition = "2021" # Rust edition
 
-[dependencies]
+[workspace.dependencies]
+kaspa-database = { path = "database" }
 kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.13.6" }
 kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.13.6" }
 kaspa-hashes = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.13.6" }
 hex = "0.4.3"
-tokio = { version = "1.37.0" , features = ["default", "signal"]}
+tokio = { version = "1.37.0", features = ["default", "signal"] }
 serde = "1.0.197"
 crossbeam-queue = "0.3.11"
 bigdecimal = "0.4.3"

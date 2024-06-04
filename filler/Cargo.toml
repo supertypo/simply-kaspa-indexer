@@ -1,0 +1,29 @@
+[package]
+name = "kaspa-db-filler-ng"
+description = "Kaspa DB Filler NG"
+rust-version.workspace = true
+authors.workspace = true
+license-file.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+kaspa-database.workspace = true
+kaspa-wrpc-client.workspace = true
+kaspa-rpc-core.workspace = true
+kaspa-hashes.workspace = true
+hex.workspace = true
+tokio.workspace = true
+serde.workspace = true
+crossbeam-queue.workspace = true
+bigdecimal.workspace = true
+env_logger.workspace = true
+log.workspace = true
+chrono.workspace = true
+clap.workspace = true
+itertools.workspace = true
+regex.workspace = true
+futures-util.workspace = true
+sqlx.workspace = true
