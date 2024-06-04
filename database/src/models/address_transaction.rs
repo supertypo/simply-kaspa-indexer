@@ -1,10 +1,9 @@
-use std::hash::{Hash, Hasher};
-use crate::models::sql_hash::SqlHash;
+use crate::models::types::hash::Hash;
 
 #[derive(Clone)]
 pub struct AddressTransaction {
     pub address: String,
-    pub transaction_id: SqlHash,
+    pub transaction_id: Hash,
     pub block_time: i64,
 }
 
@@ -16,8 +15,8 @@ impl PartialEq for AddressTransaction {
     }
 }
 
-impl Hash for AddressTransaction {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for AddressTransaction {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.address.hash(state);
         self.transaction_id.hash(state);
     }

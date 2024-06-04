@@ -1,5 +1,3 @@
-use std::hash::{Hash, Hasher};
-
 #[derive(Clone)]
 pub struct Subnetwork {
     pub id: i16,
@@ -14,8 +12,8 @@ impl PartialEq for Subnetwork {
     }
 }
 
-impl Hash for Subnetwork {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for Subnetwork {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.subnetwork_id.hash(state);
     }
 }

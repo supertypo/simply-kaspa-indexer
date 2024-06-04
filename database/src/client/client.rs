@@ -10,12 +10,12 @@ use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
 use crate::models::block_transaction::BlockTransaction;
 use crate::models::chain_block::ChainBlock;
-use crate::models::sql_hash::SqlHash;
 use crate::models::subnetwork::Subnetwork;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::transaction_input::TransactionInput;
 use crate::models::transaction_output::TransactionOutput;
+use crate::models::types::hash::Hash;
 
 #[derive(Clone)]
 pub struct KaspaDbClient {
@@ -80,11 +80,11 @@ impl KaspaDbClient {
         query::select::select_subnetworks(&self.pool).await
     }
 
-    pub async fn select_tx_count(&self, block_hash: &SqlHash) -> Result<i64, Error> {
+    pub async fn select_tx_count(&self, block_hash: &Hash) -> Result<i64, Error> {
         query::select::select_tx_count(block_hash, &self.pool).await
     }
 
-    pub async fn select_is_chain_block(&self, block_hash: &SqlHash) -> Result<bool, Error> {
+    pub async fn select_is_chain_block(&self, block_hash: &Hash) -> Result<bool, Error> {
         query::select::select_is_chain_block(block_hash, &self.pool).await
     }
 
@@ -112,7 +112,7 @@ impl KaspaDbClient {
         query::insert::insert_address_transactions(address_transactions, &self.pool).await
     }
 
-    pub async fn insert_address_transactions_from_inputs(&self, transaction_ids: &[SqlHash]) -> Result<u64, Error> {
+    pub async fn insert_address_transactions_from_inputs(&self, transaction_ids: &[Hash]) -> Result<u64, Error> {
         query::insert::insert_address_transactions_from_inputs(transaction_ids, &self.pool).await
     }
 
@@ -132,11 +132,11 @@ impl KaspaDbClient {
         query::upsert::upsert_var(key, value, &self.pool).await
     }
 
-    pub async fn delete_chain_blocks(&self, block_hashes: &[SqlHash]) -> Result<u64, Error> {
+    pub async fn delete_chain_blocks(&self, block_hashes: &[Hash]) -> Result<u64, Error> {
         query::delete::delete_chain_blocks(block_hashes, &self.pool).await
     }
 
-    pub async fn delete_transaction_acceptances(&self, block_hashes: &[SqlHash]) -> Result<u64, Error> {
+    pub async fn delete_transaction_acceptances(&self, block_hashes: &[Hash]) -> Result<u64, Error> {
         query::delete::delete_transaction_acceptances(block_hashes, &self.pool).await
     }
 }

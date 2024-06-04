@@ -1,10 +1,9 @@
-use std::hash::{Hash, Hasher};
-use crate::models::sql_hash::SqlHash;
+use crate::models::types::hash::Hash;
 
 pub struct TransactionInput {
-    pub transaction_id: SqlHash,
+    pub transaction_id: Hash,
     pub index: i16,
-    pub previous_outpoint_hash: SqlHash,
+    pub previous_outpoint_hash: Hash,
     pub previous_outpoint_index: i16,
     pub signature_script: Vec<u8>,
     pub sig_op_count: i16,
@@ -18,8 +17,8 @@ impl PartialEq for TransactionInput {
     }
 }
 
-impl Hash for TransactionInput {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for TransactionInput {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.transaction_id.hash(state);
         self.index.hash(state);
     }

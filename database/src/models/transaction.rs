@@ -1,10 +1,9 @@
-use std::hash::{Hash, Hasher};
-use crate::models::sql_hash::SqlHash;
+use crate::models::types::hash::Hash;
 
 pub struct Transaction {
-    pub transaction_id: SqlHash,
+    pub transaction_id: Hash,
     pub subnetwork_id: i16,
-    pub hash: SqlHash,
+    pub hash: Hash,
     pub mass: i32,
     pub block_time: i64,
 }
@@ -17,8 +16,8 @@ impl PartialEq for Transaction {
     }
 }
 
-impl Hash for Transaction {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for Transaction {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.transaction_id.hash(state);
     }
 }

@@ -1,8 +1,7 @@
-use std::hash::Hash;
-use crate::models::sql_hash::SqlHash;
+use crate::models::types::hash::Hash;
 
 #[derive(Eq, PartialEq, Hash)]
 pub struct TransactionAcceptance {
-    pub transaction_id: SqlHash,
-    pub block_hash: SqlHash,
+    pub transaction_id: Hash,
+    pub block_hash: Hash,
 }

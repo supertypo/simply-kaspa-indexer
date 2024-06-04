@@ -1,23 +1,24 @@
-use std::hash::{Hash, Hasher};
-use crate::models::sql_hash::SqlHash;
+use crate::models::types::blue_work::BlueWork;
+use crate::models::types::hash::Hash;
+use crate::models::types::nonce::Nonce;
 
 pub struct Block {
-    pub hash: SqlHash,
-    pub accepted_id_merkle_root: SqlHash,
+    pub hash: Hash,
+    pub accepted_id_merkle_root: Hash,
     pub difficulty: f64,
-    pub merge_set_blues_hashes: Vec<SqlHash>,
-    pub merge_set_reds_hashes: Vec<SqlHash>,
-    pub selected_parent_hash: SqlHash,
+    pub merge_set_blues_hashes: Vec<Hash>,
+    pub merge_set_reds_hashes: Vec<Hash>,
+    pub selected_parent_hash: Hash,
     pub bits: i64,
     pub blue_score: i64,
-    pub blue_work: [u8; 24],
+    pub blue_work: BlueWork,
     pub daa_score: i64,
-    pub hash_merkle_root: SqlHash,
-    pub nonce: [u8; 8],
-    pub parents: Vec<SqlHash>,
-    pub pruning_point: SqlHash,
+    pub hash_merkle_root: Hash,
+    pub nonce: Nonce,
+    pub parents: Vec<Hash>,
+    pub pruning_point: Hash,
     pub timestamp: i64,
-    pub utxo_commitment: SqlHash,
+    pub utxo_commitment: Hash,
     pub version: i16,
 }
 
@@ -29,8 +30,8 @@ impl PartialEq for Block {
     }
 }
 
-impl Hash for Block {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for Block {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.hash.hash(state);
     }
 }

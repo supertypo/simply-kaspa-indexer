@@ -6,7 +6,7 @@ use crossbeam_queue::ArrayQueue;
 use kaspa_rpc_core::RpcBlock;
 use tokio::time::sleep;
 use kaspa_database::models::block::Block;
-use kaspa_database::models::sql_hash::SqlHash;
+use kaspa_database::models::types::hash::Hash as SqlHash;
 
 pub async fn process_blocks(
     run: Arc<AtomicBool>,

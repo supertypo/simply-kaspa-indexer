@@ -11,7 +11,7 @@ use tokio::time::sleep;
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::address_transaction::AddressTransaction;
 use kaspa_database::models::block_transaction::BlockTransaction;
-use kaspa_database::models::sql_hash::SqlHash;
+use kaspa_database::models::types::hash::Hash as SqlHash;
 use kaspa_database::models::transaction::Transaction;
 use kaspa_database::models::transaction_input::TransactionInput;
 use kaspa_database::models::transaction_output::TransactionOutput;

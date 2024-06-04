@@ -1,8 +1,7 @@
-use std::hash::{Hash, Hasher};
-use crate::models::sql_hash::SqlHash;
+use crate::models::types::hash::Hash;
 
 pub struct TransactionOutput {
-    pub transaction_id: SqlHash,
+    pub transaction_id: Hash,
     pub index: i16,
     pub amount: i64,
     pub script_public_key: Vec<u8>,
@@ -17,8 +16,8 @@ impl PartialEq for TransactionOutput {
     }
 }
 
-impl Hash for TransactionOutput {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for TransactionOutput {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.transaction_id.hash(state);
         self.index.hash(state);
     }
