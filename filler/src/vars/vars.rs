@@ -15,7 +15,7 @@ pub async fn load_block_checkpoint(database: &KaspaDbClient) -> Result<String, (
 
 pub async fn save_checkpoint(block_hash: &String, database: &KaspaDbClient) -> Result<u64, ()> {
     match database.upsert_var(VAR_KEY_BLOCK_CHECKPOINT, block_hash).await {
-        Ok(rows_affected) => { Ok(rows_affected) }
-        Err(_) => { Err(()) }
+        Ok(rows_affected) => Ok(rows_affected),
+        Err(_) => Err(()),
     }
 }

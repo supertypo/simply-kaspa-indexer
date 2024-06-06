@@ -62,9 +62,8 @@ impl KaspaDbClient {
             Err(_) => {
                 info!("Applying schema (version={})", Self::SCHEMA_VERSION);
                 query::misc::execute_ddl(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/up.sql")), &self.pool)
-                    .await
-                    .unwrap();
-                self.upsert_var("schema_version", &Self::SCHEMA_VERSION.to_string()).await.expect("Unable to save schema version");
+                    .await?;
+                self.upsert_var("schema_version", &Self::SCHEMA_VERSION.to_string()).await?;
             }
         };
         Ok(())
