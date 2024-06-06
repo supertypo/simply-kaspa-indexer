@@ -15,16 +15,7 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 kaspa-hashes.workspace = true
-hex.workspace = true
-tokio.workspace = true
-serde.workspace = true
-crossbeam-queue.workspace = true
-bigdecimal.workspace = true
-env_logger.workspace = true
-log.workspace = true
-chrono.workspace = true
-clap.workspace = true
+sqlx.workspace = true
 itertools.workspace = true
 regex.workspace = true
-futures-util.workspace = true
-sqlx.workspace = true
+log.workspace = true
