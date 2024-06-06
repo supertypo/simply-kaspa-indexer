@@ -18,7 +18,7 @@ fi
 echo "============================================================="
 echo " Pulling $REPO_URL"
 echo "============================================================="
-(cd "$REPO_DIR" && git fetch && git checkout $TAG && git reset --hard $TAG)
+(cd "$REPO_DIR" && git fetch && git checkout $TAG && git reset --hard origin/$TAG)
 
 tag=$(cd "$REPO_DIR" && git log -n1 --format="%cs.%h")
 
