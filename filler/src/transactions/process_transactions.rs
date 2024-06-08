@@ -18,6 +18,7 @@ use tokio::time::sleep;
 
 pub async fn process_transactions(
     run: Arc<AtomicBool>,
+    extra_data: bool,
     rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
     db_transactions_queue: Arc<
         ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
@@ -42,7 +43,7 @@ pub async fn process_transactions(
                 while db_transactions_queue.is_full() && run.load(Ordering::Relaxed) {
                     sleep(Duration::from_millis(100)).await;
                 }
-                let _ = db_transactions_queue.push(map_transaction(transaction, &mut subnetwork_map, &database).await);
+                let _ = db_transactions_queue.push(map_transaction(transaction, extra_data, &mut subnetwork_map, &database).await);
             }
         } else {
             sleep(Duration::from_millis(100)).await;
@@ -52,6 +53,7 @@ pub async fn process_transactions(
 
 async fn map_transaction(
     t: RpcTransaction,
+    extra_data: bool,
     subnetwork_map: &mut HashMap<String, i16>,
     database: &KaspaDbClient,
 ) -> (Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>) {
@@ -70,6 +72,7 @@ async fn map_transaction(
         subnetwork_id: subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone(),
         hash: SqlHash::from(verbose_data.hash),
         mass: verbose_data.mass as i32,
+        payload: if extra_data { Some(t.payload) } else { None },
         block_time: verbose_data.block_time as i64,
     };
 

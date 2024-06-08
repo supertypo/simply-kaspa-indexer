@@ -56,9 +56,9 @@ pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u6
 }
 
 pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 5;
+    const COLS: usize = 6;
     let sql = format!(
-        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, block_time)
+        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time)
         VALUES {} ON CONFLICT DO NOTHING",
         generate_placeholders(transactions.len(), COLS)
     );
@@ -68,6 +68,7 @@ pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postg
         query = query.bind(&tx.subnetwork_id);
         query = query.bind(&tx.hash);
         query = query.bind((tx.mass != 0).then_some(tx.mass));
+        query = query.bind(&tx.payload);
         query = query.bind(&tx.block_time);
     }
     Ok(query.execute(pool).await?.rows_affected())

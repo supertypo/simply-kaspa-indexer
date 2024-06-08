@@ -47,6 +47,7 @@ CREATE TABLE transactions
     subnetwork_id  SMALLINT,
     hash           BYTEA,
     mass           INTEGER,
+    payload        BYTEA,
     block_time     BIGINT
 );
 CREATE INDEX ON transactions (block_time DESC);
