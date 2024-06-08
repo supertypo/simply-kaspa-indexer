@@ -6,7 +6,7 @@ pub struct Transaction {
     pub subnetwork_id: i16,
     pub hash: Hash,
     pub mass: i32,
-    pub payload: Option<Payload>,
+    pub payload: Payload,
     pub block_time: i64,
 }
 

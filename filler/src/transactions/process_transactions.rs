@@ -72,7 +72,7 @@ async fn map_transaction(
         subnetwork_id: subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone(),
         hash: SqlHash::from(verbose_data.hash),
         mass: verbose_data.mass as i32,
-        payload: if extra_data { Some(t.payload) } else { None },
+        payload: if extra_data { t.payload } else { vec![] },
         block_time: verbose_data.block_time as i64,
     };
 
