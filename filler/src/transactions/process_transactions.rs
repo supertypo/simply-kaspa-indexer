@@ -5,6 +5,12 @@ use std::time::Duration;
 
 use bigdecimal::ToPrimitive;
 use crossbeam_queue::ArrayQueue;
+use kaspa_hashes::Hash as KaspaHash;
+use kaspa_rpc_core::RpcTransaction;
+use log::{debug, info};
+use moka::sync::Cache;
+use tokio::time::sleep;
+
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::address_transaction::AddressTransaction;
 use kaspa_database::models::block_transaction::BlockTransaction;
@@ -12,9 +18,6 @@ use kaspa_database::models::transaction::Transaction;
 use kaspa_database::models::transaction_input::TransactionInput;
 use kaspa_database::models::transaction_output::TransactionOutput;
 use kaspa_database::models::types::hash::Hash as SqlHash;
-use kaspa_rpc_core::RpcTransaction;
-use log::info;
-use tokio::time::sleep;
 
 pub async fn process_transactions(
     run: Arc<AtomicBool>,
@@ -25,6 +28,8 @@ pub async fn process_transactions(
     >,
     database: KaspaDbClient,
 ) {
+    let tx_id_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(15)).max_capacity(50000).build();
+
     let mut subnetwork_map: HashMap<String, i16> = HashMap::new();
     let mut valid_address = false;
     let results = database.select_subnetworks().await.expect("Select subnetworks FAILED");
@@ -43,6 +48,12 @@ pub async fn process_transactions(
                 while db_transactions_queue.is_full() && run.load(Ordering::Relaxed) {
                     sleep(Duration::from_millis(100)).await;
                 }
+                let transaction_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
+                if tx_id_cache.contains_key(&transaction_id) {
+                    debug!("Ignoring known transaction_id {}", transaction_id.to_string());
+                    continue;
+                }
+                tx_id_cache.insert(transaction_id, ());
                 let _ = db_transactions_queue.push(map_transaction(transaction, extra_data, &mut subnetwork_map, &database).await);
             }
         } else {

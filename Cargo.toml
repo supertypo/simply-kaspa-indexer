@@ -29,6 +29,7 @@ tokio = { version = "1.37.0", features = ["default", "signal"] }
 futures-util = { version = "0.3.29", default-features = false }
 sqlx = { version = "0.7.4", features = ["runtime-tokio", "postgres"] }
 crossbeam-queue = "0.3.11"
+moka = { version = "0.12.7", features = ["sync"] }
 itertools = "0.13.0"
 chrono = { version = "0.4.38", features = ["std"] }
 bigdecimal = "0.4.3"

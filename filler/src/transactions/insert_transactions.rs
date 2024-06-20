@@ -1,5 +1,4 @@
 use std::cmp::min;
-use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -24,26 +23,25 @@ pub async fn insert_txs_ins_outs(
     >,
     database: KaspaDbClient,
 ) {
-    let batch_size = min((1000f64 * batch_scale) as u16, 7500);
-    let set_size = 3 * batch_size as usize; // Large sets helps us to filter duplicates during catch-up
-    let mut transactions: HashSet<Transaction> = HashSet::with_capacity(set_size);
-    let mut block_tx: HashSet<BlockTransaction> = HashSet::with_capacity(set_size);
-    let mut tx_inputs: HashSet<TransactionInput> = HashSet::with_capacity(set_size * 2);
-    let mut tx_outputs: HashSet<TransactionOutput> = HashSet::with_capacity(set_size * 2);
-    let mut tx_addresses: HashSet<AddressTransaction> = HashSet::with_capacity(set_size * 2);
+    let batch_size = min((1000f64 * batch_scale) as u16, 7500) as usize;
+    let mut transactions = vec![];
+    let mut block_tx = vec![];
+    let mut tx_inputs = vec![];
+    let mut tx_outputs = vec![];
+    let mut tx_addresses = vec![];
     let mut last_block_timestamp;
     let mut last_commit_time = Instant::now();
 
     while run.load(Ordering::Relaxed) {
         if let Some((transaction, block_transactions, inputs, outputs, addresses)) = db_transactions_queue.pop() {
             last_block_timestamp = transaction.block_time;
-            transactions.insert(transaction);
-            block_tx.insert(block_transactions);
+            transactions.push(transaction);
+            block_tx.push(block_transactions);
             tx_inputs.extend(inputs.into_iter());
             tx_outputs.extend(outputs.into_iter());
             tx_addresses.extend(addresses.into_iter());
 
-            if block_tx.len() >= set_size || (block_tx.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
+            if block_tx.len() >= batch_size || (block_tx.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
                 let start_commit_time = Instant::now();
                 debug!(
                     "Committing {} transactions ({} block/tx, {} inputs, {} outputs)",
@@ -89,11 +87,11 @@ pub async fn insert_txs_ins_outs(
                     chrono::DateTime::from_timestamp_millis(last_block_timestamp / 1000 * 1000).unwrap()
                 );
 
-                transactions = HashSet::with_capacity(set_size);
-                block_tx = HashSet::with_capacity(set_size);
-                tx_inputs = HashSet::with_capacity(set_size * 2);
-                tx_outputs = HashSet::with_capacity(set_size * 2);
-                tx_addresses = HashSet::with_capacity(set_size * 2);
+                transactions = vec![];
+                block_tx = vec![];
+                tx_inputs = vec![];
+                tx_outputs = vec![];
+                tx_addresses = vec![];
                 last_commit_time = Instant::now();
             }
         } else {
@@ -102,48 +100,48 @@ pub async fn insert_txs_ins_outs(
     }
 }
 
-async fn insert_txs(max_batch_size: u16, values: Vec<Transaction>, database: KaspaDbClient) -> u64 {
+async fn insert_txs(max_batch_size: usize, values: Vec<Transaction>, database: KaspaDbClient) -> u64 {
     let key = "transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
-    for batch_values in values.chunks(max_batch_size as usize) {
+    for batch_values in values.chunks(max_batch_size) {
         rows_affected += database.insert_transactions(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
 
-async fn insert_tx_inputs(max_batch_size: u16, values: Vec<TransactionInput>, database: KaspaDbClient) -> u64 {
+async fn insert_tx_inputs(max_batch_size: usize, values: Vec<TransactionInput>, database: KaspaDbClient) -> u64 {
     let key = "transaction_inputs";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
-    for batch_values in values.chunks(max_batch_size as usize) {
+    for batch_values in values.chunks(max_batch_size) {
         rows_affected += database.insert_transaction_inputs(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
 
-async fn insert_tx_outputs(max_batch_size: u16, values: Vec<TransactionOutput>, database: KaspaDbClient) -> u64 {
+async fn insert_tx_outputs(max_batch_size: usize, values: Vec<TransactionOutput>, database: KaspaDbClient) -> u64 {
     let key = "transactions_outputs";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
-    for batch_values in values.chunks(max_batch_size as usize) {
+    for batch_values in values.chunks(max_batch_size) {
         rows_affected += database.insert_transaction_outputs(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
 
-async fn insert_input_tx_addr(max_batch_size: u16, values: Vec<SqlHash>, database: KaspaDbClient) -> u64 {
+async fn insert_input_tx_addr(max_batch_size: usize, values: Vec<SqlHash>, database: KaspaDbClient) -> u64 {
     let key = "input addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} transactions for {}", values.len(), key);
     let mut rows_affected = 0;
-    for batch_values in values.chunks(max_batch_size as usize) {
+    for batch_values in values.chunks(max_batch_size) {
         rows_affected +=
             database.insert_address_transactions_from_inputs(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
@@ -151,24 +149,24 @@ async fn insert_input_tx_addr(max_batch_size: u16, values: Vec<SqlHash>, databas
     return rows_affected;
 }
 
-async fn insert_output_tx_addr(max_batch_size: u16, values: Vec<AddressTransaction>, database: KaspaDbClient) -> u64 {
+async fn insert_output_tx_addr(max_batch_size: usize, values: Vec<AddressTransaction>, database: KaspaDbClient) -> u64 {
     let key = "output addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
-    for batch_values in values.chunks(max_batch_size as usize) {
+    for batch_values in values.chunks(max_batch_size) {
         rows_affected += database.insert_address_transactions(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
 
-async fn insert_block_txs(max_batch_size: u16, values: Vec<BlockTransaction>, database: KaspaDbClient) -> u64 {
+async fn insert_block_txs(max_batch_size: usize, values: Vec<BlockTransaction>, database: KaspaDbClient) -> u64 {
     let key = "block/transaction mappings";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
-    for batch_values in values.chunks(max_batch_size as usize) {
+    for batch_values in values.chunks(max_batch_size) {
         rows_affected += database.insert_block_transactions(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());

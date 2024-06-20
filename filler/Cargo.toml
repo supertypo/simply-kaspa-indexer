@@ -17,6 +17,7 @@ kaspa-hashes.workspace = true
 tokio.workspace = true
 futures-util.workspace = true
 crossbeam-queue.workspace = true
+moka.workspace = true
 chrono.workspace = true
 bigdecimal.workspace = true
 hex.workspace = true

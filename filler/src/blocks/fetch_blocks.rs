@@ -5,11 +5,13 @@ use std::time::{Duration, Instant};
 
 use crossbeam_queue::ArrayQueue;
 use kaspa_hashes::Hash;
+use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::{RpcBlock, RpcTransaction};
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::info;
 use log::{debug, trace, warn};
+use moka::sync::Cache;
 use tokio::time::sleep;
 
 use crate::kaspad::client::with_retry;
@@ -27,6 +29,8 @@ pub async fn fetch_blocks(
     let mut last_sync_check = Instant::now() - SYNC_CHECK_INTERVAL;
     let mut synced = false;
     let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
+
+    let block_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(15)).max_capacity(300).build();
 
     while run.load(Ordering::Relaxed) {
         let last_fetch_time = Instant::now();
@@ -61,8 +65,8 @@ pub async fn fetch_blocks(
                     );
                     synced = true;
                 }
-                if block_hash == low_hash {
-                    trace!("Ignoring low_hash block {}", low_hash.to_string());
+                if block_cache.contains_key(&block_hash) {
+                    debug!("Ignoring known block hash {}", block_hash.to_string());
                     continue;
                 }
                 let mut last_blocks_warn = Instant::now();
@@ -85,6 +89,7 @@ pub async fn fetch_blocks(
                     .push((RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }, synced))
                     .unwrap();
                 rpc_transactions_queue.push(b.transactions).unwrap();
+                block_cache.insert(block_hash, ());
             }
         }
         if blocks_len < 50 {
