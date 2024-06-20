@@ -40,8 +40,8 @@ where
 
 pub async fn connect_kaspad(url: String, force_network: String) -> Result<KaspaRpcClient, Error> {
     debug!("Connecting to Kaspad {}", url);
-    let client = KaspaRpcClient::new(WrpcEncoding::Borsh, &url, None)?;
-    client.connect(ConnectOptions::fallback()).await?;
+    let client = KaspaRpcClient::new(WrpcEncoding::Borsh, Some(&url), None, None, None)?;
+    client.connect(Some(ConnectOptions::fallback())).await?;
     let server_info = client.get_server_info().await?;
     let network = format!(
         "{}{}",

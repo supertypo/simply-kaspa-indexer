@@ -22,15 +22,15 @@ edition = "2021" # Rust edition
 
 [workspace.dependencies]
 kaspa-database = { path = "database" }
-kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.13.6" }
-kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.13.6" }
-kaspa-hashes = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.13.6" }
+kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.14.1" }
+kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.14.1" }
+kaspa-hashes = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.14.1" }
 tokio = { version = "1.37.0", features = ["default", "signal"] }
 futures-util = { version = "0.3.29", default-features = false }
 sqlx = { version = "0.7.4", features = ["runtime-tokio", "postgres"] }
 crossbeam-queue = "0.3.11"
-itertools = "0.12.1"
-chrono = { version = "0.4.37", features = ["std"] }
+itertools = "0.13.0"
+chrono = { version = "0.4.38", features = ["std"] }
 bigdecimal = "0.4.3"
 hex = "0.4.3"
 regex = "1.10.4"
