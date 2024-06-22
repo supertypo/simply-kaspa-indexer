@@ -19,7 +19,7 @@ pub async fn insert_txs_ins_outs(
     run: Arc<AtomicBool>,
     batch_scale: f64,
     db_transactions_queue: Arc<
-        ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
+        ArrayQueue<(Option<Transaction>, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
     >,
     database: KaspaDbClient,
 ) {
@@ -29,14 +29,16 @@ pub async fn insert_txs_ins_outs(
     let mut tx_inputs = vec![];
     let mut tx_outputs = vec![];
     let mut tx_addresses = vec![];
-    let mut last_block_timestamp;
+    let mut last_block_timestamp = 0;
     let mut last_commit_time = Instant::now();
 
     while run.load(Ordering::Relaxed) {
-        if let Some((transaction, block_transactions, inputs, outputs, addresses)) = db_transactions_queue.pop() {
-            last_block_timestamp = transaction.block_time;
-            transactions.push(transaction);
-            block_tx.push(block_transactions);
+        if let Some((transaction, block_transaction, inputs, outputs, addresses)) = db_transactions_queue.pop() {
+            if let Some(t) = transaction {
+                last_block_timestamp = t.block_time;
+                transactions.push(t);
+            }
+            block_tx.push(block_transaction);
             tx_inputs.extend(inputs.into_iter());
             tx_outputs.extend(outputs.into_iter());
             tx_addresses.extend(addresses.into_iter());

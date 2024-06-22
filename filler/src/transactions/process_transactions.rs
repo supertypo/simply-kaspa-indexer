@@ -24,7 +24,7 @@ pub async fn process_transactions(
     extra_data: bool,
     rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
     db_transactions_queue: Arc<
-        ArrayQueue<(Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
+        ArrayQueue<(Option<Transaction>, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
     >,
     database: KaspaDbClient,
 ) {
@@ -50,11 +50,16 @@ pub async fn process_transactions(
                 }
                 let transaction_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
                 if tx_id_cache.contains_key(&transaction_id) {
-                    debug!("Ignoring known transaction_id {}", transaction_id.to_string());
-                    continue;
+                    debug!("Known transaction_id {}, keeping block relation only", transaction_id.to_string());
+                    let db_block_transaction = BlockTransaction {
+                        block_hash: transaction.verbose_data.unwrap().block_hash.into(),
+                        transaction_id: transaction_id.into(),
+                    };
+                    let _ = db_transactions_queue.push((None, db_block_transaction, vec![], vec![], vec![]));
+                } else {
+                    let _ = db_transactions_queue.push(map_transaction(transaction, extra_data, &mut subnetwork_map, &database).await);
+                    tx_id_cache.insert(transaction_id, ());
                 }
-                tx_id_cache.insert(transaction_id, ());
-                let _ = db_transactions_queue.push(map_transaction(transaction, extra_data, &mut subnetwork_map, &database).await);
             }
         } else {
             sleep(Duration::from_millis(100)).await;
@@ -67,7 +72,7 @@ async fn map_transaction(
     extra_data: bool,
     subnetwork_map: &mut HashMap<String, i16>,
     database: &KaspaDbClient,
-) -> (Transaction, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>) {
+) -> (Option<Transaction>, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>) {
     let verbose_data = t.verbose_data.unwrap();
     let subnetwork_id = t.subnetwork_id.to_string();
 
@@ -131,7 +136,7 @@ async fn map_transaction(
         })
         .collect::<Vec<TransactionOutput>>();
 
-    (db_transaction, db_block_transaction, db_transaction_inputs, db_transaction_outputs, db_addresses_transactions)
+    (Some(db_transaction), db_block_transaction, db_transaction_inputs, db_transaction_outputs, db_addresses_transactions)
 }
 
 fn validate_address(transactions: &Vec<RpcTransaction>) {
