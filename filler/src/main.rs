@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use clap::{crate_description, crate_name, Arg, Command};
+use clap::{crate_description, crate_name, Arg, Command, ArgMatches};
 use crossbeam_queue::ArrayQueue;
 use futures_util::future::try_join_all;
 use kaspa_database::client::client::KaspaDbClient;
@@ -30,7 +30,41 @@ async fn main() {
     println!("**************************************************************");
     println!("https://hub.docker.com/r/supertypo/kaspa-db-filler-ng");
     println!();
-    let matches = Command::new(crate_name!())
+    let matches = cli_matches();
+    let rpc_url = matches.get_one::<String>("rpc-url").unwrap().to_string();
+    let network = matches.get_one::<String>("network").unwrap().to_lowercase();
+    let database_url = matches.get_one::<String>("database-url").unwrap();
+    let log_level = matches.get_one::<String>("log-level").unwrap().to_lowercase();
+    let log_no_color = matches.get_flag("log-no-color");
+    let batch_scale = matches.get_one::<f64>("batch-scale").unwrap().to_owned();
+    let ignore_checkpoint = matches.get_one::<String>("ignore-checkpoint").map(|i| i.to_lowercase());
+    let skip_input_resolve = matches.get_flag("skip-input-resolve");
+    let extra_data = matches.get_flag("extra-data");
+    let initialize_db = matches.get_flag("initialize-db");
+
+    env::set_var("RUST_LOG", log_level);
+    env::set_var("RUST_LOG_STYLE", if log_no_color { "never" } else { "always" });
+    env_logger::builder().target(env_logger::Target::Stdout).format_target(false).format_timestamp_millis().init();
+
+    if batch_scale < 0.1 || batch_scale > 10.0 {
+        panic!("Invalid batch-scale");
+    }
+
+    let database = KaspaDbClient::new(database_url).await.expect("Database connection FAILED");
+
+    if initialize_db {
+        info!("Initializing database");
+        database.drop_schema().await.expect("Unable to drop schema");
+    }
+    database.create_schema().await.expect("Unable to create schema");
+
+    let kaspad = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
+
+    start_processing(batch_scale, ignore_checkpoint, skip_input_resolve, extra_data, kaspad, database).await.expect("Unreachable");
+}
+
+fn cli_matches() -> ArgMatches {
+    Command::new(crate_name!())
         .about(crate_description!())
         .arg(
             Arg::new("rpc-url")
@@ -82,6 +116,12 @@ async fn main() {
                 .action(clap::ArgAction::Set),
         )
         .arg(
+            Arg::new("skip-input-resolve")
+                .long("skip-input-resolve")
+                .help("Reduces database load by not tracking an address's incoming transactions")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("extra-data")
                 .short('x')
                 .long("extra-data")
@@ -95,42 +135,13 @@ async fn main() {
                 .help("(Re-)initializes the database schema. Use with care")
                 .action(clap::ArgAction::SetTrue),
         )
-        .get_matches();
-
-    let rpc_url = matches.get_one::<String>("rpc-url").unwrap().to_string();
-    let network = matches.get_one::<String>("network").unwrap().to_lowercase();
-    let database_url = matches.get_one::<String>("database-url").unwrap();
-    let log_level = matches.get_one::<String>("log-level").unwrap().to_lowercase();
-    let log_no_color = matches.get_flag("log-no-color");
-    let batch_scale = matches.get_one::<f64>("batch-scale").unwrap().to_owned();
-    let ignore_checkpoint = matches.get_one::<String>("ignore-checkpoint").map(|i| i.to_lowercase());
-    let extra_data = matches.get_flag("extra-data");
-    let initialize_db = matches.get_flag("initialize-db");
-
-    env::set_var("RUST_LOG", log_level);
-    env::set_var("RUST_LOG_STYLE", if log_no_color { "never" } else { "always" });
-    env_logger::builder().target(env_logger::Target::Stdout).format_target(false).format_timestamp_millis().init();
-
-    if batch_scale < 0.1 || batch_scale > 10.0 {
-        panic!("Invalid batch-scale");
-    }
-
-    let database = KaspaDbClient::new(database_url).await.expect("Database connection FAILED");
-
-    if initialize_db {
-        info!("Initializing database");
-        database.drop_schema().await.expect("Unable to drop schema");
-    }
-    database.create_schema().await.expect("Unable to create schema");
-
-    let kaspad = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
-
-    start_processing(batch_scale, ignore_checkpoint, extra_data, kaspad, database).await.expect("Unreachable");
+        .get_matches()
 }
 
 async fn start_processing(
     batch_scale: f64,
     ignore_checkpoint: Option<String>,
+    skip_input_resolve: bool,
     extra_data: bool,
     kaspad: KaspaRpcClient,
     database: KaspaDbClient,
@@ -159,10 +170,11 @@ async fn start_processing(
             warn!("Checkpoint not found, starting from virtual_parent {}", checkpoint);
         }
     }
+    if skip_input_resolve {
+        warn!("Skip resolving inputs to addresses is enabled")
+    }
     if extra_data {
         info!("Extra data is enabled")
-    } else {
-        info!("Extra data is NOT enabled")
     }
 
     let run = Arc::new(AtomicBool::new(true));
@@ -180,7 +192,7 @@ async fn start_processing(
         task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
         task::spawn(process_transactions(run.clone(), extra_data, rpc_txs_queue.clone(), db_txs_queue.clone(), database.clone())),
         task::spawn(insert_blocks(run.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), database.clone())),
-        task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, db_txs_queue.clone(), database.clone())),
+        task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, skip_input_resolve, db_txs_queue.clone(), database.clone())),
         task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), database.clone())),
     ];
     try_join_all(tasks).await.unwrap();

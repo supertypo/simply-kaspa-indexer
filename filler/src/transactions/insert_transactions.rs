@@ -18,6 +18,7 @@ use tokio::time::sleep;
 pub async fn insert_txs_ins_outs(
     run: Arc<AtomicBool>,
     batch_scale: f64,
+    skip_input_resolve: bool,
     db_transactions_queue: Arc<
         ArrayQueue<(Option<Transaction>, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
     >,
@@ -71,7 +72,9 @@ pub async fn insert_txs_ins_outs(
                 let rows_affected_tx_outputs = tx_outputs_handle.await.unwrap();
                 let mut rows_affected_tx_addresses = tx_out_addr_handle.await.unwrap();
                 // ^Input address resolving can only happen after the transaction + inputs + outputs are committed
-                rows_affected_tx_addresses += insert_input_tx_addr(batch_size, transaction_ids, database.clone()).await;
+                if !skip_input_resolve {
+                    rows_affected_tx_addresses += insert_input_tx_addr(batch_size, transaction_ids, database.clone()).await;
+                }
                 // ^All other transaction details needs to be committed before linking to blocks, to avoid incomplete checkpoints
                 let rows_affected_block_tx = insert_block_txs(batch_size, block_transactions_vec, database.clone()).await;
 
