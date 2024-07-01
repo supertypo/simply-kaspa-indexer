@@ -18,6 +18,8 @@ use kaspa_database::models::transaction::Transaction;
 use kaspa_database::models::transaction_input::TransactionInput;
 use kaspa_database::models::transaction_output::TransactionOutput;
 
+type SubnetworkMap = HashMap<String, i16>;
+
 pub async fn process_transactions(
     run: Arc<AtomicBool>,
     extra_data: bool,
@@ -29,7 +31,7 @@ pub async fn process_transactions(
 ) {
     let tx_id_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(15)).max_capacity(50000).build();
 
-    let mut subnetwork_map: HashMap<String, i16> = HashMap::new();
+    let mut subnetwork_map = SubnetworkMap::new();
     let mut valid_address = false;
     let results = database.select_subnetworks().await.expect("Select subnetworks FAILED");
     for s in results {
@@ -69,7 +71,7 @@ pub async fn process_transactions(
 async fn map_transaction(
     t: RpcTransaction,
     extra_data: bool,
-    subnetwork_map: &mut HashMap<String, i16>,
+    subnetwork_map: &mut SubnetworkMap,
     database: &KaspaDbClient,
 ) -> (Option<Transaction>, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>) {
     let verbose_data = t.verbose_data.unwrap();
