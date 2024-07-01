@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use clap::{crate_description, crate_name, Arg, Command, ArgMatches};
+use clap::{crate_description, crate_name, Arg, ArgMatches, Command};
 use crossbeam_queue::ArrayQueue;
 use futures_util::future::try_join_all;
 use kaspa_database::client::client::KaspaDbClient;

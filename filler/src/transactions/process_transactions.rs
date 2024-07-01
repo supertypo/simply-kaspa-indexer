@@ -17,7 +17,6 @@ use kaspa_database::models::block_transaction::BlockTransaction;
 use kaspa_database::models::transaction::Transaction;
 use kaspa_database::models::transaction_input::TransactionInput;
 use kaspa_database::models::transaction_output::TransactionOutput;
-use kaspa_database::models::types::hash::Hash as SqlHash;
 
 pub async fn process_transactions(
     run: Arc<AtomicBool>,
@@ -84,19 +83,17 @@ async fn map_transaction(
 
     // Create transaction
     let db_transaction = Transaction {
-        transaction_id: SqlHash::from(verbose_data.transaction_id),
+        transaction_id: verbose_data.transaction_id.into(),
         subnetwork_id: subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone(),
-        hash: SqlHash::from(verbose_data.hash),
+        hash: verbose_data.hash.into(),
         mass: verbose_data.mass as i32,
         payload: if extra_data { t.payload } else { vec![] },
         block_time: verbose_data.block_time as i64,
     };
 
     // Create block to transaction relation
-    let db_block_transaction = BlockTransaction {
-        block_hash: SqlHash::from(verbose_data.block_hash),
-        transaction_id: SqlHash::from(verbose_data.transaction_id),
-    };
+    let db_block_transaction =
+        BlockTransaction { block_hash: verbose_data.block_hash.into(), transaction_id: verbose_data.transaction_id.into() };
 
     // Process transactions inputs
     let db_transaction_inputs = t
@@ -104,9 +101,9 @@ async fn map_transaction(
         .into_iter()
         .enumerate()
         .map(|(i, input)| TransactionInput {
-            transaction_id: SqlHash::from(verbose_data.transaction_id),
+            transaction_id: verbose_data.transaction_id.into(),
             index: i as i16,
-            previous_outpoint_hash: SqlHash::from(input.previous_outpoint.transaction_id),
+            previous_outpoint_hash: input.previous_outpoint.transaction_id.into(),
             previous_outpoint_index: input.previous_outpoint.index.to_i16().unwrap(),
             signature_script: input.signature_script.clone(),
             sig_op_count: input.sig_op_count.to_i16().unwrap(),
@@ -121,7 +118,7 @@ async fn map_transaction(
         .enumerate()
         .map(|(i, output)| {
             let o = TransactionOutput {
-                transaction_id: SqlHash::from(verbose_data.transaction_id),
+                transaction_id: verbose_data.transaction_id.into(),
                 index: i as i16,
                 amount: output.value as i64,
                 script_public_key: output.script_public_key.script().to_vec(),

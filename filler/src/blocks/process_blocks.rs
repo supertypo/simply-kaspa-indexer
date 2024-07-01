@@ -21,7 +21,7 @@ pub async fn process_blocks(
             }
             let _ = db_blocks_queue.push((
                 db_block,
-                block.verbose_data.map(|vd| vd.transaction_ids.into_iter().map(|t| SqlHash::from(t)).collect()).unwrap(),
+                block.verbose_data.map(|vd| vd.transaction_ids.into_iter().map(|t| t.into()).collect()).unwrap(),
                 synced,
             ));
         } else {
@@ -33,22 +33,22 @@ pub async fn process_blocks(
 fn map_block(block: &RpcBlock) -> Block {
     let verbose_data = block.verbose_data.as_ref().expect("Block verbose_data is missing");
     Block {
-        hash: SqlHash::from(block.header.hash),
-        accepted_id_merkle_root: SqlHash::from(block.header.accepted_id_merkle_root),
+        hash: block.header.hash.into(),
+        accepted_id_merkle_root: block.header.accepted_id_merkle_root.into(),
         difficulty: verbose_data.difficulty,
-        merge_set_blues_hashes: verbose_data.merge_set_blues_hashes.iter().map(|v| SqlHash::from(*v)).collect(),
-        merge_set_reds_hashes: verbose_data.merge_set_reds_hashes.iter().map(|v| SqlHash::from(*v)).collect(),
-        selected_parent_hash: SqlHash::from(verbose_data.selected_parent_hash),
+        merge_set_blues_hashes: verbose_data.merge_set_blues_hashes.iter().map(|v| v.to_owned().into()).collect(),
+        merge_set_reds_hashes: verbose_data.merge_set_reds_hashes.iter().map(|v| v.to_owned().into()).collect(),
+        selected_parent_hash: verbose_data.selected_parent_hash.into(),
         bits: block.header.bits as i64,
         blue_score: block.header.blue_score as i64,
         blue_work: block.header.blue_work.to_be_bytes_var(),
         daa_score: block.header.daa_score as i64,
-        hash_merkle_root: SqlHash::from(block.header.hash_merkle_root),
+        hash_merkle_root: block.header.hash_merkle_root.into(),
         nonce: block.header.nonce.to_be_bytes().to_vec(),
-        parents: block.header.parents_by_level[0].iter().map(|v| SqlHash::from(*v)).collect(),
-        pruning_point: SqlHash::from(block.header.pruning_point),
+        parents: block.header.parents_by_level[0].iter().map(|v| v.to_owned().into()).collect(),
+        pruning_point: block.header.pruning_point.into(),
         timestamp: block.header.timestamp as i64,
-        utxo_commitment: SqlHash::from(block.header.utxo_commitment),
+        utxo_commitment: block.header.utxo_commitment.into(),
         version: block.header.version as i16,
     }
 }

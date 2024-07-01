@@ -2,7 +2,6 @@ use std::cmp::min;
 
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::chain_block::ChainBlock;
-use kaspa_database::models::types::hash::Hash as SqlHash;
 use kaspa_rpc_core::RpcHash;
 use log::{debug, info, trace};
 
@@ -21,12 +20,12 @@ pub async fn update_chain_blocks(
     let mut rows_removed = 0;
     let mut rows_added = 0;
 
-    let removed_blocks = removed_hashes.into_iter().map(|h| SqlHash::from(*h)).collect::<Vec<_>>();
+    let removed_blocks = removed_hashes.into_iter().map(|h| h.to_owned().into()).collect::<Vec<_>>();
     for removed_blocks_chunk in removed_blocks.chunks(batch_size) {
         debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
         rows_removed += database.delete_chain_blocks(removed_blocks_chunk).await.expect("Delete chain blocks FAILED");
     }
-    let added_blocks = added_hashes.into_iter().map(|h| ChainBlock { block_hash: SqlHash::from(*h) }).collect::<Vec<_>>();
+    let added_blocks = added_hashes.into_iter().map(|h| ChainBlock { block_hash: h.to_owned().into() }).collect::<Vec<_>>();
     for added_blocks_chunk in added_blocks.chunks(batch_size) {
         debug!("Processing {} added chain blocks", added_blocks_chunk.len());
         rows_added += database.insert_chain_blocks(added_blocks_chunk).await.expect("Insert chain blocks FAILED");

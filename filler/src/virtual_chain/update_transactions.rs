@@ -2,7 +2,6 @@ use std::cmp::min;
 
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::transaction_acceptance::TransactionAcceptance;
-use kaspa_database::models::types::hash::Hash as SqlHash;
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcHash};
 use log::{debug, info, trace};
 
@@ -24,7 +23,7 @@ pub async fn update_txs(
     let mut rows_removed = 0;
     let mut rows_added = 0;
 
-    let removed_blocks = removed_hashes.into_iter().map(|h| SqlHash::from(*h)).collect::<Vec<_>>();
+    let removed_blocks = removed_hashes.into_iter().map(|h| h.to_owned().into()).collect::<Vec<_>>();
     for removed_blocks_chunk in removed_blocks.chunks(batch_size) {
         debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
         rows_removed +=
@@ -34,8 +33,8 @@ pub async fn update_txs(
     for accepted_id in accepted_transaction_ids {
         for transaction_id in accepted_id.accepted_transaction_ids.iter() {
             accepted_transactions.push(TransactionAcceptance {
-                transaction_id: SqlHash::from(*transaction_id),
-                block_hash: SqlHash::from(accepted_id.accepting_block_hash),
+                transaction_id: transaction_id.to_owned().into(),
+                block_hash: accepted_id.accepting_block_hash.into(),
             });
         }
     }
