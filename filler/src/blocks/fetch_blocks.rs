@@ -2,6 +2,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use chrono::Utc;
 
 use crossbeam_queue::ArrayQueue;
 use kaspa_hashes::Hash;
@@ -9,7 +10,7 @@ use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::{RpcBlock, RpcTransaction};
 use kaspa_wrpc_client::KaspaRpcClient;
-use log::info;
+use log::{error, info};
 use log::{debug, trace, warn};
 use moka::sync::Cache;
 use tokio::time::sleep;
@@ -51,7 +52,19 @@ pub async fn fetch_blocks(
         let blocks_len = response.blocks.len();
         let mut txs_len = 0;
         if blocks_len > 1 {
-            low_hash = response.blocks.last().unwrap().header.hash;
+            if let Some(last_block) = response.blocks.last() {
+                low_hash = last_block.header.hash;
+                if synced {
+                    let skew_seconds = Utc::now().timestamp() - last_block.header.timestamp as i64 / 1000;
+                    if skew_seconds < -10 {
+                        warn!("\x1b[33mLast block is from more than 10 seconds in the future\x1b[0m")
+                    } else if skew_seconds > 300 {
+                        error!("\x1b[31mBlock fetcher is behind. Last block is older than 5 minutes\x1b[0m")
+                    } else if skew_seconds > 30 {
+                        warn!("\x1b[33mBlock fetcher is behind. Last block is older than 30 seconds\x1b[0m")
+                    }
+                }
+            }
             for b in response.blocks {
                 txs_len += b.transactions.len();
                 let block_hash = b.header.hash;
