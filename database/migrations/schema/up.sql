@@ -82,7 +82,6 @@ CREATE TABLE transactions_inputs
     PRIMARY KEY (transaction_id, index)
 );
 CREATE INDEX ON transactions_inputs (transaction_id);
-CREATE INDEX ON transactions_inputs (previous_outpoint_hash, previous_outpoint_index);
 
 
 CREATE TABLE transactions_outputs
