@@ -21,7 +21,7 @@ struct Checkpoint {
 pub async fn insert_blocks(
     run: Arc<AtomicBool>,
     batch_scale: f64,
-    vcp_before_sync: bool,
+    vcp_before_synced: bool,
     start_vcp: Arc<AtomicBool>,
     db_blocks_queue: Arc<ArrayQueue<(Block, Vec<SqlHash>, bool)>>,
     database: KaspaDbClient,
@@ -68,7 +68,7 @@ pub async fn insert_blocks(
                     let tas_deleted =
                         database.delete_transaction_acceptances(&block_hashes).await.expect("Delete transactions_acceptances FAILED");
                     block_hashes = vec![];
-                    if (vcp_before_sync || synced) && blocks_inserted > 0 && tas_deleted == 0 && cbs_deleted == 0 {
+                    if (vcp_before_synced || synced) && blocks_inserted > 0 && tas_deleted == 0 && cbs_deleted == 0 {
                         noop_delete_count += 1;
                     } else {
                         noop_delete_count = 0;
