@@ -105,5 +105,4 @@ CREATE TABLE addresses_transactions
     PRIMARY KEY (address, transaction_id)
 );
 CREATE INDEX ON addresses_transactions (address);
-CREATE INDEX ON addresses_transactions (transaction_id);
 CREATE INDEX ON addresses_transactions (block_time DESC);
