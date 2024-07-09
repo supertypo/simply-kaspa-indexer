@@ -38,6 +38,7 @@ async fn main() {
     let log_no_color = matches.get_flag("log-no-color");
     let batch_scale = matches.get_one::<f64>("batch-scale").unwrap().to_owned();
     let ignore_checkpoint = matches.get_one::<String>("ignore-checkpoint").map(|i| i.to_lowercase());
+    let vcp_before_sync = matches.get_flag("vcp-before-sync");
     let skip_input_resolve = matches.get_flag("skip-input-resolve");
     let extra_data = matches.get_flag("extra-data");
     let initialize_db = matches.get_flag("initialize-db");
@@ -60,7 +61,7 @@ async fn main() {
 
     let kaspad = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
 
-    start_processing(batch_scale, ignore_checkpoint, skip_input_resolve, extra_data, kaspad, database).await.expect("Unreachable");
+    start_processing(batch_scale, ignore_checkpoint, vcp_before_sync, skip_input_resolve, extra_data, kaspad, database).await.expect("Unreachable");
 }
 
 fn cli_matches() -> ArgMatches {
@@ -116,6 +117,12 @@ fn cli_matches() -> ArgMatches {
                 .action(clap::ArgAction::Set),
         )
         .arg(
+            Arg::new("vcp-before-sync")
+                .long("vcp-before-sync")
+                .help("Start VCP as soon as the filler has passed the previous run")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("skip-input-resolve")
                 .long("skip-input-resolve")
                 .help("Reduces database load by not tracking an address's incoming transactions")
@@ -141,6 +148,7 @@ fn cli_matches() -> ArgMatches {
 async fn start_processing(
     batch_scale: f64,
     ignore_checkpoint: Option<String>,
+    vcp_before_sync: bool,
     skip_input_resolve: bool,
     extra_data: bool,
     kaspad: KaspaRpcClient,
@@ -170,6 +178,9 @@ async fn start_processing(
             warn!("Checkpoint not found, starting from virtual_parent {}", checkpoint);
         }
     }
+    if vcp_before_sync {
+        warn!("VCP before sync is enabled. Starting VCP as soon as the filler has caught up to the previous run")
+    }
     if skip_input_resolve {
         warn!("Skip resolving inputs to addresses is enabled")
     }
@@ -191,7 +202,7 @@ async fn start_processing(
         task::spawn(fetch_blocks(run.clone(), checkpoint, kaspad.clone(), rpc_blocks_queue.clone(), rpc_txs_queue.clone())),
         task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
         task::spawn(process_transactions(run.clone(), extra_data, rpc_txs_queue.clone(), db_txs_queue.clone(), database.clone())),
-        task::spawn(insert_blocks(run.clone(), batch_scale, start_vcp.clone(), db_blocks_queue.clone(), database.clone())),
+        task::spawn(insert_blocks(run.clone(), batch_scale, vcp_before_sync, start_vcp.clone(), db_blocks_queue.clone(), database.clone())),
         task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, skip_input_resolve, db_txs_queue.clone(), database.clone())),
         task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), database.clone())),
     ];
