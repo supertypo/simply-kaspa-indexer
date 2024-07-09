@@ -95,7 +95,6 @@ CREATE TABLE transactions_outputs
     PRIMARY KEY (transaction_id, index)
 );
 CREATE INDEX ON transactions_outputs (transaction_id);
-CREATE INDEX ON transactions_outputs (script_public_key_address);
 
 
 CREATE TABLE addresses_transactions
