@@ -1,5 +1,6 @@
 pub mod address_transaction;
 pub mod block;
+pub mod block_parent;
 pub mod block_transaction;
 pub mod chain_block;
 pub mod subnetwork;

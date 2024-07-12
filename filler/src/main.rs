@@ -8,7 +8,7 @@ use crossbeam_queue::ArrayQueue;
 use futures_util::future::try_join_all;
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
-use kaspa_db_filler_ng::blocks::insert_blocks::insert_blocks;
+use kaspa_db_filler_ng::blocks::insert_blocks::insert_blocks_parents;
 use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
 use kaspa_db_filler_ng::signal::signal_handler::notify_on_signals;
@@ -212,7 +212,7 @@ async fn start_processing(
         task::spawn(fetch_blocks(run.clone(), checkpoint, kaspad.clone(), rpc_blocks_queue.clone(), rpc_txs_queue.clone())),
         task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
         task::spawn(process_transactions(run.clone(), extra_data, rpc_txs_queue.clone(), db_txs_queue.clone(), database.clone())),
-        task::spawn(insert_blocks(
+        task::spawn(insert_blocks_parents(
             run.clone(),
             batch_scale,
             vcp_before_synced,

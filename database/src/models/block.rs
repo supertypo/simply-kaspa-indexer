@@ -15,7 +15,6 @@ pub struct Block {
     pub daa_score: i64,
     pub hash_merkle_root: Hash,
     pub nonce: Nonce,
-    pub parents: Vec<Hash>,
     pub pruning_point: Hash,
     pub timestamp: i64,
     pub utxo_commitment: Hash,

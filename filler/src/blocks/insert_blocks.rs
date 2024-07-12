@@ -7,6 +7,7 @@ use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::block::Block;
+use kaspa_database::models::block_parent::BlockParent;
 use kaspa_database::models::types::hash::Hash as SqlHash;
 use log::{debug, error, info};
 use tokio::time::sleep;
@@ -18,12 +19,12 @@ struct Checkpoint {
     tx_count: i64,
 }
 
-pub async fn insert_blocks(
+pub async fn insert_blocks_parents(
     run: Arc<AtomicBool>,
     batch_scale: f64,
     vcp_before_synced: bool,
     start_vcp: Arc<AtomicBool>,
-    db_blocks_queue: Arc<ArrayQueue<(Block, Vec<SqlHash>, bool)>>,
+    db_blocks_queue: Arc<ArrayQueue<(Block, Vec<BlockParent>, Vec<SqlHash>, bool)>>,
     database: KaspaDbClient,
 ) {
     const NOOP_DELETES_BEFORE_VCP: i32 = 10;
@@ -32,6 +33,7 @@ pub async fn insert_blocks(
     let batch_size = min((500f64 * batch_scale) as usize, 3500); // 2^16 / fields in Blocks
     let mut vcp_started = false;
     let mut blocks = vec![];
+    let mut blocks_parents = vec![];
     let mut block_hashes = vec![];
     let mut checkpoint = None;
     let mut last_block_datetime;
@@ -40,7 +42,7 @@ pub async fn insert_blocks(
     let mut noop_delete_count = 0;
 
     while run.load(Ordering::Relaxed) {
-        if let Some((block, transactions, synced)) = db_blocks_queue.pop() {
+        if let Some((block, block_parents, transactions, synced)) = db_blocks_queue.pop() {
             if Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_SAVE_INTERVAL {
                 if let None = checkpoint {
                     // Select the current block as checkpoint if none is set
@@ -52,15 +54,18 @@ pub async fn insert_blocks(
                 block_hashes.push(block.hash.clone());
             }
             blocks.push(block);
+            blocks_parents.extend(block_parents);
 
             if blocks.len() >= batch_size || (blocks.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
-                debug!("Processing {} blocks", blocks.len());
                 let start_commit_time = Instant::now();
+                debug!("Committing {} blocks ({} parents)", blocks.len(), blocks_parents.len());
                 let blocks_len = blocks.len();
-                let blocks_inserted = database.insert_blocks(&blocks).await.expect("Insert blocks FAILED");
+                let blocks_inserted = insert_blocks(batch_size, blocks, database.clone()).await;
+                let block_parents_inserted = insert_block_parents(batch_size, blocks_parents, database.clone()).await;
                 let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                 let bps = blocks_len as f64 / commit_time as f64 * 1000f64;
                 blocks = vec![];
+                blocks_parents = vec![];
 
                 if !vcp_started {
                     checkpoint = None; // Clear the checkpoint block until vcp has been started
@@ -80,13 +85,13 @@ pub async fn insert_blocks(
                         checkpoint_last_saved = Instant::now(); // Give VCP time to catch up before complaining
                     }
                     info!(
-                        "Committed {} new blocks, cleared {} cb and {} ta in {}ms ({:.1} bps). Last block: {}",
-                        blocks_inserted, cbs_deleted, tas_deleted, commit_time, bps, last_block_datetime
+                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp) [clr {} cb, {} ta]. Last block: {}",
+                        blocks_inserted, commit_time, bps, block_parents_inserted, cbs_deleted, tas_deleted, last_block_datetime
                     );
                 } else {
                     info!(
-                        "Committed {} new blocks in {}ms ({:.1} bps). Last block: {}",
-                        blocks_inserted, commit_time, bps, last_block_datetime
+                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp). Last block: {}",
+                        blocks_inserted, commit_time, bps, block_parents_inserted, last_block_datetime
                     );
                     if let Some(c) = checkpoint {
                         // Check if the checkpoint candidate's transactions are present
@@ -130,4 +135,28 @@ pub async fn insert_blocks(
             sleep(Duration::from_millis(100)).await;
         }
     }
+}
+
+async fn insert_blocks(max_batch_size: usize, values: Vec<Block>, database: KaspaDbClient) -> u64 {
+    let key = "blocks";
+    let start_time = Instant::now();
+    debug!("Processing {} {}", values.len(), key);
+    let mut rows_affected = 0;
+    for batch_values in values.chunks(max_batch_size) {
+        rows_affected += database.insert_blocks(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
+    }
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    return rows_affected;
+}
+
+async fn insert_block_parents(max_batch_size: usize, values: Vec<BlockParent>, database: KaspaDbClient) -> u64 {
+    let key = "block_parents";
+    let start_time = Instant::now();
+    debug!("Processing {} {}", values.len(), key);
+    let mut rows_affected = 0;
+    for batch_values in values.chunks(max_batch_size) {
+        rows_affected += database.insert_block_parents(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
+    }
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    return rows_affected;
 }

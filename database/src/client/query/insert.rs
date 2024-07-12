@@ -3,6 +3,7 @@ use sqlx::{Error, Executor, Pool, Postgres, Row};
 
 use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
+use crate::models::block_parent::BlockParent;
 use crate::models::block_transaction::BlockTransaction;
 use crate::models::chain_block::ChainBlock;
 use crate::models::transaction::Transaction;
@@ -20,12 +21,12 @@ pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) ->
 }
 
 pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 17;
+    const COLS: usize = 16;
     let mut tx = pool.begin().await?;
 
     let sql = format!(
         "INSERT INTO blocks (hash, accepted_id_merkle_root, difficulty, merge_set_blues_hashes, merge_set_reds_hashes,
-            selected_parent_hash, bits, blue_score, blue_work, daa_score, hash_merkle_root, nonce, parents, pruning_point,
+            selected_parent_hash, bits, blue_score, blue_work, daa_score, hash_merkle_root, nonce, pruning_point,
             timestamp, utxo_commitment, version
         ) VALUES {} ON CONFLICT DO NOTHING",
         generate_placeholders(blocks.len(), COLS)
@@ -45,7 +46,6 @@ pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u6
         query = query.bind(&block.daa_score);
         query = query.bind(&block.hash_merkle_root);
         query = query.bind(&block.nonce);
-        query = query.bind(&block.parents);
         query = query.bind(&block.pruning_point);
         query = query.bind(&block.timestamp);
         query = query.bind(&block.utxo_commitment);
@@ -54,6 +54,21 @@ pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u6
     let rows_affected = tx.execute(query).await?.rows_affected();
     tx.commit().await?;
     Ok(rows_affected)
+}
+
+pub async fn insert_block_parents(block_parents: &[BlockParent], pool: &Pool<Postgres>) -> Result<u64, Error> {
+    const COLS: usize = 2;
+    let sql = format!(
+        "INSERT INTO block_parent (block_hash, parent_hash)
+        VALUES {} ON CONFLICT DO NOTHING",
+        generate_placeholders(block_parents.len(), COLS)
+    );
+    let mut query = sqlx::query(&sql);
+    for block_transaction in block_parents {
+        query = query.bind(&block_transaction.block_hash);
+        query = query.bind(&block_transaction.parent_hash);
+    }
+    Ok(query.execute(pool).await?.rows_affected())
 }
 
 pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postgres>) -> Result<u64, Error> {

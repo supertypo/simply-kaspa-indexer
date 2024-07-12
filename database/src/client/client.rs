@@ -1,9 +1,15 @@
 use std::str::FromStr;
 use std::time::Duration;
 
+use log::{debug, info, warn, LevelFilter};
+use regex::Regex;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::{ConnectOptions, Error, Pool, Postgres};
+
 use crate::client::query;
 use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
+use crate::models::block_parent::BlockParent;
 use crate::models::block_transaction::BlockTransaction;
 use crate::models::chain_block::ChainBlock;
 use crate::models::subnetwork::Subnetwork;
@@ -12,10 +18,6 @@ use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::transaction_input::TransactionInput;
 use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
-use log::{debug, info, warn, LevelFilter};
-use regex::Regex;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{ConnectOptions, Error, Pool, Postgres};
 
 #[derive(Clone)]
 pub struct KaspaDbClient {
@@ -60,19 +62,19 @@ impl KaspaDbClient {
                             self.upsert_var("schema_version", &Self::SCHEMA_VERSION.to_string()).await?;
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
                         } else {
-                            panic!("\n{}\nFound outdated schema (version=1). Set flag '-u' to upgrade, or apply manually ^", v1_v2_ddl)
+                            panic!("\n{}\nFound outdated schema v1. Set flag '-u' to upgrade, or apply manually ^", v1_v2_ddl)
                         }
                     } else {
-                        panic!("Found outdated & unsupported schema (version={})", version)
+                        panic!("Found outdated & unsupported schema v{}", version)
                     }
                 } else if version > Self::SCHEMA_VERSION {
-                    panic!("Found newer & unsupported schema (version={})", version)
+                    panic!("Found newer & unsupported schema v{}", version)
                 } else {
-                    info!("Existing schema is up to date (version={})", version)
+                    info!("Existing schema v{} is up to date", version)
                 }
             }
             Err(_) => {
-                warn!("Applying schema (version={})", Self::SCHEMA_VERSION);
+                warn!("Applying schema v{}", Self::SCHEMA_VERSION);
                 query::misc::execute_ddl(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/up.sql")), &self.pool)
                     .await?;
                 self.upsert_var("schema_version", &Self::SCHEMA_VERSION.to_string()).await?;
@@ -108,6 +110,10 @@ impl KaspaDbClient {
 
     pub async fn insert_blocks(&self, blocks: &[Block]) -> Result<u64, Error> {
         query::insert::insert_blocks(blocks, &self.pool).await
+    }
+
+    pub async fn insert_block_parents(&self, block_parents: &[BlockParent]) -> Result<u64, Error> {
+        query::insert::insert_block_parents(block_parents, &self.pool).await
     }
 
     pub async fn insert_transactions(&self, transactions: &[Transaction]) -> Result<u64, Error> {

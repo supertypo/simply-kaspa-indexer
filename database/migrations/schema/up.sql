@@ -19,13 +19,22 @@ CREATE TABLE blocks
     daa_score               BIGINT,
     hash_merkle_root        BYTEA,
     nonce                   BYTEA,
-    parents                 BYTEA[],
     pruning_point           BYTEA,
     "timestamp"             BIGINT,
     utxo_commitment         BYTEA,
     version                 SMALLINT
 );
 CREATE INDEX ON blocks (blue_score);
+
+
+CREATE TABLE block_parent
+(
+    block_hash  BYTEA,
+    parent_hash BYTEA,
+    PRIMARY KEY (block_hash, parent_hash)
+);
+CREATE INDEX ON block_parent (block_hash);
+CREATE INDEX ON block_parent (parent_hash);
 
 
 CREATE TABLE chain_blocks
