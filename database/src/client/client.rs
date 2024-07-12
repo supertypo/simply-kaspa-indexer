@@ -12,7 +12,7 @@ use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::transaction_input::TransactionInput;
 use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
-use log::{debug, info, LevelFilter};
+use log::{debug, info, warn, LevelFilter};
 use regex::Regex;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Error, Pool, Postgres};
@@ -23,7 +23,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 1;
+    const SCHEMA_VERSION: u8 = 2;
 
     pub async fn new(url: &String) -> Result<KaspaDbClient, Error> {
         Self::new_with_args(url, 10).await
@@ -47,23 +47,36 @@ impl KaspaDbClient {
         Ok(())
     }
 
-    pub async fn create_schema(&self) -> Result<(), Error> {
+    pub async fn create_schema(&self, upgrade_db: bool) -> Result<(), Error> {
         match &self.select_var("schema_version").await {
             Ok(v) => {
                 let version = v.parse::<u8>().expect("Existing schema is unknown");
-                if Self::SCHEMA_VERSION < version {
-                    panic!("Found newer & unsupported schema schema (version={})", version)
-                } else if Self::SCHEMA_VERSION > version {
-                    panic!("Found outdated & unsupported schema schema (version={})", version)
+                if version < Self::SCHEMA_VERSION {
+                    if version == 1 && Self::SCHEMA_VERSION == 2 {
+                        let v1_v2_ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v1_to_v2.sql"));
+                        if upgrade_db {
+                            warn!("Upgrading schema from v1 to v2, this may take a while...");
+                            query::misc::execute_ddl(v1_v2_ddl, &self.pool).await?;
+                            self.upsert_var("schema_version", &Self::SCHEMA_VERSION.to_string()).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                        } else {
+                            panic!("\n{}\nFound outdated schema (version=1). Set flag '-u' to upgrade, or apply manually ^", v1_v2_ddl)
+                        }
+                    } else {
+                        panic!("Found outdated & unsupported schema (version={})", version)
+                    }
+                } else if version > Self::SCHEMA_VERSION {
+                    panic!("Found newer & unsupported schema (version={})", version)
                 } else {
                     info!("Existing schema is up to date (version={})", version)
                 }
             }
             Err(_) => {
-                info!("Applying schema (version={})", Self::SCHEMA_VERSION);
+                warn!("Applying schema (version={})", Self::SCHEMA_VERSION);
                 query::misc::execute_ddl(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/up.sql")), &self.pool)
                     .await?;
                 self.upsert_var("schema_version", &Self::SCHEMA_VERSION.to_string()).await?;
+                info!("\x1b[32mSchema applied successfully\x1b[0m");
             }
         };
         Ok(())

@@ -41,6 +41,7 @@ async fn main() {
     let vcp_before_synced = matches.get_flag("vcp-before-synced");
     let skip_input_resolve = matches.get_flag("skip-input-resolve");
     let extra_data = matches.get_flag("extra-data");
+    let upgrade_db = matches.get_flag("upgrade-db");
     let initialize_db = matches.get_flag("initialize-db");
 
     env::set_var("RUST_LOG", log_level);
@@ -57,11 +58,13 @@ async fn main() {
         info!("Initializing database");
         database.drop_schema().await.expect("Unable to drop schema");
     }
-    database.create_schema().await.expect("Unable to create schema");
+    database.create_schema(upgrade_db).await.expect("Unable to create schema");
 
     let kaspad = connect_kaspad(rpc_url, network).await.expect("Kaspad connection FAILED");
 
-    start_processing(batch_scale, ignore_checkpoint, vcp_before_synced, skip_input_resolve, extra_data, kaspad, database).await.expect("Unreachable");
+    start_processing(batch_scale, ignore_checkpoint, vcp_before_synced, skip_input_resolve, extra_data, kaspad, database)
+        .await
+        .expect("Unreachable");
 }
 
 fn cli_matches() -> ArgMatches {
@@ -136,6 +139,13 @@ fn cli_matches() -> ArgMatches {
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
+            Arg::new("upgrade-db")
+                .short('u')
+                .long("upgrade-db")
+                .help("Auto-upgrades older db schemas. Use with care")
+                .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
             Arg::new("initialize-db")
                 .short('c')
                 .long("initialize-db")
@@ -202,7 +212,14 @@ async fn start_processing(
         task::spawn(fetch_blocks(run.clone(), checkpoint, kaspad.clone(), rpc_blocks_queue.clone(), rpc_txs_queue.clone())),
         task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
         task::spawn(process_transactions(run.clone(), extra_data, rpc_txs_queue.clone(), db_txs_queue.clone(), database.clone())),
-        task::spawn(insert_blocks(run.clone(), batch_scale, vcp_before_synced, start_vcp.clone(), db_blocks_queue.clone(), database.clone())),
+        task::spawn(insert_blocks(
+            run.clone(),
+            batch_scale,
+            vcp_before_synced,
+            start_vcp.clone(),
+            db_blocks_queue.clone(),
+            database.clone(),
+        )),
         task::spawn(insert_txs_ins_outs(run.clone(), batch_scale, skip_input_resolve, db_txs_queue.clone(), database.clone())),
         task::spawn(process_virtual_chain(run.clone(), start_vcp.clone(), batch_scale, checkpoint, kaspad.clone(), database.clone())),
     ];

@@ -1,8 +1,8 @@
+use chrono::Utc;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use chrono::Utc;
 
 use crossbeam_queue::ArrayQueue;
 use kaspa_hashes::Hash;
@@ -10,8 +10,8 @@ use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::{RpcBlock, RpcTransaction};
 use kaspa_wrpc_client::KaspaRpcClient;
-use log::{error, info};
 use log::{debug, trace, warn};
+use log::{error, info};
 use moka::sync::Cache;
 use tokio::time::sleep;
 
