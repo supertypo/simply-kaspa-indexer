@@ -30,7 +30,7 @@ pub async fn insert_blocks_parents(
     const NOOP_DELETES_BEFORE_VCP: i32 = 10;
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     const CHECKPOINT_WARN_AFTER: u64 = 5 * CHECKPOINT_SAVE_INTERVAL;
-    let batch_size = min((500f64 * batch_scale) as usize, 3500); // 2^16 / fields in Blocks
+    let batch_size = (500f64 * batch_scale) as usize;
     let mut vcp_started = false;
     let mut blocks = vec![];
     let mut blocks_parents = vec![];
@@ -60,8 +60,8 @@ pub async fn insert_blocks_parents(
                 let start_commit_time = Instant::now();
                 debug!("Committing {} blocks ({} parents)", blocks.len(), blocks_parents.len());
                 let blocks_len = blocks.len();
-                let blocks_inserted = insert_blocks(batch_size, blocks, database.clone()).await;
-                let block_parents_inserted = insert_block_parents(batch_size, blocks_parents, database.clone()).await;
+                let blocks_inserted = insert_blocks(batch_scale, blocks, database.clone()).await;
+                let block_parents_inserted = insert_block_parents(batch_scale, blocks_parents, database.clone()).await;
                 let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                 let bps = blocks_len as f64 / commit_time as f64 * 1000f64;
                 blocks = vec![];
@@ -137,24 +137,26 @@ pub async fn insert_blocks_parents(
     }
 }
 
-async fn insert_blocks(max_batch_size: usize, values: Vec<Block>, database: KaspaDbClient) -> u64 {
+async fn insert_blocks(batch_scale: f64, values: Vec<Block>, database: KaspaDbClient) -> u64 {
+    let batch_size = min((350f64 * batch_scale) as usize, 3500); // 2^16 / fields
     let key = "blocks";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
-    for batch_values in values.chunks(max_batch_size) {
+    for batch_values in values.chunks(batch_size) {
         rows_affected += database.insert_blocks(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     return rows_affected;
 }
 
-async fn insert_block_parents(max_batch_size: usize, values: Vec<BlockParent>, database: KaspaDbClient) -> u64 {
+async fn insert_block_parents(batch_scale: f64, values: Vec<BlockParent>, database: KaspaDbClient) -> u64 {
+    let batch_size = min((700f64 * batch_scale) as usize, 10000); // 2^16 / fields
     let key = "block_parents";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
-    for batch_values in values.chunks(max_batch_size) {
+    for batch_values in values.chunks(batch_size) {
         rows_affected += database.insert_block_parents(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
