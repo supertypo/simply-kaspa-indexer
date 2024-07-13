@@ -38,8 +38,6 @@ plain_build() {
   if [ -n "$VERSION" ]; then
      $docker tag $DOCKER_REPO:$tag $DOCKER_REPO:$VERSION
      echo Tagged $DOCKER_REPO:$VERSION
-     $docker tag $DOCKER_REPO:$tag $DOCKER_REPO:latest
-     echo Tagged $DOCKER_REPO:latest
    else
      $docker tag $DOCKER_REPO:$tag $DOCKER_REPO:unstable
      echo Tagged $DOCKER_REPO:unstable
@@ -49,7 +47,6 @@ plain_build() {
     $docker push $DOCKER_REPO:$tag
     if [ -n "$VERSION" ]; then
        $docker push $DOCKER_REPO:$VERSION
-       $docker push $DOCKER_REPO:latest
      else
        $docker push $DOCKER_REPO:unstable
     fi
@@ -70,7 +67,6 @@ multi_arch_build() {
   fi
   if [ -n "$VERSION" ]; then
     dockerRepoArgs="$dockerRepoArgs --tag $DOCKER_REPO:$VERSION"
-    dockerRepoArgs="$dockerRepoArgs --tag $DOCKER_REPO:latest"
   else
     dockerRepoArgs="$dockerRepoArgs --tag $DOCKER_REPO:unstable"
   fi
