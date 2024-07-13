@@ -55,17 +55,12 @@ pub async fn insert_txs_ins_outs(
                 );
                 // We used a HashSet first to filter some amount of duplicates locally, now we can switch back to vector:
                 let transactions_len = transactions.len();
-                let transactions_vec: Vec<Transaction> = transactions.into_iter().collect();
-                let transaction_ids = transactions_vec.iter().map(|t| t.transaction_id.clone()).collect();
-                let block_transactions_vec = block_tx.into_iter().collect();
-                let inputs_vec = tx_inputs.into_iter().collect();
-                let outputs_vec = tx_outputs.into_iter().collect();
-                let addresses_vec = tx_addresses.into_iter().collect();
+                let transaction_ids = transactions.iter().map(|t| t.transaction_id.clone()).collect();
 
-                let tx_handle = task::spawn(insert_txs(batch_scale, transactions_vec, database.clone()));
-                let tx_inputs_handle = task::spawn(insert_tx_inputs(batch_scale, inputs_vec, database.clone()));
-                let tx_outputs_handle = task::spawn(insert_tx_outputs(batch_scale, outputs_vec, database.clone()));
-                let tx_out_addr_handle = task::spawn(insert_output_tx_addr(batch_scale, addresses_vec, database.clone()));
+                let tx_handle = task::spawn(insert_txs(batch_scale, transactions, database.clone()));
+                let tx_inputs_handle = task::spawn(insert_tx_inputs(batch_scale, tx_inputs, database.clone()));
+                let tx_outputs_handle = task::spawn(insert_tx_outputs(batch_scale, tx_outputs, database.clone()));
+                let tx_out_addr_handle = task::spawn(insert_output_tx_addr(batch_scale, tx_addresses, database.clone()));
 
                 let rows_affected_tx = tx_handle.await.unwrap();
                 let rows_affected_tx_inputs = tx_inputs_handle.await.unwrap();
@@ -76,7 +71,7 @@ pub async fn insert_txs_ins_outs(
                     rows_affected_tx_addresses += insert_input_tx_addr(batch_scale, transaction_ids, database.clone()).await;
                 }
                 // ^All other transaction details needs to be committed before linking to blocks, to avoid incomplete checkpoints
-                let rows_affected_block_tx = insert_block_txs(batch_scale, block_transactions_vec, database.clone()).await;
+                let rows_affected_block_tx = insert_block_txs(batch_scale, block_tx, database.clone()).await;
 
                 let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                 let tps = transactions_len as f64 / commit_time as f64 * 1000f64;
