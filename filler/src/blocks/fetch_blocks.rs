@@ -31,7 +31,8 @@ pub async fn fetch_blocks(
     let mut synced = false;
     let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
 
-    let block_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(15)).max_capacity(300).build();
+    let ttl = 15; // seconds
+    let block_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(ttl)).max_capacity(10 * ttl * 2).build();
 
     while run.load(Ordering::Relaxed) {
         let last_fetch_time = Instant::now();

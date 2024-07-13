@@ -22,6 +22,7 @@ type SubnetworkMap = HashMap<String, i16>;
 
 pub async fn process_transactions(
     run: Arc<AtomicBool>,
+    net_bps: u8,
     extra_data: bool,
     rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
     db_transactions_queue: Arc<
@@ -29,7 +30,9 @@ pub async fn process_transactions(
     >,
     database: KaspaDbClient,
 ) {
-    let tx_id_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(15)).max_capacity(50000).build();
+    let ttl = 15; // seconds
+    let cache_size = net_bps as u64 * 300 * ttl * 2;
+    let tx_id_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(ttl)).max_capacity(cache_size).build();
 
     let mut subnetwork_map = SubnetworkMap::new();
     let mut valid_address = false;

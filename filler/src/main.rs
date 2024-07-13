@@ -165,8 +165,10 @@ async fn start_processing(
     database: KaspaDbClient,
 ) -> Result<(), ()> {
     let block_dag_info = kaspad.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
-    let checkpoint: Hash;
+    let net_bps = if block_dag_info.network.suffix.filter(|s| s.to_owned() == 11).is_some() { 10 } else { 1 };
+    info!("Assuming {} block(s) per second for cache sizes", net_bps);
 
+    let checkpoint: Hash;
     if let Some(ignore_checkpoint) = ignore_checkpoint {
         warn!("Checkpoint ignored due to user request (-i). This might lead to inconsistencies.");
         if ignore_checkpoint == "p" {
@@ -211,7 +213,14 @@ async fn start_processing(
     let tasks = vec![
         task::spawn(fetch_blocks(run.clone(), checkpoint, kaspad.clone(), rpc_blocks_queue.clone(), rpc_txs_queue.clone())),
         task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
-        task::spawn(process_transactions(run.clone(), extra_data, rpc_txs_queue.clone(), db_txs_queue.clone(), database.clone())),
+        task::spawn(process_transactions(
+            run.clone(),
+            net_bps,
+            extra_data,
+            rpc_txs_queue.clone(),
+            db_txs_queue.clone(),
+            database.clone(),
+        )),
         task::spawn(insert_blocks_parents(
             run.clone(),
             batch_scale,
