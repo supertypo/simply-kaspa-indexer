@@ -80,7 +80,7 @@ pub async fn fetch_blocks(
                     synced = true;
                 }
                 if block_cache.contains_key(&block_hash) {
-                    debug!("Ignoring known block hash {}", block_hash.to_string());
+                    trace!("Ignoring known block hash {}", block_hash.to_string());
                     continue;
                 }
                 let mut last_blocks_warn = Instant::now();

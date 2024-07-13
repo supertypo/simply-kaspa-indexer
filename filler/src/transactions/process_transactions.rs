@@ -7,7 +7,7 @@ use bigdecimal::ToPrimitive;
 use crossbeam_queue::ArrayQueue;
 use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::RpcTransaction;
-use log::{debug, info};
+use log::{info, trace};
 use moka::sync::Cache;
 use tokio::time::sleep;
 
@@ -54,7 +54,7 @@ pub async fn process_transactions(
                 }
                 let transaction_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
                 if tx_id_cache.contains_key(&transaction_id) {
-                    debug!("Known transaction_id {}, keeping block relation only", transaction_id.to_string());
+                    trace!("Known transaction_id {}, keeping block relation only", transaction_id.to_string());
                     let db_block_transaction = BlockTransaction {
                         block_hash: transaction.verbose_data.unwrap().block_hash.into(),
                         transaction_id: transaction_id.into(),
