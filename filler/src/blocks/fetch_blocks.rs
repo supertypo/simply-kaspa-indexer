@@ -16,23 +16,25 @@ use moka::sync::Cache;
 use tokio::time::sleep;
 
 use crate::kaspad::client::with_retry;
+use crate::settings::settings::Settings;
 
 pub async fn fetch_blocks(
+    settings: Settings,
     run: Arc<AtomicBool>,
-    checkpoint: Hash,
     kaspad: KaspaRpcClient,
     rpc_blocks_queue: Arc<ArrayQueue<(RpcBlock, bool)>>,
     rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
 ) {
     const SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(30);
     let start_time = Instant::now();
-    let mut low_hash = checkpoint;
+    let mut low_hash = settings.checkpoint;
     let mut last_sync_check = Instant::now() - SYNC_CHECK_INTERVAL;
     let mut synced = false;
     let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
 
-    let ttl = 15; // seconds
-    let block_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(ttl)).max_capacity(10 * ttl * 2).build();
+    let ttl = settings.cli_args.cache_ttl;
+    let cache_size = settings.net_bps as u64 * ttl.as_secs() * 2;
+    let block_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(ttl).max_capacity(cache_size).build();
 
     while run.load(Ordering::Relaxed) {
         let last_fetch_time = Instant::now();

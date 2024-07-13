@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::settings::settings::Settings;
 use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
 use kaspa_database::client::client::KaspaDbClient;
@@ -20,9 +21,8 @@ struct Checkpoint {
 }
 
 pub async fn insert_blocks_parents(
+    settings: Settings,
     run: Arc<AtomicBool>,
-    batch_scale: f64,
-    vcp_before_synced: bool,
     start_vcp: Arc<AtomicBool>,
     db_blocks_queue: Arc<ArrayQueue<(Block, Vec<BlockParent>, Vec<SqlHash>, bool)>>,
     database: KaspaDbClient,
@@ -30,7 +30,9 @@ pub async fn insert_blocks_parents(
     const NOOP_DELETES_BEFORE_VCP: i32 = 10;
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
     const CHECKPOINT_WARN_AFTER: u64 = 5 * CHECKPOINT_SAVE_INTERVAL;
+    let batch_scale = settings.cli_args.batch_scale;
     let batch_size = (500f64 * batch_scale) as usize;
+    let vcp_before_synced = settings.cli_args.vcp_before_synced;
     let mut vcp_started = false;
     let mut blocks = vec![];
     let mut blocks_parents = vec![];

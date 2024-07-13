@@ -11,6 +11,7 @@ use log::{info, trace};
 use moka::sync::Cache;
 use tokio::time::sleep;
 
+use crate::settings::settings::Settings;
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::address_transaction::AddressTransaction;
 use kaspa_database::models::block_transaction::BlockTransaction;
@@ -21,18 +22,17 @@ use kaspa_database::models::transaction_output::TransactionOutput;
 type SubnetworkMap = HashMap<String, i16>;
 
 pub async fn process_transactions(
+    settings: Settings,
     run: Arc<AtomicBool>,
-    net_bps: u8,
-    extra_data: bool,
     rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
     db_transactions_queue: Arc<
         ArrayQueue<(Option<Transaction>, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
     >,
     database: KaspaDbClient,
 ) {
-    let ttl = 15; // seconds
-    let cache_size = net_bps as u64 * 300 * ttl * 2;
-    let tx_id_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(ttl)).max_capacity(cache_size).build();
+    let ttl = settings.cli_args.cache_ttl;
+    let cache_size = settings.net_tps_max as u64 * ttl.as_secs() * 2;
+    let tx_id_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(ttl).max_capacity(cache_size).build();
 
     let mut subnetwork_map = SubnetworkMap::new();
     let mut valid_address = false;
@@ -61,7 +61,8 @@ pub async fn process_transactions(
                     };
                     let _ = db_transactions_queue.push((None, db_block_transaction, vec![], vec![], vec![]));
                 } else {
-                    let _ = db_transactions_queue.push(map_transaction(transaction, extra_data, &mut subnetwork_map, &database).await);
+                    let _ = db_transactions_queue
+                        .push(map_transaction(transaction, settings.cli_args.extra_data, &mut subnetwork_map, &database).await);
                     tx_id_cache.insert(transaction_id, ());
                 }
             }

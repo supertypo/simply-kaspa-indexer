@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::settings::settings::Settings;
 use crossbeam_queue::ArrayQueue;
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::address_transaction::AddressTransaction;
@@ -16,15 +17,16 @@ use tokio::task;
 use tokio::time::sleep;
 
 pub async fn insert_txs_ins_outs(
+    settings: Settings,
     run: Arc<AtomicBool>,
-    batch_scale: f64,
-    skip_input_resolve: bool,
     db_transactions_queue: Arc<
         ArrayQueue<(Option<Transaction>, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>)>,
     >,
     database: KaspaDbClient,
 ) {
+    let batch_scale = settings.cli_args.batch_scale;
     let batch_size = (5000f64 * batch_scale) as usize;
+    let skip_input_resolve = settings.cli_args.skip_input_resolve;
     let mut transactions = vec![];
     let mut block_tx = vec![];
     let mut tx_inputs = vec![];

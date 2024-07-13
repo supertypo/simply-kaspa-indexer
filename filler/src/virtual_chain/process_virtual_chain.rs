@@ -3,27 +3,28 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use kaspa_database::client::client::KaspaDbClient;
-use kaspa_hashes::Hash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, info};
 use tokio::time::sleep;
 
 use crate::kaspad::client::with_retry;
+use crate::settings::settings::Settings;
 use crate::virtual_chain::update_chain_blocks::update_chain_blocks;
 use crate::virtual_chain::update_transactions::update_txs;
 
 pub async fn process_virtual_chain(
+    settings: Settings,
     run: Arc<AtomicBool>,
     start_vcp: Arc<AtomicBool>,
-    batch_scale: f64,
-    checkpoint: Hash,
     kaspad: KaspaRpcClient,
     database: KaspaDbClient,
 ) {
+    let batch_scale = settings.cli_args.batch_scale;
+    let mut start_hash = settings.checkpoint;
+
     let start_time = Instant::now();
     let mut synced = false;
-    let mut start_hash = checkpoint;
 
     while run.load(Ordering::Relaxed) {
         if !start_vcp.load(Ordering::Relaxed) {

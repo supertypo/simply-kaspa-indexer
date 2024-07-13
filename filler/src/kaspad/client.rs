@@ -38,9 +38,9 @@ where
     unreachable!();
 }
 
-pub async fn connect_kaspad(url: String, force_network: String) -> Result<KaspaRpcClient, Error> {
+pub async fn connect_kaspad(url: &String, force_network: &String) -> Result<KaspaRpcClient, Error> {
     debug!("Connecting to Kaspad {}", url);
-    let client = KaspaRpcClient::new(WrpcEncoding::Borsh, Some(&url), None, None, None)?;
+    let client = KaspaRpcClient::new(WrpcEncoding::Borsh, Some(url), None, None, None)?;
     client.connect(Some(ConnectOptions::fallback())).await?;
     let server_info = client.get_server_info().await?;
     let network = format!(
@@ -50,7 +50,7 @@ pub async fn connect_kaspad(url: String, force_network: String) -> Result<KaspaR
     );
     info!("Connected to Kaspad {} version: {}, network: {}", url, server_info.server_version, network);
 
-    if network != force_network {
+    if &network != force_network {
         return Err(Error::Custom(format!("Network mismatch, expected '{}', actual '{}'", force_network, network)));
     } else if server_info.network_id.network_type == RpcNetworkType::Mainnet && server_info.virtual_daa_score < 76902846 {
         return Err(Error::Custom("Invalid network".to_string()));
