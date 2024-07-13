@@ -1,11 +1,9 @@
 use chrono::Utc;
-use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossbeam_queue::ArrayQueue;
-use kaspa_hashes::Hash;
 use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::{RpcBlock, RpcTransaction};
@@ -30,7 +28,7 @@ pub async fn fetch_blocks(
     let mut low_hash = settings.checkpoint;
     let mut last_sync_check = Instant::now() - SYNC_CHECK_INTERVAL;
     let mut synced = false;
-    let mut tip_hash = Hash::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap();
+    let mut tip_hashes = vec![];
 
     let ttl = settings.cli_args.cache_ttl;
     let cache_size = settings.net_bps as u64 * ttl.as_secs() * 2;
@@ -47,7 +45,7 @@ pub async fn fetch_blocks(
             if Instant::now().duration_since(last_sync_check) >= SYNC_CHECK_INTERVAL {
                 let block_dag_info = kaspad.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
                 info!("Getting tip hashes from BlockDagInfo for sync check");
-                tip_hash = block_dag_info.tip_hashes[0];
+                tip_hashes = block_dag_info.tip_hashes;
                 last_sync_check = Instant::now();
             }
         }
@@ -71,7 +69,7 @@ pub async fn fetch_blocks(
             for b in response.blocks {
                 txs_len += b.transactions.len();
                 let block_hash = b.header.hash;
-                if !synced && block_hash == tip_hash {
+                if !synced && tip_hashes.contains(&block_hash) {
                     let time_to_sync = Instant::now().duration_since(start_time);
                     info!(
                         "\x1b[32mFound tip. Block fetcher synced! (in {}:{:0>2}:{:0>2}s)\x1b[0m",
