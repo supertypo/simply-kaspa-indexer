@@ -1,16 +1,16 @@
 use std::collections::HashSet;
-use chrono::Utc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use chrono::Utc;
 use crossbeam_queue::ArrayQueue;
 use kaspa_hashes::Hash as KaspaHash;
-use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::{RpcBlock, RpcTransaction};
+use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, trace, warn};
-use log::{error, info};
+use log::info;
 use moka::sync::Cache;
 use tokio::time::sleep;
 
@@ -29,6 +29,7 @@ pub async fn fetch_blocks(
     let mut low_hash = settings.checkpoint;
     let mut last_sync_check = Instant::now() - SYNC_CHECK_INTERVAL;
     let mut synced = false;
+    let mut lag_count = 0;
     let mut tip_hashes = HashSet::new();
 
     let ttl = settings.cli_args.cache_ttl;
@@ -55,7 +56,7 @@ pub async fn fetch_blocks(
         let mut txs_len = 0;
         if blocks_len > 1 {
             low_hash = response.blocks.last().unwrap().header.hash;
-            let mut newest_block_timestamp= 0;
+            let mut newest_block_timestamp = 0;
             for b in response.blocks {
                 if synced && b.header.timestamp > newest_block_timestamp {
                     newest_block_timestamp = b.header.timestamp;
@@ -100,12 +101,14 @@ pub async fn fetch_blocks(
             }
             if synced {
                 let skew_seconds = Utc::now().timestamp() - newest_block_timestamp as i64 / 1000;
-                if skew_seconds < -10 {
-                    warn!("\x1b[33mNewest block is from more than 10 seconds in the future\x1b[0m")
-                } else if skew_seconds > 300 {
-                    error!("\x1b[31mBlock fetcher is behind. Newest block is older than 5 minutes\x1b[0m")
-                } else if skew_seconds > 30 {
-                    warn!("\x1b[33mBlock fetcher is behind. Newest block is older than 30 seconds\x1b[0m")
+                if skew_seconds >= 30 {
+                    lag_count += 1;
+                    if lag_count >= 15 {
+                        warn!("\x1b[33mBlock fetcher is lagging behind. Newest block is {} seconds old\x1b[0m", skew_seconds);
+                        lag_count = 0;
+                    }
+                } else {
+                    lag_count = 0;
                 }
             }
         }
