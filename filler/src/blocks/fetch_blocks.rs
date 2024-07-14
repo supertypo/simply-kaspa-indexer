@@ -54,20 +54,12 @@ pub async fn fetch_blocks(
         let blocks_len = response.blocks.len();
         let mut txs_len = 0;
         if blocks_len > 1 {
-            if let Some(last_block) = response.blocks.last() {
-                low_hash = last_block.header.hash;
-                if synced {
-                    let skew_seconds = Utc::now().timestamp() - last_block.header.timestamp as i64 / 1000;
-                    if skew_seconds < -10 {
-                        warn!("\x1b[33mLast block is from more than 10 seconds in the future\x1b[0m")
-                    } else if skew_seconds > 300 {
-                        error!("\x1b[31mBlock fetcher is behind. Last block is older than 5 minutes\x1b[0m")
-                    } else if skew_seconds > 30 {
-                        warn!("\x1b[33mBlock fetcher is behind. Last block is older than 30 seconds\x1b[0m")
-                    }
-                }
-            }
+            low_hash = response.blocks.last().unwrap().header.hash;
+            let mut newest_block_timestamp= 0;
             for b in response.blocks {
+                if synced && b.header.timestamp > newest_block_timestamp {
+                    newest_block_timestamp = b.header.timestamp;
+                }
                 txs_len += b.transactions.len();
                 let block_hash = b.header.hash;
                 if !synced && tip_hashes.contains(&block_hash) {
@@ -105,6 +97,16 @@ pub async fn fetch_blocks(
                     .unwrap();
                 rpc_transactions_queue.push(b.transactions).unwrap();
                 block_cache.insert(block_hash, ());
+            }
+            if synced {
+                let skew_seconds = Utc::now().timestamp() - newest_block_timestamp as i64 / 1000;
+                if skew_seconds < -10 {
+                    warn!("\x1b[33mNewest block is from more than 10 seconds in the future\x1b[0m")
+                } else if skew_seconds > 300 {
+                    error!("\x1b[31mBlock fetcher is behind. Newest block is older than 5 minutes\x1b[0m")
+                } else if skew_seconds > 30 {
+                    warn!("\x1b[33mBlock fetcher is behind. Newest block is older than 30 seconds\x1b[0m")
+                }
             }
         }
         if blocks_len < 50 {
