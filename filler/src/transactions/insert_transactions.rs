@@ -55,7 +55,6 @@ pub async fn insert_txs_ins_outs(
                     tx_inputs.len(),
                     tx_outputs.len()
                 );
-                // We used a HashSet first to filter some amount of duplicates locally, now we can switch back to vector:
                 let transactions_len = transactions.len();
                 let transaction_ids = transactions.iter().map(|t| t.transaction_id.clone()).collect();
 

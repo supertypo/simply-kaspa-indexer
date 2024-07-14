@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use chrono::Utc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -28,7 +29,7 @@ pub async fn fetch_blocks(
     let mut low_hash = settings.checkpoint;
     let mut last_sync_check = Instant::now() - SYNC_CHECK_INTERVAL;
     let mut synced = false;
-    let mut tip_hashes = vec![];
+    let mut tip_hashes = HashSet::new();
 
     let ttl = settings.cli_args.cache_ttl;
     let cache_size = settings.net_bps as u64 * ttl.as_secs() * 2;
@@ -45,7 +46,7 @@ pub async fn fetch_blocks(
             if Instant::now().duration_since(last_sync_check) >= SYNC_CHECK_INTERVAL {
                 let block_dag_info = kaspad.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
                 info!("Getting tip hashes from BlockDagInfo for sync check");
-                tip_hashes = block_dag_info.tip_hashes;
+                tip_hashes = HashSet::from_iter(block_dag_info.tip_hashes.into_iter());
                 last_sync_check = Instant::now();
             }
         }
