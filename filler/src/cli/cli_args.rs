@@ -12,7 +12,7 @@ pub struct CliArgs {
     pub cache_ttl: Duration,
     pub ignore_checkpoint: Option<String>,
     pub vcp_before_synced: bool,
-    pub skip_input_resolve: bool,
+    pub skip_resolving_addresses: bool,
     pub extra_data: bool,
     pub upgrade_db: bool,
     pub initialize_db: bool,
@@ -30,7 +30,7 @@ pub fn get_cli_args() -> CliArgs {
         cache_ttl: Duration::from_secs(matches.get_one::<u64>("cache-ttl").expect("Missing cache-ttl").to_owned()),
         ignore_checkpoint: matches.get_one::<String>("ignore-checkpoint").map(|i| i.to_lowercase()),
         vcp_before_synced: matches.get_flag("vcp-before-synced"),
-        skip_input_resolve: matches.get_flag("skip-input-resolve"),
+        skip_resolving_addresses: matches.get_flag("skip-resolving-addresses"),
         extra_data: matches.get_flag("extra-data"),
         upgrade_db: matches.get_flag("upgrade-db"),
         initialize_db: matches.get_flag("initialize-db"),
@@ -105,9 +105,9 @@ fn get_cli_matches() -> ArgMatches {
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(
-            Arg::new("skip-input-resolve")
-                .long("skip-input-resolve")
-                .help("Reduces database load by not tracking an address's incoming transactions")
+            Arg::new("skip-resolving-addresses")
+                .long("skip-resolving-addresses")
+                .help("Reduces database load by not tracking an address's transactions")
                 .action(clap::ArgAction::SetTrue),
         )
         .arg(

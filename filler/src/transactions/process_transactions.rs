@@ -62,7 +62,7 @@ pub async fn process_transactions(
                     let _ = db_transactions_queue.push((None, db_block_transaction, vec![], vec![], vec![]));
                 } else {
                     let _ = db_transactions_queue
-                        .push(map_transaction(transaction, settings.cli_args.extra_data, &mut subnetwork_map, &database).await);
+                        .push(map_transaction(settings.clone(), transaction, &mut subnetwork_map, &database).await);
                     tx_id_cache.insert(transaction_id, ());
                 }
             }
@@ -73,8 +73,8 @@ pub async fn process_transactions(
 }
 
 async fn map_transaction(
+    settings: Settings,
     t: RpcTransaction,
-    extra_data: bool,
     subnetwork_map: &mut SubnetworkMap,
     database: &KaspaDbClient,
 ) -> (Option<Transaction>, BlockTransaction, Vec<TransactionInput>, Vec<TransactionOutput>, Vec<AddressTransaction>) {
@@ -93,7 +93,7 @@ async fn map_transaction(
         subnetwork_id: subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone(),
         hash: verbose_data.hash.into(),
         mass: verbose_data.mass as i32,
-        payload: if extra_data { t.payload } else { vec![] },
+        payload: if settings.cli_args.extra_data { t.payload } else { vec![] },
         block_time: verbose_data.block_time as i64,
     };
 
@@ -130,11 +130,13 @@ async fn map_transaction(
                 script_public_key: output.script_public_key.script().to_vec(),
                 script_public_key_address: output.verbose_data.clone().unwrap().script_public_key_address.payload_to_string(),
             };
-            db_addresses_transactions.push(AddressTransaction {
-                address: o.script_public_key_address.clone(),
-                transaction_id: o.transaction_id.clone(),
-                block_time: db_transaction.block_time,
-            });
+            if !settings.cli_args.skip_resolving_addresses {
+                db_addresses_transactions.push(AddressTransaction {
+                    address: o.script_public_key_address.clone(),
+                    transaction_id: o.transaction_id.clone(),
+                    block_time: db_transaction.block_time,
+                });
+            }
             o
         })
         .collect::<Vec<TransactionOutput>>();

@@ -26,7 +26,6 @@ pub async fn insert_txs_ins_outs(
 ) {
     let batch_scale = settings.cli_args.batch_scale;
     let batch_size = (5000f64 * batch_scale) as usize;
-    let skip_input_resolve = settings.cli_args.skip_input_resolve;
     let mut transactions = vec![];
     let mut block_tx = vec![];
     let mut tx_inputs = vec![];
@@ -61,16 +60,18 @@ pub async fn insert_txs_ins_outs(
                 let tx_handle = task::spawn(insert_txs(batch_scale, transactions, database.clone()));
                 let tx_inputs_handle = task::spawn(insert_tx_inputs(batch_scale, tx_inputs, database.clone()));
                 let tx_outputs_handle = task::spawn(insert_tx_outputs(batch_scale, tx_outputs, database.clone()));
-                let tx_out_addr_handle = task::spawn(insert_output_tx_addr(batch_scale, tx_addresses, database.clone()));
-
                 let rows_affected_tx = tx_handle.await.unwrap();
                 let rows_affected_tx_inputs = tx_inputs_handle.await.unwrap();
                 let rows_affected_tx_outputs = tx_outputs_handle.await.unwrap();
-                let mut rows_affected_tx_addresses = tx_out_addr_handle.await.unwrap();
-                // ^Input address resolving can only happen after the transaction + inputs + outputs are committed
-                if !skip_input_resolve {
+
+                let mut rows_affected_tx_addresses = 0;
+                if !settings.cli_args.skip_resolving_addresses {
+                    // ^Input address resolving can only happen after the transaction + inputs + outputs are committed
                     rows_affected_tx_addresses += insert_input_tx_addr(batch_scale, transaction_ids, database.clone()).await;
+                    // ^Persisting inputs and outputs concurrently will deadlock
+                    rows_affected_tx_addresses += insert_output_tx_addr(batch_scale, tx_addresses, database.clone()).await;
                 }
+
                 // ^All other transaction details needs to be committed before linking to blocks, to avoid incomplete checkpoints
                 let rows_affected_block_tx = insert_block_txs(batch_scale, block_tx, database.clone()).await;
 

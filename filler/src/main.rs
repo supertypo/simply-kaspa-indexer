@@ -85,8 +85,8 @@ async fn start_processing(cli_args: CliArgs, kaspad: KaspaRpcClient, database: K
     if cli_args.vcp_before_synced {
         warn!("VCP before synced is enabled. Starting VCP as soon as the filler has caught up to the previous run")
     }
-    if cli_args.skip_input_resolve {
-        warn!("Skip resolving inputs to addresses is enabled")
+    if cli_args.skip_resolving_addresses {
+        warn!("Skip resolving addresses is enabled")
     }
     if cli_args.extra_data {
         info!("Extra data is enabled")
