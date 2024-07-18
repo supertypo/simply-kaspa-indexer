@@ -10,7 +10,7 @@ use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::block::Block;
 use kaspa_database::models::block_parent::BlockParent;
 use kaspa_database::models::types::hash::Hash as SqlHash;
-use log::{debug, error, info};
+use log::{debug, info, warn};
 use tokio::time::sleep;
 
 use crate::vars::vars::save_checkpoint;
@@ -40,6 +40,7 @@ pub async fn insert_blocks_parents(
     let mut checkpoint = None;
     let mut last_block_datetime;
     let mut checkpoint_last_saved = Instant::now();
+    let mut checkpoint_last_warned = Instant::now();
     let mut last_commit_time = Instant::now();
     let mut noop_delete_count = 0;
 
@@ -117,13 +118,16 @@ pub async fn insert_blocks_parents(
                                 count,
                                 hex::encode(c.block_hash.as_bytes())
                             )
-                        } else if Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_WARN_AFTER {
-                            error!(
+                        } else if Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_WARN_AFTER
+                            && Instant::now().duration_since(checkpoint_last_warned).as_secs() > CHECKPOINT_SAVE_INTERVAL
+                        {
+                            warn!(
                                 "Still unable to save block_checkpoint {}. Expected {} txs, committed {}",
                                 hex::encode(c.block_hash.as_bytes()),
                                 &c.tx_count,
                                 count
                             );
+                            checkpoint_last_warned = Instant::now();
                             checkpoint = Some(c);
                         } else {
                             // Let's wait one round and check again
