@@ -1697,8 +1697,10 @@ dependencies = [
 name = "kaspa-database-mapping"
 version = "0.0.0"
 dependencies = [
+ "bigdecimal",
  "kaspa-database",
  "kaspa-rpc-core",
+ "log",
 ]
 
 [[package]]

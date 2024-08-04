@@ -28,6 +28,7 @@ pub async fn process_blocks(
     start_vcp: Arc<AtomicBool>,
     rpc_blocks_queue: Arc<ArrayQueue<(RpcBlock, bool)>>,
     database: KaspaDbClient,
+    mapper: KaspaDbMapper,
 ) {
     const NOOP_DELETES_BEFORE_VCP: i32 = 10;
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
@@ -35,7 +36,6 @@ pub async fn process_blocks(
     let batch_scale = settings.cli_args.batch_scale;
     let batch_size = (500f64 * batch_scale) as usize;
     let vcp_before_synced = settings.cli_args.vcp_before_synced;
-    let mapper = KaspaDbMapper::new();
     let mut vcp_started = false;
     let mut blocks = vec![];
     let mut blocks_parents = vec![];
@@ -51,7 +51,7 @@ pub async fn process_blocks(
         if let Some((rpc_block, synced)) = rpc_blocks_queue.pop() {
             let block = mapper.map_block(&rpc_block);
             let block_parents = mapper.map_block_parents(&rpc_block);
-            let tx_count = mapper.count_transactions(&rpc_block);
+            let tx_count = mapper.count_block_transactions(&rpc_block);
             if Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_SAVE_INTERVAL {
                 if let None = checkpoint {
                     // Select the current block as checkpoint if none is set

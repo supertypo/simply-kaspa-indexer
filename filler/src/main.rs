@@ -1,7 +1,7 @@
 use std::env;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use crossbeam_queue::ArrayQueue;
 use futures_util::future::try_join_all;
@@ -12,13 +12,13 @@ use log::{info, warn};
 use tokio::task;
 
 use kaspa_database::client::client::KaspaDbClient;
+use kaspa_database_mapping::mapper::mapper::KaspaDbMapper;
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
 use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
-use kaspa_db_filler_ng::cli::cli_args::{CliArgs, get_cli_args};
+use kaspa_db_filler_ng::cli::cli_args::{get_cli_args, CliArgs};
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
 use kaspa_db_filler_ng::settings::settings::Settings;
 use kaspa_db_filler_ng::signal::signal_handler::notify_on_signals;
-use kaspa_db_filler_ng::transactions::insert_transactions::insert_txs_ins_outs;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
 use kaspa_db_filler_ng::vars::vars::load_block_checkpoint;
 use kaspa_db_filler_ng::virtual_chain::process_virtual_chain::process_virtual_chain;
@@ -97,22 +97,23 @@ async fn start_processing(cli_args: CliArgs, kaspad: KaspaRpcClient, database: K
 
     let base_buffer = 3000f64;
     let blocks_queue = Arc::new(ArrayQueue::new((base_buffer * cli_args.batch_scale) as usize));
-    let rpc_txs_queue = Arc::new(ArrayQueue::new((base_buffer * cli_args.batch_scale) as usize));
-    let db_txs_queue = Arc::new(ArrayQueue::new((base_buffer * cli_args.batch_scale) as usize));
+    let txs_queue = Arc::new(ArrayQueue::new((base_buffer * cli_args.batch_scale) as usize));
+
+    let mapper = KaspaDbMapper::new(cli_args.extra_data);
 
     let settings = Settings { cli_args: cli_args.clone(), net_bps, net_tps_max, checkpoint };
     let start_vcp = Arc::new(AtomicBool::new(false));
     let tasks = vec![
-        task::spawn(fetch_blocks(settings.clone(), run.clone(), kaspad.clone(), blocks_queue.clone(), rpc_txs_queue.clone())),
-        task::spawn(process_transactions(
+        task::spawn(fetch_blocks(settings.clone(), run.clone(), kaspad.clone(), blocks_queue.clone(), txs_queue.clone())),
+        task::spawn(process_blocks(
             settings.clone(),
             run.clone(),
-            rpc_txs_queue.clone(),
-            db_txs_queue.clone(),
+            start_vcp.clone(),
+            blocks_queue.clone(),
             database.clone(),
+            mapper.clone(),
         )),
-        task::spawn(process_blocks(settings.clone(), run.clone(), start_vcp.clone(), blocks_queue.clone(), database.clone())),
-        task::spawn(insert_txs_ins_outs(settings.clone(), run.clone(), db_txs_queue.clone(), database.clone())),
+        task::spawn(process_transactions(settings.clone(), run.clone(), txs_queue.clone(), database.clone(), mapper.clone())),
         task::spawn(process_virtual_chain(settings.clone(), run.clone(), start_vcp.clone(), kaspad.clone(), database.clone())),
     ];
     try_join_all(tasks).await.unwrap();

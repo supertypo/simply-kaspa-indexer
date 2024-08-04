@@ -21,8 +21,8 @@ pub async fn fetch_blocks(
     settings: Settings,
     run: Arc<AtomicBool>,
     kaspad: KaspaRpcClient,
-    rpc_blocks_queue: Arc<ArrayQueue<(RpcBlock, bool)>>,
-    rpc_transactions_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
+    blocks_queue: Arc<ArrayQueue<(RpcBlock, bool)>>,
+    txs_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
 ) {
     const SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(30);
     let start_time = Instant::now();
@@ -78,7 +78,7 @@ pub async fn fetch_blocks(
                     continue;
                 }
                 let mut last_blocks_warn = Instant::now();
-                while rpc_blocks_queue.is_full() && run.load(Ordering::Relaxed) {
+                while blocks_queue.is_full() && run.load(Ordering::Relaxed) {
                     if Instant::now().duration_since(last_blocks_warn).as_secs() >= 30 {
                         warn!("RPC blocks queue is full");
                         last_blocks_warn = Instant::now();
@@ -86,17 +86,17 @@ pub async fn fetch_blocks(
                     sleep(Duration::from_secs(1)).await;
                 }
                 let mut last_transactions_warn = Instant::now();
-                while rpc_transactions_queue.is_full() && run.load(Ordering::Relaxed) {
+                while txs_queue.is_full() && run.load(Ordering::Relaxed) {
                     if Instant::now().duration_since(last_transactions_warn).as_secs() >= 30 {
                         warn!("RPC transactions queue is full");
                         last_transactions_warn = Instant::now();
                     }
                     sleep(Duration::from_secs(1)).await;
                 }
-                rpc_blocks_queue
+                blocks_queue
                     .push((RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }, synced))
                     .unwrap();
-                rpc_transactions_queue.push(b.transactions).unwrap();
+                txs_queue.push(b.transactions).unwrap();
                 block_cache.insert(block_hash, ());
             }
             if synced {

@@ -1,12 +1,12 @@
 use kaspa_rpc_core::RpcBlock;
 
-use kaspa_database::models::block::Block;
-use kaspa_database::models::block_parent::BlockParent;
+use kaspa_database::models::block::Block as SqlBlock;
+use kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
 use kaspa_database::models::types::hash::Hash as SqlHash;
 
-pub fn map_block(block: &RpcBlock) -> Block {
+pub fn map_block(block: &RpcBlock) -> SqlBlock {
     let verbose_data = block.verbose_data.as_ref().expect("Block verbose_data is missing");
-    Block {
+    SqlBlock {
         hash: block.header.hash.into(),
         accepted_id_merkle_root: block.header.accepted_id_merkle_root.into(),
         difficulty: verbose_data.difficulty,
@@ -26,10 +26,10 @@ pub fn map_block(block: &RpcBlock) -> Block {
     }
 }
 
-pub fn map_block_parents(block: &RpcBlock) -> Vec<BlockParent> {
+pub fn map_block_parents(block: &RpcBlock) -> Vec<SqlBlockParent> {
     block.header.parents_by_level[0]
         .iter()
-        .map(|v| BlockParent { block_hash: block.header.hash.into(), parent_hash: v.to_owned().into() })
+        .map(|v| SqlBlockParent { block_hash: block.header.hash.into(), parent_hash: v.to_owned().into() })
         .collect()
 }
 
