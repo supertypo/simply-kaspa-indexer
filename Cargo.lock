@@ -1694,6 +1694,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaspa-database-mapping"
+version = "0.0.0"
+dependencies = [
+ "kaspa-database",
+ "kaspa-rpc-core",
+]
+
+[[package]]
 name = "kaspa-db-filler-ng"
 version = "0.0.0"
 dependencies = [
@@ -1705,6 +1713,7 @@ dependencies = [
  "futures-util",
  "hex",
  "kaspa-database",
+ "kaspa-database-mapping",
  "kaspa-hashes",
  "kaspa-rpc-core",
  "kaspa-wrpc-client",

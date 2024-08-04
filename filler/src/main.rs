@@ -1,15 +1,20 @@
 use std::env;
 use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use crossbeam_queue::ArrayQueue;
 use futures_util::future::try_join_all;
+use kaspa_hashes::Hash as KaspaHash;
+use kaspa_rpc_core::api::rpc::RpcApi;
+use kaspa_wrpc_client::KaspaRpcClient;
+use log::{info, warn};
+use tokio::task;
+
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
-use kaspa_db_filler_ng::blocks::insert_blocks::insert_blocks_parents;
 use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
-use kaspa_db_filler_ng::cli::cli_args::{get_cli_args, CliArgs};
+use kaspa_db_filler_ng::cli::cli_args::{CliArgs, get_cli_args};
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
 use kaspa_db_filler_ng::settings::settings::Settings;
 use kaspa_db_filler_ng::signal::signal_handler::notify_on_signals;
@@ -17,11 +22,6 @@ use kaspa_db_filler_ng::transactions::insert_transactions::insert_txs_ins_outs;
 use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
 use kaspa_db_filler_ng::vars::vars::load_block_checkpoint;
 use kaspa_db_filler_ng::virtual_chain::process_virtual_chain::process_virtual_chain;
-use kaspa_hashes::Hash as KaspaHash;
-use kaspa_rpc_core::api::rpc::RpcApi;
-use kaspa_wrpc_client::KaspaRpcClient;
-use log::{info, warn};
-use tokio::task;
 
 #[tokio::main]
 async fn main() {
@@ -96,16 +96,14 @@ async fn start_processing(cli_args: CliArgs, kaspad: KaspaRpcClient, database: K
     task::spawn(notify_on_signals(run.clone()));
 
     let base_buffer = 3000f64;
-    let rpc_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * cli_args.batch_scale) as usize));
+    let blocks_queue = Arc::new(ArrayQueue::new((base_buffer * cli_args.batch_scale) as usize));
     let rpc_txs_queue = Arc::new(ArrayQueue::new((base_buffer * cli_args.batch_scale) as usize));
-    let db_blocks_queue = Arc::new(ArrayQueue::new((base_buffer * cli_args.batch_scale) as usize));
     let db_txs_queue = Arc::new(ArrayQueue::new((base_buffer * cli_args.batch_scale) as usize));
 
     let settings = Settings { cli_args: cli_args.clone(), net_bps, net_tps_max, checkpoint };
     let start_vcp = Arc::new(AtomicBool::new(false));
     let tasks = vec![
-        task::spawn(fetch_blocks(settings.clone(), run.clone(), kaspad.clone(), rpc_blocks_queue.clone(), rpc_txs_queue.clone())),
-        task::spawn(process_blocks(run.clone(), rpc_blocks_queue.clone(), db_blocks_queue.clone())),
+        task::spawn(fetch_blocks(settings.clone(), run.clone(), kaspad.clone(), blocks_queue.clone(), rpc_txs_queue.clone())),
         task::spawn(process_transactions(
             settings.clone(),
             run.clone(),
@@ -113,13 +111,7 @@ async fn start_processing(cli_args: CliArgs, kaspad: KaspaRpcClient, database: K
             db_txs_queue.clone(),
             database.clone(),
         )),
-        task::spawn(insert_blocks_parents(
-            settings.clone(),
-            run.clone(),
-            start_vcp.clone(),
-            db_blocks_queue.clone(),
-            database.clone(),
-        )),
+        task::spawn(process_blocks(settings.clone(), run.clone(), start_vcp.clone(), blocks_queue.clone(), database.clone())),
         task::spawn(insert_txs_ins_outs(settings.clone(), run.clone(), db_txs_queue.clone(), database.clone())),
         task::spawn(process_virtual_chain(settings.clone(), run.clone(), start_vcp.clone(), kaspad.clone(), database.clone())),
     ];

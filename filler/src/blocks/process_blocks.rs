@@ -1,65 +1,176 @@
+use std::cmp::min;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use crate::settings::settings::Settings;
+use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
-use kaspa_rpc_core::RpcBlock;
-use tokio::time::sleep;
-
+use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database::models::block::Block;
 use kaspa_database::models::block_parent::BlockParent;
 use kaspa_database::models::types::hash::Hash as SqlHash;
+use kaspa_database_mapping::mapper::mapper::KaspaDbMapper;
+use kaspa_rpc_core::RpcBlock;
+use log::{debug, info, warn};
+use tokio::time::sleep;
+
+use crate::vars::vars::save_checkpoint;
+
+struct Checkpoint {
+    block_hash: SqlHash,
+    tx_count: i64,
+}
 
 pub async fn process_blocks(
+    settings: Settings,
     run: Arc<AtomicBool>,
+    start_vcp: Arc<AtomicBool>,
     rpc_blocks_queue: Arc<ArrayQueue<(RpcBlock, bool)>>,
-    db_blocks_queue: Arc<ArrayQueue<(Block, Vec<BlockParent>, Vec<SqlHash>, bool)>>,
+    database: KaspaDbClient,
 ) {
+    const NOOP_DELETES_BEFORE_VCP: i32 = 10;
+    const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
+    const CHECKPOINT_WARN_AFTER: u64 = 5 * CHECKPOINT_SAVE_INTERVAL;
+    let batch_scale = settings.cli_args.batch_scale;
+    let batch_size = (500f64 * batch_scale) as usize;
+    let vcp_before_synced = settings.cli_args.vcp_before_synced;
+    let mapper = KaspaDbMapper::new();
+    let mut vcp_started = false;
+    let mut blocks = vec![];
+    let mut blocks_parents = vec![];
+    let mut block_hashes = vec![];
+    let mut checkpoint = None;
+    let mut last_block_datetime;
+    let mut checkpoint_last_saved = Instant::now();
+    let mut checkpoint_last_warned = Instant::now();
+    let mut last_commit_time = Instant::now();
+    let mut noop_delete_count = 0;
+
     while run.load(Ordering::Relaxed) {
-        if let Some((block, synced)) = rpc_blocks_queue.pop() {
-            let db_block = map_block(&block);
-            let db_block_parents = map_block_parents(&block);
-            let transaction_ids = map_block_transaction_ids(&block);
-            while db_blocks_queue.is_full() && run.load(Ordering::Relaxed) {
-                sleep(Duration::from_millis(100)).await;
+        if let Some((rpc_block, synced)) = rpc_blocks_queue.pop() {
+            let block = mapper.map_block(&rpc_block);
+            let block_parents = mapper.map_block_parents(&rpc_block);
+            let tx_count = mapper.count_transactions(&rpc_block);
+            if Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_SAVE_INTERVAL {
+                if let None = checkpoint {
+                    // Select the current block as checkpoint if none is set
+                    checkpoint = Some(Checkpoint { block_hash: block.hash.clone(), tx_count: tx_count as i64 })
+                }
             }
-            let _ = db_blocks_queue.push((db_block, db_block_parents, transaction_ids, synced));
+            last_block_datetime = DateTime::from_timestamp_millis(block.timestamp / 1000 * 1000).unwrap();
+            if !vcp_started {
+                block_hashes.push(block.hash.clone());
+            }
+            blocks.push(block);
+            blocks_parents.extend(block_parents);
+
+            if blocks.len() >= batch_size || (blocks.len() >= 1 && Instant::now().duration_since(last_commit_time).as_secs() > 2) {
+                let start_commit_time = Instant::now();
+                debug!("Committing {} blocks ({} parents)", blocks.len(), blocks_parents.len());
+                let blocks_len = blocks.len();
+                let blocks_inserted = insert_blocks(batch_scale, blocks, database.clone()).await;
+                let block_parents_inserted = insert_block_parents(batch_scale, blocks_parents, database.clone()).await;
+                let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
+                let bps = blocks_len as f64 / commit_time as f64 * 1000f64;
+                blocks = vec![];
+                blocks_parents = vec![];
+
+                if !vcp_started {
+                    checkpoint = None; // Clear the checkpoint block until vcp has been started
+                    let cbs_deleted = database.delete_chain_blocks(&block_hashes).await.expect("Delete chain_blocks FAILED");
+                    let tas_deleted =
+                        database.delete_transaction_acceptances(&block_hashes).await.expect("Delete transactions_acceptances FAILED");
+                    block_hashes = vec![];
+                    if (vcp_before_synced || synced) && blocks_inserted > 0 && tas_deleted == 0 && cbs_deleted == 0 {
+                        noop_delete_count += 1;
+                    } else {
+                        noop_delete_count = 0;
+                    }
+                    if noop_delete_count >= NOOP_DELETES_BEFORE_VCP {
+                        info!("Notifying virtual chain processor");
+                        start_vcp.store(true, Ordering::Relaxed);
+                        vcp_started = true;
+                        checkpoint_last_saved = Instant::now(); // Give VCP time to catch up before complaining
+                    }
+                    info!(
+                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp) [clr {} cb, {} ta]. Last block: {}",
+                        blocks_inserted, commit_time, bps, block_parents_inserted, cbs_deleted, tas_deleted, last_block_datetime
+                    );
+                } else {
+                    info!(
+                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp). Last block: {}",
+                        blocks_inserted, commit_time, bps, block_parents_inserted, last_block_datetime
+                    );
+                    if let Some(c) = checkpoint {
+                        // Check if the checkpoint candidate's transactions are present
+                        let count: i64 = database.select_tx_count(&c.block_hash).await.expect("Get tx count FAILED");
+                        if count == c.tx_count {
+                            // Next, let's check if the VCP has proccessed it
+                            let is_chain_block = database.select_is_chain_block(&c.block_hash).await.expect("Get is cb FAILED");
+                            if is_chain_block {
+                                // All set, the checkpoint block has all transactions present and are marked as a chain block by the VCP
+                                let checkpoint_string = hex::encode(c.block_hash.as_bytes());
+                                info!("Saving block_checkpoint {}", checkpoint_string);
+                                save_checkpoint(&checkpoint_string, &database).await.expect("Checkpoint saving FAILED");
+                                checkpoint_last_saved = Instant::now();
+                            }
+                            // Clear the checkpoint candidate either way
+                            checkpoint = None;
+                        } else if count > c.tx_count {
+                            panic!(
+                                "Expected {}, but found {} transactions on block {}!",
+                                &c.tx_count,
+                                count,
+                                hex::encode(c.block_hash.as_bytes())
+                            )
+                        } else if Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_WARN_AFTER
+                            && Instant::now().duration_since(checkpoint_last_warned).as_secs() > CHECKPOINT_SAVE_INTERVAL
+                        {
+                            warn!(
+                                "Still unable to save block_checkpoint {}. Expected {} txs, committed {}",
+                                hex::encode(c.block_hash.as_bytes()),
+                                &c.tx_count,
+                                count
+                            );
+                            checkpoint_last_warned = Instant::now();
+                            checkpoint = Some(c);
+                        } else {
+                            // Let's wait one round and check again
+                            checkpoint = Some(c);
+                        }
+                    }
+                }
+                last_commit_time = Instant::now();
+            }
         } else {
             sleep(Duration::from_millis(100)).await;
         }
     }
 }
 
-fn map_block(block: &RpcBlock) -> Block {
-    let verbose_data = block.verbose_data.as_ref().expect("Block verbose_data is missing");
-    Block {
-        hash: block.header.hash.into(),
-        accepted_id_merkle_root: block.header.accepted_id_merkle_root.into(),
-        difficulty: verbose_data.difficulty,
-        merge_set_blues_hashes: verbose_data.merge_set_blues_hashes.iter().map(|v| v.to_owned().into()).collect(),
-        merge_set_reds_hashes: verbose_data.merge_set_reds_hashes.iter().map(|v| v.to_owned().into()).collect(),
-        selected_parent_hash: verbose_data.selected_parent_hash.into(),
-        bits: block.header.bits as i64,
-        blue_score: block.header.blue_score as i64,
-        blue_work: block.header.blue_work.to_be_bytes_var(),
-        daa_score: block.header.daa_score as i64,
-        hash_merkle_root: block.header.hash_merkle_root.into(),
-        nonce: block.header.nonce.to_be_bytes().to_vec(),
-        pruning_point: block.header.pruning_point.into(),
-        timestamp: block.header.timestamp as i64,
-        utxo_commitment: block.header.utxo_commitment.into(),
-        version: block.header.version as i16,
+async fn insert_blocks(batch_scale: f64, values: Vec<Block>, database: KaspaDbClient) -> u64 {
+    let batch_size = min((350f64 * batch_scale) as usize, 3500); // 2^16 / fields
+    let key = "blocks";
+    let start_time = Instant::now();
+    debug!("Processing {} {}", values.len(), key);
+    let mut rows_affected = 0;
+    for batch_values in values.chunks(batch_size) {
+        rows_affected += database.insert_blocks(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    return rows_affected;
 }
 
-fn map_block_parents(block: &RpcBlock) -> Vec<BlockParent> {
-    block.header.parents_by_level[0]
-        .iter()
-        .map(|v| BlockParent { block_hash: block.header.hash.into(), parent_hash: v.to_owned().into() })
-        .collect()
-}
-
-fn map_block_transaction_ids(block: &RpcBlock) -> Vec<SqlHash> {
-    let verbose_data = block.verbose_data.as_ref().expect("Block verbose_data is missing");
-    verbose_data.transaction_ids.iter().map(|t| t.to_owned().into()).collect()
+async fn insert_block_parents(batch_scale: f64, values: Vec<BlockParent>, database: KaspaDbClient) -> u64 {
+    let batch_size = min((700f64 * batch_scale) as usize, 10000); // 2^16 / fields
+    let key = "block_parents";
+    let start_time = Instant::now();
+    debug!("Processing {} {}", values.len(), key);
+    let mut rows_affected = 0;
+    for batch_values in values.chunks(batch_size) {
+        rows_affected += database.insert_block_parents(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
+    }
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    return rows_affected;
 }

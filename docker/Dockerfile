@@ -23,9 +23,11 @@ ENV RUSTFLAGS="-C target-feature=-crt-static -C link-args=-s" \
 # Cache dependencies
 COPY "$REPO_DIR"/Cargo.toml "$REPO_DIR"/Cargo.lock ./
 COPY "$REPO_DIR"/database/Cargo.toml ./database/
+COPY "$REPO_DIR"/mapping/Cargo.toml ./mapping/
 COPY "$REPO_DIR"/filler/Cargo.toml ./filler/
-RUN mkdir database/src filler/src && \
+RUN mkdir database/src mapping/src filler/src && \
     echo "pub fn placeholder() {}" > database/src/lib.rs && \
+    echo "pub fn placeholder() {}" > mapping/src/lib.rs && \
     echo "pub fn placeholder() {}" > filler/src/lib.rs && \
     echo "fn main() {}" > filler/src/main.rs && \
     cargo build --release
