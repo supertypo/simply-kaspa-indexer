@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::settings::settings::Settings;
 use chrono::Utc;
 use crossbeam_queue::ArrayQueue;
 use kaspa_hashes::Hash as KaspaHash;
@@ -14,113 +15,146 @@ use log::{debug, trace, warn};
 use moka::sync::Cache;
 use tokio::time::sleep;
 
-use crate::kaspad::client::with_retry;
-use crate::settings::settings::Settings;
+#[derive(Debug)]
+pub struct BlockData {
+    pub block: RpcBlock,
+    pub synced: bool,
+}
 
-pub async fn fetch_blocks(
+pub struct KaspaBlocksFetcher {
     settings: Settings,
     run: Arc<AtomicBool>,
     kaspad: KaspaRpcClient,
-    blocks_queue: Arc<ArrayQueue<(RpcBlock, bool)>>,
+    blocks_queue: Arc<ArrayQueue<BlockData>>,
     txs_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
-) {
+}
+
+impl KaspaBlocksFetcher {
     const SYNC_CHECK_INTERVAL: Duration = Duration::from_secs(30);
-    let start_time = Instant::now();
-    let mut low_hash = settings.checkpoint;
-    let mut last_sync_check = Instant::now() - SYNC_CHECK_INTERVAL;
-    let mut synced = false;
-    let mut lag_count = 0;
-    let mut tip_hashes = HashSet::new();
 
-    let ttl = settings.cli_args.cache_ttl;
-    let cache_size = settings.net_bps as u64 * ttl.as_secs() * 2;
-    let block_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(ttl).max_capacity(cache_size).build();
+    pub fn new(
+        settings: Settings,
+        run: Arc<AtomicBool>,
+        kaspad: KaspaRpcClient,
+        blocks_queue: Arc<ArrayQueue<BlockData>>,
+        txs_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
+    ) -> KaspaBlocksFetcher {
+        KaspaBlocksFetcher { settings, run, kaspad, blocks_queue, txs_queue }
+    }
 
-    while run.load(Ordering::Relaxed) {
-        let last_fetch_time = Instant::now();
-        debug!("Getting blocks with low_hash {}", low_hash.to_string());
-        let response = with_retry(|| kaspad.get_blocks(Some(low_hash), true, true)).await.expect("Error when invoking GetBlocks");
-        debug!("Received {} blocks", response.blocks.len());
-        trace!("Block hashes: \n{:#?}", response.block_hashes);
+    pub async fn start(&mut self) -> () {
+        self.run.store(true, Ordering::Relaxed);
+        self.fetch_blocks().await;
+    }
 
-        if !synced && response.blocks.len() < 100 {
-            if Instant::now().duration_since(last_sync_check) >= SYNC_CHECK_INTERVAL {
-                let block_dag_info = kaspad.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
+    async fn fetch_blocks(&self) {
+        let start_time = Instant::now();
+        let mut low_hash = self.settings.checkpoint;
+        let mut last_sync_check = Instant::now() - Self::SYNC_CHECK_INTERVAL;
+        let mut synced = false;
+        let mut lag_count = 0;
+        let mut tip_hashes = HashSet::new();
+
+        let ttl = self.settings.cli_args.cache_ttl;
+        let cache_size = self.settings.net_bps as u64 * ttl.as_secs() * 2;
+        let block_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(ttl).max_capacity(cache_size).build();
+
+        while self.run.load(Ordering::Relaxed) {
+            let last_fetch_time = Instant::now();
+            debug!("Getting blocks with low_hash {}", low_hash.to_string());
+            let response = self.kaspad.get_blocks(Some(low_hash), true, true).await.expect("Error when invoking GetBlocks");
+            debug!("Received {} blocks", response.blocks.len());
+            trace!("Block hashes: \n{:#?}", response.block_hashes);
+
+            if !synced && response.blocks.len() < 100 && Instant::now().duration_since(last_sync_check) >= Self::SYNC_CHECK_INTERVAL {
+                let block_dag_info = self.kaspad.get_block_dag_info().await.expect("Error when invoking GetBlockDagInfo");
                 info!("Getting tip hashes from BlockDagInfo for sync check");
                 tip_hashes = HashSet::from_iter(block_dag_info.tip_hashes.into_iter());
                 last_sync_check = Instant::now();
             }
-        }
 
-        let blocks_len = response.blocks.len();
-        let mut txs_len = 0;
-        if blocks_len > 1 {
-            low_hash = response.blocks.last().unwrap().header.hash;
-            let mut newest_block_timestamp = 0;
-            for b in response.blocks {
-                if synced && b.header.timestamp > newest_block_timestamp {
-                    newest_block_timestamp = b.header.timestamp;
-                }
-                txs_len += b.transactions.len();
-                let block_hash = b.header.hash;
-                if !synced && tip_hashes.contains(&block_hash) {
-                    let time_to_sync = Instant::now().duration_since(start_time);
-                    info!(
-                        "\x1b[32mFound tip. Block fetcher synced! (in {}:{:0>2}:{:0>2}s)\x1b[0m",
-                        time_to_sync.as_secs() / 3600,
-                        time_to_sync.as_secs() % 3600 / 60,
-                        time_to_sync.as_secs() % 60
-                    );
-                    synced = true;
-                }
-                if block_cache.contains_key(&block_hash) {
-                    trace!("Ignoring known block hash {}", block_hash.to_string());
-                    continue;
-                }
-                let mut last_blocks_warn = Instant::now();
-                while blocks_queue.is_full() && run.load(Ordering::Relaxed) {
-                    if Instant::now().duration_since(last_blocks_warn).as_secs() >= 30 {
-                        warn!("RPC blocks queue is full");
-                        last_blocks_warn = Instant::now();
+            let blocks_len = response.blocks.len();
+            let mut txs_len = 0;
+            if blocks_len > 1 {
+                low_hash = response.blocks.last().unwrap().header.hash;
+                let mut newest_block_timestamp = 0;
+                for b in response.blocks {
+                    if synced && b.header.timestamp > newest_block_timestamp {
+                        newest_block_timestamp = b.header.timestamp;
                     }
-                    sleep(Duration::from_secs(1)).await;
-                }
-                let mut last_transactions_warn = Instant::now();
-                while txs_queue.is_full() && run.load(Ordering::Relaxed) {
-                    if Instant::now().duration_since(last_transactions_warn).as_secs() >= 30 {
-                        warn!("RPC transactions queue is full");
-                        last_transactions_warn = Instant::now();
+                    txs_len += b.transactions.len();
+                    let block_hash = b.header.hash;
+                    if !synced && tip_hashes.contains(&block_hash) {
+                        let time_to_sync = Instant::now().duration_since(start_time);
+                        info!(
+                            "\x1b[32mFound tip. Block fetcher synced! (in {}:{:0>2}:{:0>2}s)\x1b[0m",
+                            time_to_sync.as_secs() / 3600,
+                            time_to_sync.as_secs() % 3600 / 60,
+                            time_to_sync.as_secs() % 60
+                        );
+                        synced = true;
                     }
-                    sleep(Duration::from_secs(1)).await;
+                    if block_cache.contains_key(&block_hash) {
+                        trace!("Ignoring known block hash {}", block_hash.to_string());
+                        continue;
+                    }
+                    self.blocks_queue_space().await;
+                    self.txs_queue_space().await;
+                    let block_data =
+                        BlockData { block: RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }, synced };
+                    self.blocks_queue.push(block_data).expect("Failed to enqueue block data");
+                    self.txs_queue.push(b.transactions).expect("Failed to enqueue transactions");
+                    block_cache.insert(block_hash, ());
                 }
-                blocks_queue
-                    .push((RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data }, synced))
-                    .unwrap();
-                txs_queue.push(b.transactions).unwrap();
-                block_cache.insert(block_hash, ());
+                lag_count = self.check_lag(synced, lag_count, newest_block_timestamp);
             }
-            if synced {
-                let skew_seconds = Utc::now().timestamp() - newest_block_timestamp as i64 / 1000;
-                if skew_seconds >= 30 {
-                    lag_count += 1;
-                    if lag_count >= 15 {
-                        warn!("\x1b[33mBlock fetcher is lagging behind. Newest block is {} seconds old\x1b[0m", skew_seconds);
-                        lag_count = 0;
-                    }
+            if blocks_len < 50 {
+                sleep(Duration::from_secs(2)).await;
+            }
+            let fetch_time = Instant::now().duration_since(last_fetch_time).as_millis() as f64 / 1000f64;
+            debug!(
+                "Fetch blocks bps: {:.1}, tps: {:.1} ({:.1} txs/block)",
+                blocks_len as f64 / fetch_time,
+                txs_len as f64 / fetch_time,
+                txs_len as f64 / blocks_len as f64
+            );
+        }
+    }
+
+    async fn txs_queue_space(&self) {
+        let mut last_transactions_warn = Instant::now();
+        while self.txs_queue.is_full() && self.run.load(Ordering::Relaxed) {
+            if Instant::now().duration_since(last_transactions_warn).as_secs() >= 30 {
+                warn!("RPC transactions queue is full");
+                last_transactions_warn = Instant::now();
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    async fn blocks_queue_space(&self) {
+        let mut last_blocks_warn = Instant::now();
+        while self.blocks_queue.is_full() && self.run.load(Ordering::Relaxed) {
+            if Instant::now().duration_since(last_blocks_warn).as_secs() >= 30 {
+                warn!("RPC blocks queue is full");
+                last_blocks_warn = Instant::now();
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    fn check_lag(&self, synced: bool, lag_count: i32, newest_block_timestamp: u64) -> i32 {
+        if synced {
+            let skew_seconds = Utc::now().timestamp() - newest_block_timestamp as i64 / 1000;
+            if skew_seconds >= 30 {
+                return if lag_count >= 15 {
+                    warn!("\x1b[33mBlock fetcher is lagging behind. Newest block is {} seconds old\x1b[0m", skew_seconds);
+                    0
                 } else {
-                    lag_count = 0;
-                }
+                    lag_count + 1
+                };
             }
         }
-        if blocks_len < 50 {
-            sleep(Duration::from_secs(2)).await;
-        }
-        let fetch_time = Instant::now().duration_since(last_fetch_time).as_millis() as f64 / 1000f64;
-        debug!(
-            "Fetch blocks bps: {:.1}, tps: {:.1} ({:.1} txs/block)",
-            blocks_len as f64 / fetch_time,
-            txs_len as f64 / fetch_time,
-            txs_len as f64 / blocks_len as f64
-        );
+        0
     }
 }

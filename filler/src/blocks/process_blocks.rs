@@ -3,7 +3,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::blocks::fetch_blocks::BlockData;
 use crate::settings::settings::Settings;
+use crate::vars::vars::save_checkpoint;
 use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
 use kaspa_database::client::client::KaspaDbClient;
@@ -11,11 +13,8 @@ use kaspa_database::models::block::Block;
 use kaspa_database::models::block_parent::BlockParent;
 use kaspa_database::models::types::hash::Hash as SqlHash;
 use kaspa_database_mapping::mapper::mapper::KaspaDbMapper;
-use kaspa_rpc_core::RpcBlock;
 use log::{debug, info, warn};
 use tokio::time::sleep;
-
-use crate::vars::vars::save_checkpoint;
 
 struct Checkpoint {
     block_hash: SqlHash,
@@ -26,7 +25,7 @@ pub async fn process_blocks(
     settings: Settings,
     run: Arc<AtomicBool>,
     start_vcp: Arc<AtomicBool>,
-    rpc_blocks_queue: Arc<ArrayQueue<(RpcBlock, bool)>>,
+    rpc_blocks_queue: Arc<ArrayQueue<BlockData>>,
     database: KaspaDbClient,
     mapper: KaspaDbMapper,
 ) {
@@ -48,10 +47,11 @@ pub async fn process_blocks(
     let mut noop_delete_count = 0;
 
     while run.load(Ordering::Relaxed) {
-        if let Some((rpc_block, synced)) = rpc_blocks_queue.pop() {
-            let block = mapper.map_block(&rpc_block);
-            let block_parents = mapper.map_block_parents(&rpc_block);
-            let tx_count = mapper.count_block_transactions(&rpc_block);
+        if let Some(block_data) = rpc_blocks_queue.pop() {
+            let synced = block_data.synced;
+            let block = mapper.map_block(&block_data.block);
+            let block_parents = mapper.map_block_parents(&block_data.block);
+            let tx_count = mapper.count_block_transactions(&block_data.block);
             if Instant::now().duration_since(checkpoint_last_saved).as_secs() > CHECKPOINT_SAVE_INTERVAL {
                 if let None = checkpoint {
                     // Select the current block as checkpoint if none is set
@@ -159,7 +159,7 @@ async fn insert_blocks(batch_scale: f64, values: Vec<Block>, database: KaspaDbCl
         rows_affected += database.insert_blocks(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
-    return rows_affected;
+    rows_affected
 }
 
 async fn insert_block_parents(batch_scale: f64, values: Vec<BlockParent>, database: KaspaDbClient) -> u64 {
@@ -172,5 +172,5 @@ async fn insert_block_parents(batch_scale: f64, values: Vec<BlockParent>, databa
         rows_affected += database.insert_block_parents(batch_values).await.expect(format!("Insert {} FAILED", key).as_str());
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
-    return rows_affected;
+    rows_affected
 }

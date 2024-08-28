@@ -13,7 +13,7 @@ use tokio::task;
 
 use kaspa_database::client::client::KaspaDbClient;
 use kaspa_database_mapping::mapper::mapper::KaspaDbMapper;
-use kaspa_db_filler_ng::blocks::fetch_blocks::fetch_blocks;
+use kaspa_db_filler_ng::blocks::fetch_blocks::KaspaBlocksFetcher;
 use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
 use kaspa_db_filler_ng::cli::cli_args::{get_cli_args, CliArgs};
 use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
@@ -103,8 +103,12 @@ async fn start_processing(cli_args: CliArgs, kaspad: KaspaRpcClient, database: K
 
     let settings = Settings { cli_args: cli_args.clone(), net_bps, net_tps_max, checkpoint };
     let start_vcp = Arc::new(AtomicBool::new(false));
+
+    let mut block_fetcher =
+        KaspaBlocksFetcher::new(settings.clone(), run.clone(), kaspad.clone(), blocks_queue.clone(), txs_queue.clone());
+
     let tasks = vec![
-        task::spawn(fetch_blocks(settings.clone(), run.clone(), kaspad.clone(), blocks_queue.clone(), txs_queue.clone())),
+        task::spawn(async move { block_fetcher.start().await }),
         task::spawn(process_blocks(
             settings.clone(),
             run.clone(),
