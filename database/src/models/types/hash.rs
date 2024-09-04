@@ -39,9 +39,9 @@ impl PgHasArrayType for Hash {
 }
 
 impl Encode<'_, Postgres> for Hash {
-    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> IsNull {
+    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, Box<dyn std::error::Error + Send + Sync + 'static>> {
         buf.extend_from_slice(&self.0.as_bytes());
-        IsNull::No
+        Ok(IsNull::No)
     }
 }
 

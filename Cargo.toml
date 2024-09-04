@@ -15,19 +15,19 @@ overflow-checks = true
 panic = "abort"
 
 [workspace.package]
-rust-version = "1.77.2"
+rust-version = "1.80.1"
 authors = ["suprtypo@pm.me"]
 license-file = "LICENSE"
 edition = "2021" # Rust edition
 
 [workspace.dependencies]
 kaspa-database = { path = "database" }
-kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.14.1" }
-kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.14.1" }
-kaspa-hashes = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.14.1" }
+kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.15.1-rc1" }
+kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.15.1-rc1" }
+kaspa-hashes = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v0.15.1-rc1" }
 tokio = { version = "1.37.0", features = ["default", "signal"] }
 futures-util = { version = "0.3.29", default-features = false }
-sqlx = { version = "0.7.4", features = ["runtime-tokio", "postgres"] }
+sqlx = { version = "0.8.2", features = ["runtime-tokio", "postgres"] }
 crossbeam-queue = "0.3.11"
 moka = { version = "0.12.7", features = ["sync"] }
 itertools = "0.13.0"
