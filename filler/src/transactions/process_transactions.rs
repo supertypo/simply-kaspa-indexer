@@ -92,7 +92,7 @@ async fn map_transaction(
         transaction_id: verbose_data.transaction_id.into(),
         subnetwork_id: subnetwork_map.get(&t.subnetwork_id.to_string()).unwrap().clone(),
         hash: verbose_data.hash.into(),
-        mass: verbose_data.mass as i32,
+        mass: verbose_data.compute_mass as i32,
         payload: if settings.cli_args.extra_data { t.payload } else { vec![] },
         block_time: verbose_data.block_time as i64,
     };
