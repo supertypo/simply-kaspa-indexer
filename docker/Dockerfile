@@ -3,7 +3,7 @@
 ##
 FROM rust:1.81-alpine AS builder
 
-ARG REPO_DIR
+ARG REPO_DIR=.
 
 RUN apk --no-cache add \
   musl-dev \
