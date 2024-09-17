@@ -60,16 +60,18 @@ pub async fn insert_txs_ins_outs(
                 let tx_handle = task::spawn(insert_txs(batch_scale, transactions, database.clone()));
                 let tx_inputs_handle = task::spawn(insert_tx_inputs(batch_scale, tx_inputs, database.clone()));
                 let tx_outputs_handle = task::spawn(insert_tx_outputs(batch_scale, tx_outputs, database.clone()));
+                let mut rows_affected_tx_addresses = 0;
+                if !settings.cli_args.skip_resolving_addresses {
+                    let tx_output_addr_handle = task::spawn(insert_output_tx_addr(batch_scale, tx_addresses, database.clone()));
+                    rows_affected_tx_addresses += tx_output_addr_handle.await.unwrap()
+                }
                 let rows_affected_tx = tx_handle.await.unwrap();
                 let rows_affected_tx_inputs = tx_inputs_handle.await.unwrap();
                 let rows_affected_tx_outputs = tx_outputs_handle.await.unwrap();
 
-                let mut rows_affected_tx_addresses = 0;
                 if !settings.cli_args.skip_resolving_addresses {
                     // ^Input address resolving can only happen after the transaction + inputs + outputs are committed
                     rows_affected_tx_addresses += insert_input_tx_addr(batch_scale, transaction_ids, database.clone()).await;
-                    // ^Persisting inputs and outputs concurrently will deadlock
-                    rows_affected_tx_addresses += insert_output_tx_addr(batch_scale, tx_addresses, database.clone()).await;
                 }
 
                 // ^All other transaction details needs to be committed before linking to blocks, to avoid incomplete checkpoints
