@@ -34,13 +34,14 @@ pub async fn process_virtual_chain(
         }
         debug!("Getting virtual chain from start_hash {}", start_hash.to_string());
         let res = with_retry(|| kaspad.get_virtual_chain_from_block(start_hash, true)).await.expect("GetVirtualChainFromBlock failed");
+        let added_blocks_count = res.added_chain_block_hashes.len();
 
         if !res.accepted_transaction_ids.is_empty() {
             let last_accepting = res.accepted_transaction_ids.last().unwrap().accepting_block_hash;
             let timestamp = with_retry(|| kaspad.get_block(last_accepting, false)).await.expect("GetBlock failed").header.timestamp;
             update_txs(batch_scale, &res.removed_chain_block_hashes, &res.accepted_transaction_ids, timestamp, &database).await;
             update_chain_blocks(batch_scale, &res.added_chain_block_hashes, &res.removed_chain_block_hashes, &database).await;
-            if !synced {
+            if !synced && added_blocks_count < 200 { // Default batch size is 1800 on 1 bps
                 log_time_to_synced(start_time);
                 synced = true;
             }
