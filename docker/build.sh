@@ -25,7 +25,7 @@ fi
 echo "============================================================="
 echo " Pulling $REPO_URL"
 echo "============================================================="
-(cd "$REPO_DIR" && git fetch && git checkout $TAG > /dev/null)
+(cd "$REPO_DIR" && git fetch && git checkout $TAG > /dev/null && (git pull 2>/dev/null | true))
 
 tag=$(cd "$REPO_DIR" && git log -n1 --format="%cs.%h")
 
