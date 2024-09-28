@@ -33,7 +33,6 @@ CREATE TABLE block_parent
     parent_hash BYTEA,
     PRIMARY KEY (block_hash, parent_hash)
 );
-CREATE INDEX ON block_parent (block_hash);
 CREATE INDEX ON block_parent (parent_hash);
 
 
@@ -76,7 +75,6 @@ CREATE TABLE blocks_transactions
     transaction_id BYTEA,
     PRIMARY KEY (block_hash, transaction_id)
 );
-CREATE INDEX ON blocks_transactions (block_hash);
 CREATE INDEX ON blocks_transactions (transaction_id);
 
 
@@ -90,7 +88,6 @@ CREATE TABLE transactions_inputs
     sig_op_count            SMALLINT,
     PRIMARY KEY (transaction_id, index)
 );
-CREATE INDEX ON transactions_inputs (transaction_id);
 
 
 CREATE TABLE transactions_outputs
@@ -102,7 +99,6 @@ CREATE TABLE transactions_outputs
     script_public_key_address VARCHAR,
     PRIMARY KEY (transaction_id, index)
 );
-CREATE INDEX ON transactions_outputs (transaction_id);
 
 
 CREATE TABLE addresses_transactions
@@ -112,5 +108,4 @@ CREATE TABLE addresses_transactions
     block_time     BIGINT,
     PRIMARY KEY (address, transaction_id)
 );
-CREATE INDEX ON addresses_transactions (address);
 CREATE INDEX ON addresses_transactions (block_time DESC);

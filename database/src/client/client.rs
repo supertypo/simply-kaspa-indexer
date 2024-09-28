@@ -25,7 +25,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 2;
+    const SCHEMA_VERSION: u8 = 3;
 
     pub async fn new(url: &String) -> Result<KaspaDbClient, Error> {
         Self::new_with_args(url, 10).await
@@ -52,20 +52,30 @@ impl KaspaDbClient {
     pub async fn create_schema(&self, upgrade_db: bool) -> Result<(), Error> {
         match &self.select_var("schema_version").await {
             Ok(v) => {
-                let version = v.parse::<u8>().expect("Existing schema is unknown");
+                let mut version = v.parse::<u8>().expect("Existing schema is unknown");
                 if version < Self::SCHEMA_VERSION {
-                    if version == 1 && Self::SCHEMA_VERSION == 2 {
+                    if version == 1 {
                         let v1_v2_ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v1_to_v2.sql"));
                         if upgrade_db {
                             warn!("Upgrading schema from v1 to v2, this may take a while...");
                             query::misc::execute_ddl(v1_v2_ddl, &self.pool).await?;
-                            self.upsert_var("schema_version", &Self::SCHEMA_VERSION.to_string()).await?;
+                            self.upsert_var("schema_version", &2.to_string()).await?;
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            version = 2;
                         } else {
                             panic!("\n{}\nFound outdated schema v1. Set flag '-u' to upgrade, or apply manually ^", v1_v2_ddl)
                         }
-                    } else {
-                        panic!("Found outdated & unsupported schema v{}", version)
+                    }
+                    if version == 2 {
+                        let v2_v3_ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v2_to_v3.sql"));
+                        if upgrade_db {
+                            warn!("Upgrading schema from v2 to v3...");
+                            query::misc::execute_ddl(v2_v3_ddl, &self.pool).await?;
+                            self.upsert_var("schema_version", &3.to_string()).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                        } else {
+                            panic!("\n{}\nFound outdated schema v2. Set flag '-u' to upgrade, or apply manually ^", v2_v3_ddl)
+                        }
                     }
                 } else if version > Self::SCHEMA_VERSION {
                     panic!("Found newer & unsupported schema v{}", version)
