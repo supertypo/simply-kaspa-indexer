@@ -74,7 +74,7 @@ impl KaspaDbClient {
                             self.upsert_var("schema_version", &3.to_string()).await?;
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
                         } else {
-                            panic!("\n{}\nFound outdated schema v2. Set flag '-u' to upgrade, or apply manually ^", v2_v3_ddl)
+                            warn!("\n{}\nFound outdated schema v2. Set flag '-u' to upgrade, or apply manually ^", v2_v3_ddl)
                         }
                     }
                 } else if version > Self::SCHEMA_VERSION {
