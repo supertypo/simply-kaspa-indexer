@@ -3,7 +3,7 @@ use std::time::Duration;
 
 #[derive(Clone)]
 pub struct CliArgs {
-    pub rpc_url: String,
+    pub rpc_url: Option<String>,
     pub network: String,
     pub database_url: String,
     pub log_level: String,
@@ -21,7 +21,7 @@ pub struct CliArgs {
 pub fn get_cli_args() -> CliArgs {
     let matches = get_cli_matches();
     CliArgs {
-        rpc_url: matches.get_one::<String>("rpc-url").expect("Missing rpc-url").to_owned(),
+        rpc_url: matches.get_one::<String>("rpc-url").map(|v| v.to_owned()),
         network: matches.get_one::<String>("network").expect("Missing network").to_owned(),
         database_url: matches.get_one::<String>("database-url").expect("Missing database-url").to_owned(),
         log_level: matches.get_one::<String>("log-level").expect("Missing log-level").to_owned(),
@@ -44,8 +44,7 @@ fn get_cli_matches() -> ArgMatches {
             Arg::new("rpc-url")
                 .short('s')
                 .long("rpc-url")
-                .help("The url to a kaspad instance")
-                .default_value("ws://127.0.0.1:17110")
+                .help("The url to a kaspad instance, e.g 'ws://localhost:17110'. Leave empty to use the Kaspa PNN")
                 .action(clap::ArgAction::Set),
         )
         .arg(

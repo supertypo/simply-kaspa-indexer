@@ -41,7 +41,8 @@ pub async fn process_virtual_chain(
             let timestamp = with_retry(|| kaspad.get_block(last_accepting, false)).await.expect("GetBlock failed").header.timestamp;
             update_txs(batch_scale, &res.removed_chain_block_hashes, &res.accepted_transaction_ids, timestamp, &database).await;
             update_chain_blocks(batch_scale, &res.added_chain_block_hashes, &res.removed_chain_block_hashes, &database).await;
-            if !synced && added_blocks_count < 200 { // Default batch size is 1800 on 1 bps
+            // Default batch size is 1800 on 1 bps:
+            if !synced && added_blocks_count < 200 {
                 log_time_to_synced(start_time);
                 synced = true;
             }

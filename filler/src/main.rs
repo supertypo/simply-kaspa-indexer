@@ -49,7 +49,7 @@ async fn main() {
     }
     database.create_schema(cli_args.upgrade_db).await.expect("Unable to create schema");
 
-    let kaspad = connect_kaspad(&cli_args.rpc_url, &cli_args.network).await.expect("Kaspad connection FAILED");
+    let kaspad = connect_kaspad(&cli_args).await.expect("Kaspad connection FAILED");
 
     start_processing(cli_args, kaspad, database).await.expect("Unreachable");
 }
