@@ -52,14 +52,13 @@ impl KaspaDbClient {
     pub async fn create_schema(&self, upgrade_db: bool) -> Result<(), Error> {
         match &self.select_var("schema_version").await {
             Ok(v) => {
-                let mut version = v.parse::<u8>().expect("Existing schema is unknown");
+                let mut version = v.parse::<u8>().expect("Expected valid schema version");
                 if version < Self::SCHEMA_VERSION {
                     if version == 1 {
                         let v1_v2_ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v1_to_v2.sql"));
                         if upgrade_db {
                             warn!("Upgrading schema from v1 to v2, this may take a while...");
                             query::misc::execute_ddl(v1_v2_ddl, &self.pool).await?;
-                            self.upsert_var("schema_version", &2.to_string()).await?;
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
                             version = 2;
                         } else {
@@ -71,23 +70,21 @@ impl KaspaDbClient {
                         if upgrade_db {
                             warn!("Upgrading schema from v2 to v3...");
                             query::misc::execute_ddl(v2_v3_ddl, &self.pool).await?;
-                            self.upsert_var("schema_version", &3.to_string()).await?;
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            version = 3;
                         } else {
-                            warn!("\n{}\nFound outdated schema v2. Set flag '-u' to upgrade, or apply manually ^", v2_v3_ddl)
+                            panic!("\n{}\nFound outdated schema v2. Set flag '-u' to upgrade, or apply manually ^", v2_v3_ddl)
                         }
                     }
                 } else if version > Self::SCHEMA_VERSION {
                     panic!("Found newer & unsupported schema v{}", version)
-                } else {
-                    info!("Existing schema v{} is up to date", version)
                 }
+                info!("Schema v{} is up to date", version)
             }
             Err(_) => {
                 warn!("Applying schema v{}", Self::SCHEMA_VERSION);
                 query::misc::execute_ddl(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/up.sql")), &self.pool)
                     .await?;
-                self.upsert_var("schema_version", &Self::SCHEMA_VERSION.to_string()).await?;
                 info!("\x1b[32mSchema applied successfully\x1b[0m");
             }
         };
