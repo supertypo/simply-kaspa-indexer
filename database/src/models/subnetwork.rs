@@ -1,6 +1,6 @@
 #[derive(Clone)]
 pub struct Subnetwork {
-    pub id: i16,
+    pub id: i32,
     pub subnetwork_id: String,
 }
 

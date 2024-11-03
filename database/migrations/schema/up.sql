@@ -3,7 +3,7 @@ CREATE TABLE vars
     key   VARCHAR(255) PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT INTO vars (key, value) VALUES ('schema_version', '3');
+INSERT INTO vars (key, value) VALUES ('schema_version', '4');
 
 
 CREATE TABLE blocks
@@ -45,7 +45,7 @@ CREATE TABLE chain_blocks
 
 CREATE TABLE subnetworks
 (
-    id            SMALLSERIAL PRIMARY KEY,
+    id            SERIAL PRIMARY KEY,
     subnetwork_id VARCHAR(40) NOT NULL
 );
 
@@ -53,7 +53,7 @@ CREATE TABLE subnetworks
 CREATE TABLE transactions
 (
     transaction_id BYTEA PRIMARY KEY,
-    subnetwork_id  SMALLINT,
+    subnetwork_id  INTEGER,
     hash           BYTEA,
     mass           INTEGER,
     payload        BYTEA,

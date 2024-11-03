@@ -12,7 +12,7 @@ use crate::models::transaction_input::TransactionInput;
 use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
 
-pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i16, Error> {
+pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i32, Error> {
     sqlx::query("INSERT INTO subnetworks (subnetwork_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id")
         .bind(&subnetwork_id)
         .fetch_one(pool)

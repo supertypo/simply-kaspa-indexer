@@ -19,7 +19,7 @@ use kaspa_database::models::transaction::Transaction;
 use kaspa_database::models::transaction_input::TransactionInput;
 use kaspa_database::models::transaction_output::TransactionOutput;
 
-type SubnetworkMap = HashMap<String, i16>;
+type SubnetworkMap = HashMap<String, i32>;
 
 pub async fn process_transactions(
     settings: Settings,

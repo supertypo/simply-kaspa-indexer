@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use log::{debug, info, warn, LevelFilter};
+use log::{debug, info, trace, warn, LevelFilter};
 use regex::Regex;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Error, Pool, Postgres};
@@ -25,7 +25,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 3;
+    const SCHEMA_VERSION: u8 = 4;
 
     pub async fn new(url: &String) -> Result<KaspaDbClient, Error> {
         Self::new_with_args(url, 10).await
@@ -62,7 +62,7 @@ impl KaspaDbClient {
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
                             version = 2;
                         } else {
-                            panic!("\n{}\nFound outdated schema v1. Set flag '-u' to upgrade, or apply manually ^", v1_v2_ddl)
+                            panic!("\n{v1_v2_ddl}\nFound outdated schema v1. Set flag '-u' to upgrade, or apply manually ^", )
                         }
                     }
                     if version == 2 {
@@ -73,11 +73,28 @@ impl KaspaDbClient {
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
                             version = 3;
                         } else {
-                            panic!("\n{}\nFound outdated schema v2. Set flag '-u' to upgrade, or apply manually ^", v2_v3_ddl)
+                            panic!("\n{v2_v3_ddl}\nFound outdated schema v2. Set flag '-u' to upgrade, or apply manually ^", )
                         }
                     }
-                } else if version > Self::SCHEMA_VERSION {
-                    panic!("Found newer & unsupported schema v{}", version)
+                    if version == 3 {
+                        let v3_v4_ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v3_to_v4.sql"));
+                        if upgrade_db {
+                            warn!("Upgrading schema from v3 to v4...");
+                            query::misc::execute_ddl(v3_v4_ddl, &self.pool).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            version = 4;
+                        } else {
+                            panic!("\n{v3_v4_ddl}\nFound outdated schema v3. Set flag '-u' to upgrade, or apply manually ^", )
+                        }
+                    }
+                    trace!("Schema version is v{version}")
+                }
+                version = self.select_var("schema_version").await?.parse::<u8>().unwrap();
+                if version < Self::SCHEMA_VERSION {
+                    panic!("Found old & unsupported schema v{version}", )
+                }
+                if version > Self::SCHEMA_VERSION {
+                    panic!("Found newer & unsupported schema v{version}", )
                 }
                 info!("Schema v{} is up to date", version)
             }
@@ -111,7 +128,7 @@ impl KaspaDbClient {
         query::select::select_is_chain_block(block_hash, &self.pool).await
     }
 
-    pub async fn insert_subnetwork(&self, subnetwork_id: &String) -> Result<i16, Error> {
+    pub async fn insert_subnetwork(&self, subnetwork_id: &String) -> Result<i32, Error> {
         query::insert::insert_subnetwork(subnetwork_id, &self.pool).await
     }
 
