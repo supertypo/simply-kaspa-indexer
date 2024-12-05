@@ -5,7 +5,6 @@ use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
 use crate::models::block_parent::BlockParent;
 use crate::models::block_transaction::BlockTransaction;
-use crate::models::chain_block::ChainBlock;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::transaction_input::TransactionInput;
@@ -168,19 +167,6 @@ pub async fn insert_block_transactions(block_transactions: &[BlockTransaction], 
     for block_transaction in block_transactions {
         query = query.bind(&block_transaction.block_hash);
         query = query.bind(&block_transaction.transaction_id);
-    }
-    Ok(query.execute(pool).await?.rows_affected())
-}
-
-pub async fn insert_chain_blocks(chain_blocks: &[ChainBlock], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 1;
-    let sql = format!(
-        "INSERT INTO chain_blocks (block_hash) VALUES {} ON CONFLICT DO NOTHING",
-        generate_placeholders(chain_blocks.len(), COLS)
-    );
-    let mut query = sqlx::query(&sql);
-    for cb in chain_blocks {
-        query = query.bind(&cb.block_hash);
     }
     Ok(query.execute(pool).await?.rows_affected())
 }

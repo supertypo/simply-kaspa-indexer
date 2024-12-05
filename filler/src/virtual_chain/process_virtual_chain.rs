@@ -10,7 +10,6 @@ use tokio::time::sleep;
 
 use crate::kaspad::client::with_retry;
 use crate::settings::settings::Settings;
-use crate::virtual_chain::update_chain_blocks::update_chain_blocks;
 use crate::virtual_chain::update_transactions::update_txs;
 
 pub async fn process_virtual_chain(
@@ -40,7 +39,6 @@ pub async fn process_virtual_chain(
             let last_accepting = res.accepted_transaction_ids.last().unwrap().accepting_block_hash;
             let timestamp = with_retry(|| kaspad.get_block(last_accepting, false)).await.expect("GetBlock failed").header.timestamp;
             update_txs(batch_scale, &res.removed_chain_block_hashes, &res.accepted_transaction_ids, timestamp, &database).await;
-            update_chain_blocks(batch_scale, &res.added_chain_block_hashes, &res.removed_chain_block_hashes, &database).await;
             // Default batch size is 1800 on 1 bps:
             if !synced && added_blocks_count < 200 {
                 log_time_to_synced(start_time);

@@ -11,7 +11,6 @@ use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
 use crate::models::block_parent::BlockParent;
 use crate::models::block_transaction::BlockTransaction;
-use crate::models::chain_block::ChainBlock;
 use crate::models::subnetwork::Subnetwork;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
@@ -168,16 +167,8 @@ impl KaspaDbClient {
         query::insert::insert_transaction_acceptances(transaction_acceptances, &self.pool).await
     }
 
-    pub async fn insert_chain_blocks(&self, chain_blocks: &[ChainBlock]) -> Result<u64, Error> {
-        query::insert::insert_chain_blocks(chain_blocks, &self.pool).await
-    }
-
     pub async fn upsert_var(&self, key: &str, value: &String) -> Result<u64, Error> {
         query::upsert::upsert_var(key, value, &self.pool).await
-    }
-
-    pub async fn delete_chain_blocks(&self, block_hashes: &[Hash]) -> Result<u64, Error> {
-        query::delete::delete_chain_blocks(block_hashes, &self.pool).await
     }
 
     pub async fn delete_transaction_acceptances(&self, block_hashes: &[Hash]) -> Result<u64, Error> {

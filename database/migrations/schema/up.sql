@@ -37,12 +37,6 @@ CREATE TABLE block_parent
 CREATE INDEX ON block_parent (parent_hash);
 
 
-CREATE TABLE chain_blocks
-(
-    block_hash BYTEA PRIMARY KEY
-);
-
-
 CREATE TABLE subnetworks
 (
     id            SERIAL PRIMARY KEY,

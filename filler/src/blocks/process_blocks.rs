@@ -78,11 +78,10 @@ pub async fn process_blocks(
 
                 if !vcp_started {
                     checkpoint = None; // Clear the checkpoint block until vcp has been started
-                    let cbs_deleted = database.delete_chain_blocks(&block_hashes).await.expect("Delete chain_blocks FAILED");
                     let tas_deleted =
                         database.delete_transaction_acceptances(&block_hashes).await.expect("Delete transactions_acceptances FAILED");
                     block_hashes = vec![];
-                    if (vcp_before_synced || synced) && blocks_inserted > 0 && tas_deleted == 0 && cbs_deleted == 0 {
+                    if (vcp_before_synced || synced) && blocks_inserted > 0 && tas_deleted == 0 {
                         noop_delete_count += 1;
                     } else {
                         noop_delete_count = 0;
@@ -94,8 +93,8 @@ pub async fn process_blocks(
                         checkpoint_last_saved = Instant::now(); // Give VCP time to catch up before complaining
                     }
                     info!(
-                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp) [clr {} cb, {} ta]. Last block: {}",
-                        blocks_inserted, commit_time, bps, block_parents_inserted, cbs_deleted, tas_deleted, last_block_datetime
+                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp) [clr {} ta]. Last block: {}",
+                        blocks_inserted, commit_time, bps, block_parents_inserted, tas_deleted, last_block_datetime
                     );
                 } else {
                     info!(
