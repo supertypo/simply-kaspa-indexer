@@ -86,16 +86,16 @@ pub async fn process_blocks(
                     } else {
                         noop_delete_count = 0;
                     }
+                    info!(
+                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp) [clr {} ta]. Last block: {}",
+                        blocks_inserted, commit_time, bps, block_parents_inserted, tas_deleted, last_block_datetime
+                    );
                     if noop_delete_count >= NOOP_DELETES_BEFORE_VCP {
                         info!("Notifying virtual chain processor");
                         start_vcp.store(true, Ordering::Relaxed);
                         vcp_started = true;
                         checkpoint_last_saved = Instant::now(); // Give VCP time to catch up before complaining
                     }
-                    info!(
-                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp) [clr {} ta]. Last block: {}",
-                        blocks_inserted, commit_time, bps, block_parents_inserted, tas_deleted, last_block_datetime
-                    );
                 } else {
                     info!(
                         "Committed {} new blocks in {}ms ({:.1} bps, {} bp). Last block: {}",
