@@ -9,7 +9,6 @@ pub fn map_block(block: &RpcBlock) -> SqlBlock {
     SqlBlock {
         hash: block.header.hash.into(),
         accepted_id_merkle_root: block.header.accepted_id_merkle_root.into(),
-        difficulty: verbose_data.difficulty,
         merge_set_blues_hashes: verbose_data.merge_set_blues_hashes.iter().map(|v| v.to_owned().into()).collect(),
         merge_set_reds_hashes: verbose_data.merge_set_reds_hashes.iter().map(|v| v.to_owned().into()).collect(),
         selected_parent_hash: verbose_data.selected_parent_hash.into(),

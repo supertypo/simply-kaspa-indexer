@@ -20,11 +20,11 @@ pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) ->
 }
 
 pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 16;
+    const COLS: usize = 15;
     let mut tx = pool.begin().await?;
 
     let sql = format!(
-        "INSERT INTO blocks (hash, accepted_id_merkle_root, difficulty, merge_set_blues_hashes, merge_set_reds_hashes,
+        "INSERT INTO blocks (hash, accepted_id_merkle_root, merge_set_blues_hashes, merge_set_reds_hashes,
             selected_parent_hash, bits, blue_score, blue_work, daa_score, hash_merkle_root, nonce, pruning_point,
             timestamp, utxo_commitment, version
         ) VALUES {} ON CONFLICT DO NOTHING",
@@ -35,7 +35,6 @@ pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u6
     for block in blocks {
         query = query.bind(&block.hash);
         query = query.bind(&block.accepted_id_merkle_root);
-        query = query.bind(&block.difficulty);
         query = query.bind((!&block.merge_set_blues_hashes.is_empty()).then_some(&block.merge_set_blues_hashes));
         query = query.bind((!&block.merge_set_reds_hashes.is_empty()).then_some(&block.merge_set_reds_hashes));
         query = query.bind(&block.selected_parent_hash);

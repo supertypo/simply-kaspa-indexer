@@ -3,14 +3,13 @@ CREATE TABLE vars
     key   VARCHAR(255) PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT INTO vars (key, value) VALUES ('schema_version', '4');
+INSERT INTO vars (key, value) VALUES ('schema_version', '5');
 
 
 CREATE TABLE blocks
 (
     hash                    BYTEA PRIMARY KEY,
     accepted_id_merkle_root BYTEA,
-    difficulty              DOUBLE PRECISION,
     merge_set_blues_hashes  BYTEA[],
     merge_set_reds_hashes   BYTEA[],
     selected_parent_hash    BYTEA,

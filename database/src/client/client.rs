@@ -24,7 +24,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 4;
+    const SCHEMA_VERSION: u8 = 5;
 
     pub async fn new(url: &String) -> Result<KaspaDbClient, Error> {
         Self::new_with_args(url, 10).await
@@ -61,7 +61,7 @@ impl KaspaDbClient {
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
                             version = 2;
                         } else {
-                            panic!("\n{v1_v2_ddl}\nFound outdated schema v1. Set flag '-u' to upgrade, or apply manually ^", )
+                            panic!("\n{v1_v2_ddl}\nFound outdated schema v1. Set flag '-u' to upgrade, or apply manually ^")
                         }
                     }
                     if version == 2 {
@@ -72,7 +72,7 @@ impl KaspaDbClient {
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
                             version = 3;
                         } else {
-                            panic!("\n{v2_v3_ddl}\nFound outdated schema v2. Set flag '-u' to upgrade, or apply manually ^", )
+                            panic!("\n{v2_v3_ddl}\nFound outdated schema v2. Set flag '-u' to upgrade, or apply manually ^")
                         }
                     }
                     if version == 3 {
@@ -83,7 +83,18 @@ impl KaspaDbClient {
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
                             version = 4;
                         } else {
-                            panic!("\n{v3_v4_ddl}\nFound outdated schema v3. Set flag '-u' to upgrade, or apply manually ^", )
+                            panic!("\n{v3_v4_ddl}\nFound outdated schema v3. Set flag '-u' to upgrade, or apply manually ^")
+                        }
+                    }
+                    if version == 4 {
+                        let v4_v5_ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v4_to_v5.sql"));
+                        if upgrade_db {
+                            warn!("Upgrading schema from v4 to v5...");
+                            query::misc::execute_ddl(v4_v5_ddl, &self.pool).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            version = 5;
+                        } else {
+                            panic!("\n{v4_v5_ddl}\nFound outdated schema v4. Set flag '-u' to upgrade, or apply manually ^")
                         }
                     }
                     trace!("Schema version is v{version}")

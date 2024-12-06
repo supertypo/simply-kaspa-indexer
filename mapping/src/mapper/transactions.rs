@@ -7,7 +7,7 @@ use kaspa_database::models::transaction::Transaction as SqlTransaction;
 use kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
 use kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
 
-pub fn map_transaction(map_payload: bool, subnetwork_key: i16, transaction: &RpcTransaction) -> SqlTransaction {
+pub fn map_transaction(map_payload: bool, subnetwork_key: i32, transaction: &RpcTransaction) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
     SqlTransaction {
         transaction_id: verbose_data.transaction_id.into(),
