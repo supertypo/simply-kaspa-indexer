@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use kaspa_database::client::client::KaspaDbClient;
+use simply_kaspa_database::client::client::KaspaDbClient;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::KaspaRpcClient;
 use log::{debug, info};

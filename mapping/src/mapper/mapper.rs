@@ -1,13 +1,13 @@
 use kaspa_rpc_core::{RpcBlock, RpcTransaction};
 
-use kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
-use kaspa_database::models::block::Block as SqlBlock;
-use kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
-use kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
-use kaspa_database::models::transaction::Transaction as SqlTransaction;
-use kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
-use kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
-use kaspa_database::models::types::hash::Hash as SqlHash;
+use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
+use simply_kaspa_database::models::block::Block as SqlBlock;
+use simply_kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
+use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
+use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
+use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
+use simply_kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
+use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 
 use crate::mapper::{blocks, transactions};
 

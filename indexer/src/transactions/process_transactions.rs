@@ -12,14 +12,14 @@ use moka::sync::Cache;
 use tokio::task;
 use tokio::time::sleep;
 
-use kaspa_database::client::client::KaspaDbClient;
-use kaspa_database::models::address_transaction::AddressTransaction;
-use kaspa_database::models::block_transaction::BlockTransaction;
-use kaspa_database::models::transaction::Transaction;
-use kaspa_database::models::transaction_input::TransactionInput;
-use kaspa_database::models::transaction_output::TransactionOutput;
-use kaspa_database::models::types::hash::Hash as SqlHash;
-use kaspa_database_mapping::mapper::mapper::KaspaDbMapper;
+use simply_kaspa_database::client::client::KaspaDbClient;
+use simply_kaspa_database::models::address_transaction::AddressTransaction;
+use simply_kaspa_database::models::block_transaction::BlockTransaction;
+use simply_kaspa_database::models::transaction::Transaction;
+use simply_kaspa_database::models::transaction_input::TransactionInput;
+use simply_kaspa_database::models::transaction_output::TransactionOutput;
+use simply_kaspa_database::models::types::hash::Hash as SqlHash;
+use simply_kaspa_mapping::mapper::mapper::KaspaDbMapper;
 
 use crate::settings::settings::Settings;
 

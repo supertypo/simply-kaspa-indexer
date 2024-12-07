@@ -11,25 +11,25 @@ use kaspa_wrpc_client::KaspaRpcClient;
 use log::{info, warn};
 use tokio::task;
 
-use kaspa_database::client::client::KaspaDbClient;
-use kaspa_database_mapping::mapper::mapper::KaspaDbMapper;
-use kaspa_db_filler_ng::blocks::fetch_blocks::KaspaBlocksFetcher;
-use kaspa_db_filler_ng::blocks::process_blocks::process_blocks;
-use kaspa_db_filler_ng::cli::cli_args::{get_cli_args, CliArgs};
-use kaspa_db_filler_ng::kaspad::client::connect_kaspad;
-use kaspa_db_filler_ng::settings::settings::Settings;
-use kaspa_db_filler_ng::signal::signal_handler::notify_on_signals;
-use kaspa_db_filler_ng::transactions::process_transactions::process_transactions;
-use kaspa_db_filler_ng::vars::vars::load_block_checkpoint;
-use kaspa_db_filler_ng::virtual_chain::process_virtual_chain::process_virtual_chain;
+use simply_kaspa_database::client::client::KaspaDbClient;
+use simply_kaspa_mapping::mapper::mapper::KaspaDbMapper;
+use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
+use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
+use simply_kaspa_indexer::cli::cli_args::{get_cli_args, CliArgs};
+use simply_kaspa_indexer::kaspad::client::connect_kaspad;
+use simply_kaspa_indexer::settings::settings::Settings;
+use simply_kaspa_indexer::signal::signal_handler::notify_on_signals;
+use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
+use simply_kaspa_indexer::vars::vars::load_block_checkpoint;
+use simply_kaspa_indexer::virtual_chain::process_virtual_chain::process_virtual_chain;
 
 #[tokio::main]
 async fn main() {
     println!();
     println!("**************************************************************");
-    println!("********************* Kaspa DB Filler NG *********************");
+    println!("******************** Simply Kaspa Indexer ********************");
     println!("**************************************************************");
-    println!("https://hub.docker.com/r/supertypo/kaspa-db-filler-ng");
+    println!("https://hub.docker.com/r/supertypo/simply-kaspa-indexer");
     println!();
     let cli_args = get_cli_args();
 

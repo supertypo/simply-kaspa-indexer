@@ -8,11 +8,11 @@ use crate::settings::settings::Settings;
 use crate::vars::vars::save_checkpoint;
 use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
-use kaspa_database::client::client::KaspaDbClient;
-use kaspa_database::models::block::Block;
-use kaspa_database::models::block_parent::BlockParent;
-use kaspa_database::models::types::hash::Hash as SqlHash;
-use kaspa_database_mapping::mapper::mapper::KaspaDbMapper;
+use simply_kaspa_database::client::client::KaspaDbClient;
+use simply_kaspa_database::models::block::Block;
+use simply_kaspa_database::models::block_parent::BlockParent;
+use simply_kaspa_database::models::types::hash::Hash as SqlHash;
+use simply_kaspa_mapping::mapper::mapper::KaspaDbMapper;
 use log::{debug, info, warn};
 use tokio::time::sleep;
 

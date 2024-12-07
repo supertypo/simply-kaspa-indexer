@@ -1,6 +1,5 @@
 [package]
-name = "kaspa-database"
-description = "Kaspa SQL database client"
+name = "simply-kaspa-database"
 rust-version.workspace = true
 authors.workspace = true
 license-file.workspace = true
@@ -10,7 +9,7 @@ edition.workspace = true
 default = []
 
 [lib]
-name = "kaspa_database"
+name = "simply_kaspa_database"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]

@@ -1,5 +1,5 @@
 [package]
-name = "simply-kaspa-mapping"
+name = "simply-kaspa-kaspad"
 rust-version.workspace = true
 authors.workspace = true
 license-file.workspace = true
@@ -9,11 +9,14 @@ edition.workspace = true
 default = []
 
 [lib]
-name = "simply_kaspa_mapping"
+name = "simply_kaspa_kaspad"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-simply-kaspa-database.workspace = true
+kaspa-wrpc-client.workspace = true
 kaspa-rpc-core.workspace = true
-bigdecimal.workspace = true
+tokio.workspace = true
+deadpool.workspace = true
+futures.workspace = true
+workflow-core.workspace = true
 log.workspace = true

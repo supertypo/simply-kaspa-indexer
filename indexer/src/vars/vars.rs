@@ -1,4 +1,4 @@
-use kaspa_database::client::client::KaspaDbClient;
+use simply_kaspa_database::client::client::KaspaDbClient;
 
 pub const VAR_KEY_BLOCK_CHECKPOINT: &str = "block_checkpoint";
 pub const VAR_KEY_LEGACY_CHECKPOINT: &str = "vspc_last_start_hash";

@@ -1,7 +1,7 @@
 use std::cmp::min;
 
-use kaspa_database::client::client::KaspaDbClient;
-use kaspa_database::models::transaction_acceptance::TransactionAcceptance;
+use simply_kaspa_database::client::client::KaspaDbClient;
+use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance;
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcHash};
 use log::{debug, info, trace};
 

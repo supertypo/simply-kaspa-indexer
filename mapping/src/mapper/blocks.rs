@@ -1,8 +1,8 @@
 use kaspa_rpc_core::RpcBlock;
 
-use kaspa_database::models::block::Block as SqlBlock;
-use kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
-use kaspa_database::models::types::hash::Hash as SqlHash;
+use simply_kaspa_database::models::block::Block as SqlBlock;
+use simply_kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
+use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 
 pub fn map_block(block: &RpcBlock) -> SqlBlock {
     let verbose_data = block.verbose_data.as_ref().expect("Block verbose_data is missing");

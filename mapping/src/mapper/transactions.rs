@@ -1,11 +1,11 @@
 use bigdecimal::ToPrimitive;
 use kaspa_rpc_core::RpcTransaction;
 
-use kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
-use kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
-use kaspa_database::models::transaction::Transaction as SqlTransaction;
-use kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
-use kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
+use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
+use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
+use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
+use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
+use simply_kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
 
 pub fn map_transaction(map_payload: bool, subnetwork_key: i32, transaction: &RpcTransaction) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");

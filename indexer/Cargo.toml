@@ -1,6 +1,6 @@
 [package]
-name = "kaspa-db-filler-ng"
-description = "Kaspa DB Filler NG"
+name = "simply-kaspa-indexer"
+description = "Simply Kaspa Indexer"
 rust-version.workspace = true
 authors.workspace = true
 license-file.workspace = true
@@ -10,8 +10,8 @@ edition.workspace = true
 default = []
 
 [dependencies]
-kaspa-database.workspace = true
-kaspa-database-mapping.workspace = true
+simply-kaspa-database.workspace = true
+simply-kaspa-mapping.workspace = true
 kaspa-wrpc-client.workspace = true
 kaspa-rpc-core.workspace = true
 kaspa-hashes.workspace = true
