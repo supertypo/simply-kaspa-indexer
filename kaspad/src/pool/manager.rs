@@ -5,7 +5,7 @@ use kaspa_wrpc_client::client::ConnectOptions;
 use kaspa_wrpc_client::error::Error;
 use kaspa_wrpc_client::prelude::*;
 use kaspa_wrpc_client::{KaspaRpcClient, WrpcEncoding};
-use log::{debug, error};
+use log::{debug, info, warn};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,21 +25,25 @@ impl Manager for KaspadManager {
 
     async fn recycle(&self, conn: &mut Self::Type, _: &Metrics) -> RecycleResult<Self::Error> {
         debug!("Recycling connection");
-        if conn.get_server_info().await.map(|s| s.is_synced).unwrap_or(false) {
+        if conn.is_connected() {
             Ok(())
         } else {
-            Err(RecycleError::Message("Kaspad connection is not alive.".into()))
+            let err_msg = "Kaspad connection lost";
+            warn!("{err_msg}");
+            Err(RecycleError::Message(err_msg.into()))
         }
     }
 }
 
 pub async fn connect_client(network_id: NetworkId, rpc_url: Option<String>) -> Result<KaspaRpcClient, Error> {
-
     let url = if let Some(url) = &rpc_url { url } else { &Resolver::default().get_url(WrpcEncoding::Borsh, network_id).await? };
 
     debug!("Connecting to Kaspad {}", url);
     let client = KaspaRpcClient::new_with_args(WrpcEncoding::Borsh, Some(url), None, Some(network_id), None)?;
-    client.connect(Some(connect_options())).await?;
+    client.connect(Some(connect_options())).await.map_err(|e| {
+        warn!("Kaspad connection failed: {e}");
+        e
+    })?;
 
     let server_info = client.get_server_info().await?;
     let connected_network = format!(
@@ -47,19 +51,15 @@ pub async fn connect_client(network_id: NetworkId, rpc_url: Option<String>) -> R
         server_info.network_id.network_type,
         server_info.network_id.suffix.map(|s| format!("-{}", s.to_string())).unwrap_or_default()
     );
-    debug!("Connected to Kaspad {} version: {}, network: {}", url, server_info.server_version, connected_network);
+    info!("Connected to Kaspad {} version: {}, network: {}", url, server_info.server_version, connected_network);
 
     if network_id != server_info.network_id {
-        let err_msg = format!("Network mismatch, expected '{}', actual '{}'", network_id, connected_network);
-        error!("{err_msg}");
-        Err(Error::Custom(err_msg))
+        panic!("Network mismatch, expected '{}', actual '{}'", network_id, connected_network);
     } else if server_info.network_id.network_type == RpcNetworkType::Mainnet && server_info.virtual_daa_score < 76902846 {
-        let err_msg = "Invalid network".to_string();
-        error!("{err_msg}");
-        Err(Error::Custom(err_msg))
+        panic!("Invalid network");
     } else if !server_info.is_synced {
         let err_msg = format!("Kaspad {} is NOT synced", server_info.server_version);
-        error!("{err_msg}");
+        warn!("{err_msg}");
         Err(Error::Custom(err_msg))
     } else {
         Ok(client)

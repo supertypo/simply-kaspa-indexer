@@ -10,12 +10,14 @@ edition.workspace = true
 default = []
 
 [dependencies]
+simply-kaspa-kaspad.workspace = true
 simply-kaspa-database.workspace = true
 simply-kaspa-mapping.workspace = true
 kaspa-wrpc-client.workspace = true
 kaspa-rpc-core.workspace = true
 kaspa-hashes.workspace = true
 tokio.workspace = true
+deadpool.workspace = true
 futures-util.workspace = true
 crossbeam-queue.workspace = true
 moka.workspace = true

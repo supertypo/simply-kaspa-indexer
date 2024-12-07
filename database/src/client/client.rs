@@ -101,10 +101,10 @@ impl KaspaDbClient {
                 }
                 version = self.select_var("schema_version").await?.parse::<u8>().unwrap();
                 if version < Self::SCHEMA_VERSION {
-                    panic!("Found old & unsupported schema v{version}", )
+                    panic!("Found old & unsupported schema v{version}",)
                 }
                 if version > Self::SCHEMA_VERSION {
-                    panic!("Found newer & unsupported schema v{version}", )
+                    panic!("Found newer & unsupported schema v{version}",)
                 }
                 info!("Schema v{} is up to date", version)
             }

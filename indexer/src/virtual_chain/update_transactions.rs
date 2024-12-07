@@ -1,9 +1,9 @@
 use std::cmp::min;
 
-use simply_kaspa_database::client::client::KaspaDbClient;
-use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance;
 use kaspa_rpc_core::{RpcAcceptedTransactionIds, RpcHash};
 use log::{debug, info, trace};
+use simply_kaspa_database::client::client::KaspaDbClient;
+use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance;
 
 pub async fn update_txs(
     batch_scale: f64,
