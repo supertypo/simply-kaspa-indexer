@@ -3,7 +3,8 @@
 ARCHES="linux/amd64 linux/arm64"
 
 REPO_URL="https://github.com/supertypo/kaspa-db-filler-ng"
-DOCKER_REPO="supertypo/kaspa-db-filler-ng"
+DOCKER_REPO1="supertypo/simply-kaspa-indexer"
+DOCKER_REPO2="supertypo/kaspa-db-filler-ng"
 BUILD_DIR="$(dirname $0)"
 PUSH=$1
 VERSIONS=$2
@@ -40,17 +41,24 @@ plain_build() {
 
   $docker build --pull \
     --build-arg REPO_DIR="$REPO_DIR" \
-    --tag ${DOCKER_REPO}:$tag "$BUILD_DIR"
+    --tag ${DOCKER_REPO1}:$tag "$BUILD_DIR"
+
+  $docker tag ${DOCKER_REPO1}:$tag ${DOCKER_REPO2}:$tag
+  echo Tagged $DOCKER_REPO2:$tag
 
   for version in $VERSIONS; do
-    $docker tag $DOCKER_REPO:$tag $DOCKER_REPO:$version
-    echo Tagged $DOCKER_REPO:$version
+    $docker tag $DOCKER_REPO1:$tag $DOCKER_REPO1:$version
+    echo Tagged $DOCKER_REPO1:$version
+    $docker tag $DOCKER_REPO2:$tag $DOCKER_REPO2:$version
+    echo Tagged $DOCKER_REPO2:$version
   done
 
   if [ "$PUSH" = "push" ]; then
-    $docker push $DOCKER_REPO:$tag
+    $docker push $DOCKER_REPO1:$tag
+    $docker push $DOCKER_REPO2:$tag
     for version in $VERSIONS; do
-      $docker push $DOCKER_REPO:$version
+      $docker push $DOCKER_REPO1:$version
+      $docker push $DOCKER_REPO2:$version
     done
   fi
   echo "============================================================="
@@ -70,12 +78,14 @@ multi_arch_build() {
   fi
 
   for version in $VERSIONS; do
-    dockerRepoArgs="$dockerRepoArgs --tag $DOCKER_REPO:$version"
+    dockerRepoArgs="$dockerRepoArgs --tag $DOCKER_REPO1:$version"
+    dockerRepoArgs="$dockerRepoArgs --tag $DOCKER_REPO2:$version"
   done
 
   $docker buildx build --pull --platform=$(echo $ARCHES | sed 's/ /,/g') $dockerRepoArgs \
     --build-arg REPO_DIR="$REPO_DIR" \
-    --tag $DOCKER_REPO:$tag "$BUILD_DIR"
+    --tag $DOCKER_REPO1:$tag \
+    --tag $DOCKER_REPO2:$tag "$BUILD_DIR"
   echo "============================================================="
   echo " Completed multi arch build"
   echo "============================================================="
