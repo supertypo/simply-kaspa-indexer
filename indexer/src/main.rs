@@ -1,8 +1,3 @@
-use std::env;
-use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-use std::time::Duration;
 use crossbeam_queue::ArrayQueue;
 use deadpool::managed::{Object, Pool};
 use futures_util::future::try_join_all;
@@ -10,6 +5,11 @@ use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::NetworkId;
 use log::{info, warn};
+use std::env;
+use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::task;
 
 use simply_kaspa_database::client::client::KaspaDbClient;

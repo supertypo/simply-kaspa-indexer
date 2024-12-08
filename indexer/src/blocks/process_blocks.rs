@@ -40,7 +40,6 @@ pub async fn process_blocks(
     let mut blocks_parents = vec![];
     let mut block_hashes = vec![];
     let mut checkpoint = None;
-    let mut last_block_datetime;
     let mut checkpoint_last_saved = Instant::now();
     let mut checkpoint_last_warned = Instant::now();
     let mut last_commit_time = Instant::now();
@@ -49,6 +48,7 @@ pub async fn process_blocks(
     while run.load(Ordering::Relaxed) {
         if let Some(block_data) = rpc_blocks_queue.pop() {
             let synced = block_data.synced;
+            let last_block_datetime = DateTime::from_timestamp_millis(block_data.block.header.timestamp as i64 / 1000 * 1000).unwrap();
             let block = mapper.map_block(&block_data.block);
             let block_parents = mapper.map_block_parents(&block_data.block);
             let tx_count = mapper.count_block_transactions(&block_data.block);
@@ -58,7 +58,6 @@ pub async fn process_blocks(
                     checkpoint = Some(Checkpoint { block_hash: block.hash.clone(), tx_count: tx_count as i64 })
                 }
             }
-            last_block_datetime = DateTime::from_timestamp_millis(block.timestamp / 1000 * 1000).unwrap();
             if !vcp_started {
                 block_hashes.push(block.hash.clone());
             }

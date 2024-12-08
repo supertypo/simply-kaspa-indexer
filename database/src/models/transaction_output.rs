@@ -5,7 +5,7 @@ pub struct TransactionOutput {
     pub index: i16,
     pub amount: i64,
     pub script_public_key: Vec<u8>,
-    pub script_public_key_address: String,
+    pub script_public_key_address: Option<String>,
 }
 
 impl Eq for TransactionOutput {}

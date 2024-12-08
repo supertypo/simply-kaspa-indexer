@@ -35,8 +35,8 @@ pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u6
     for block in blocks {
         query = query.bind(&block.hash);
         query = query.bind(&block.accepted_id_merkle_root);
-        query = query.bind((!&block.merge_set_blues_hashes.is_empty()).then_some(&block.merge_set_blues_hashes));
-        query = query.bind((!&block.merge_set_reds_hashes.is_empty()).then_some(&block.merge_set_reds_hashes));
+        query = query.bind(&block.merge_set_blues_hashes);
+        query = query.bind(&block.merge_set_reds_hashes);
         query = query.bind(&block.selected_parent_hash);
         query = query.bind(&block.bits);
         query = query.bind(&block.blue_score);
@@ -81,8 +81,8 @@ pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postg
         query = query.bind(&tx.transaction_id);
         query = query.bind(&tx.subnetwork_id);
         query = query.bind(&tx.hash);
-        query = query.bind((tx.mass != 0).then_some(tx.mass));
-        query = query.bind((tx.payload.len() != 0).then_some(&tx.payload));
+        query = query.bind(&tx.mass);
+        query = query.bind(&tx.payload);
         query = query.bind(&tx.block_time);
     }
     Ok(query.execute(pool).await?.rows_affected())

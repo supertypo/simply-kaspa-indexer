@@ -4,9 +4,9 @@ use crate::models::types::payload::Payload;
 pub struct Transaction {
     pub transaction_id: Hash,
     pub subnetwork_id: i32,
-    pub hash: Hash,
-    pub mass: i32,
-    pub payload: Payload,
+    pub hash: Option<Hash>,
+    pub mass: Option<i32>,
+    pub payload: Option<Payload>,
     pub block_time: i64,
 }
 

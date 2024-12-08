@@ -8,20 +8,22 @@ pub fn map_block(block: &RpcBlock) -> SqlBlock {
     let verbose_data = block.verbose_data.as_ref().expect("Block verbose_data is missing");
     SqlBlock {
         hash: block.header.hash.into(),
-        accepted_id_merkle_root: block.header.accepted_id_merkle_root.into(),
-        merge_set_blues_hashes: verbose_data.merge_set_blues_hashes.iter().map(|v| v.to_owned().into()).collect(),
-        merge_set_reds_hashes: verbose_data.merge_set_reds_hashes.iter().map(|v| v.to_owned().into()).collect(),
-        selected_parent_hash: verbose_data.selected_parent_hash.into(),
-        bits: block.header.bits as i64,
+        accepted_id_merkle_root: Some(block.header.accepted_id_merkle_root.into()),
+        merge_set_blues_hashes: (!verbose_data.merge_set_blues_hashes.is_empty())
+            .then_some(verbose_data.merge_set_blues_hashes.iter().map(|v| v.to_owned().into()).collect()),
+        merge_set_reds_hashes: (!verbose_data.merge_set_reds_hashes.is_empty())
+            .then_some(verbose_data.merge_set_reds_hashes.iter().map(|v| v.to_owned().into()).collect()),
+        selected_parent_hash: Some(verbose_data.selected_parent_hash.into()),
+        bits: Some(block.header.bits as i64),
         blue_score: block.header.blue_score as i64,
-        blue_work: block.header.blue_work.to_be_bytes_var(),
-        daa_score: block.header.daa_score as i64,
-        hash_merkle_root: block.header.hash_merkle_root.into(),
-        nonce: block.header.nonce.to_be_bytes().to_vec(),
-        pruning_point: block.header.pruning_point.into(),
-        timestamp: block.header.timestamp as i64,
-        utxo_commitment: block.header.utxo_commitment.into(),
-        version: block.header.version as i16,
+        blue_work: Some(block.header.blue_work.to_be_bytes_var()),
+        daa_score: Some(block.header.daa_score as i64),
+        hash_merkle_root: Some(block.header.hash_merkle_root.into()),
+        nonce: Some(block.header.nonce.to_be_bytes().to_vec()),
+        pruning_point: Some(block.header.pruning_point.into()),
+        timestamp: Some(block.header.timestamp as i64),
+        utxo_commitment: Some(block.header.utxo_commitment.into()),
+        version: Some(block.header.version as i16),
     }
 }
 

@@ -12,9 +12,9 @@ pub fn map_transaction(map_payload: bool, subnetwork_key: i32, transaction: &Rpc
     SqlTransaction {
         transaction_id: verbose_data.transaction_id.into(),
         subnetwork_id: subnetwork_key,
-        hash: verbose_data.hash.into(),
-        mass: verbose_data.compute_mass.to_i32().expect("Tx compute mass is too large"),
-        payload: if map_payload { transaction.payload.to_owned() } else { vec![] },
+        hash: Some(verbose_data.hash.into()),
+        mass: (verbose_data.compute_mass != 0).then_some(verbose_data.compute_mass.to_i32().expect("Tx compute mass is too large")),
+        payload: if map_payload && transaction.payload.len() > 0 { Some(transaction.payload.to_owned()) } else { None },
         block_time: verbose_data.block_time.to_i64().expect("Tx block_time is too large"),
     }
 }
@@ -36,8 +36,8 @@ pub fn map_transaction_inputs(transaction: &RpcTransaction) -> Vec<SqlTransactio
             index: i.to_i16().expect("Tx input index is too large"),
             previous_outpoint_hash: input.previous_outpoint.transaction_id.into(),
             previous_outpoint_index: input.previous_outpoint.index.to_i16().expect("Tx input previous_outpoint_index is too large"),
-            signature_script: input.signature_script.clone(),
-            sig_op_count: input.sig_op_count.to_i16().expect("Tx input sig_op_count is too large"),
+            signature_script: Some(input.signature_script.clone()),
+            sig_op_count: Some(input.sig_op_count as i16),
         })
         .collect::<Vec<SqlTransactionInput>>()
 }
@@ -56,7 +56,7 @@ pub fn map_transaction_outputs(transaction: &RpcTransaction) -> Vec<SqlTransacti
                 index: i.to_i16().expect("Tx output index is too large for i16"),
                 amount: output.value.to_i64().expect("Tx output amount is too large for i64"),
                 script_public_key: output.script_public_key.script().to_vec(),
-                script_public_key_address: verbose_data.script_public_key_address.payload_to_string(),
+                script_public_key_address: Some(verbose_data.script_public_key_address.payload_to_string()),
             }
         })
         .collect::<Vec<SqlTransactionOutput>>()

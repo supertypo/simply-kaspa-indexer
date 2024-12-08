@@ -4,20 +4,20 @@ use crate::models::types::nonce::Nonce;
 
 pub struct Block {
     pub hash: Hash,
-    pub accepted_id_merkle_root: Hash,
-    pub merge_set_blues_hashes: Vec<Hash>,
-    pub merge_set_reds_hashes: Vec<Hash>,
-    pub selected_parent_hash: Hash,
-    pub bits: i64,
+    pub accepted_id_merkle_root: Option<Hash>,
+    pub merge_set_blues_hashes: Option<Vec<Hash>>,
+    pub merge_set_reds_hashes: Option<Vec<Hash>>,
+    pub selected_parent_hash: Option<Hash>,
+    pub bits: Option<i64>,
     pub blue_score: i64,
-    pub blue_work: BlueWork,
-    pub daa_score: i64,
-    pub hash_merkle_root: Hash,
-    pub nonce: Nonce,
-    pub pruning_point: Hash,
-    pub timestamp: i64,
-    pub utxo_commitment: Hash,
-    pub version: i16,
+    pub blue_work: Option<BlueWork>,
+    pub daa_score: Option<i64>,
+    pub hash_merkle_root: Option<Hash>,
+    pub nonce: Option<Nonce>,
+    pub pruning_point: Option<Hash>,
+    pub timestamp: Option<i64>,
+    pub utxo_commitment: Option<Hash>,
+    pub version: Option<i16>,
 }
 
 impl Eq for Block {}

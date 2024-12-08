@@ -5,8 +5,8 @@ pub struct TransactionInput {
     pub index: i16,
     pub previous_outpoint_hash: Hash,
     pub previous_outpoint_index: i16,
-    pub signature_script: Vec<u8>,
-    pub sig_op_count: i16,
+    pub signature_script: Option<Vec<u8>>,
+    pub sig_op_count: Option<i16>,
 }
 
 impl Eq for TransactionInput {}
