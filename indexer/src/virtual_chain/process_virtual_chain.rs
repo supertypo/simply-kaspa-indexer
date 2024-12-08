@@ -46,12 +46,12 @@ pub async fn process_virtual_chain(
                                 &database,
                             )
                             .await;
-                            // Default batch size is 1800 on 1 bps:
-                            if !synced && added_blocks_count < 200 {
-                                log_time_to_synced(start_time);
-                                synced = true;
-                            }
                             start_hash = last_accepting;
+                        }
+                        // Default batch size is 1800 on 1 bps:
+                        if !synced && added_blocks_count < 200 {
+                            log_time_to_synced(start_time);
+                            synced = true;
                         }
                     }
                     Err(_) => {

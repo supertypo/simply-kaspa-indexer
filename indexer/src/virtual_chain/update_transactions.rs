@@ -23,25 +23,36 @@ pub async fn update_txs(
     let mut rows_removed = 0;
     let mut rows_added = 0;
 
+    debug!("Processing {} removed chain blocks", removed_hashes.len());
     let removed_blocks = removed_hashes.into_iter().map(|h| h.to_owned().into()).collect::<Vec<_>>();
     for removed_blocks_chunk in removed_blocks.chunks(batch_size) {
-        debug!("Processing {} removed chain blocks", removed_blocks_chunk.len());
-        rows_removed +=
-            database.delete_transaction_acceptances(removed_blocks_chunk).await.expect("Delete accepted transactions FAILED");
+        rows_removed += database.delete_transaction_acceptances(removed_blocks_chunk).await.unwrap();
     }
+
+    debug!(
+        "Processing {} accepted transactions",
+        accepted_transaction_ids.iter().map(|t| t.accepted_transaction_ids.len()).sum::<usize>()
+    );
     let mut accepted_transactions = vec![];
     for accepted_id in accepted_transaction_ids {
-        for transaction_id in accepted_id.accepted_transaction_ids.iter() {
-            accepted_transactions.push(TransactionAcceptance {
-                transaction_id: transaction_id.to_owned().into(),
-                block_hash: accepted_id.accepting_block_hash.into(),
-            });
+        // Commit all transactions for an accepting block in the same go to avoid incomplete checkpoints:
+        accepted_transactions.extend(
+            accepted_id
+                .accepted_transaction_ids
+                .iter()
+                .map(|t| TransactionAcceptance {
+                    transaction_id: t.to_owned().into(),
+                    block_hash: accepted_id.accepting_block_hash.into(),
+                })
+                .collect::<Vec<_>>(),
+        );
+        if accepted_transactions.len() >= batch_size {
+            rows_added += database.insert_transaction_acceptances(&accepted_transactions).await.unwrap();
+            accepted_transactions = vec![];
         }
     }
-    for accepted_transactions_chunk in accepted_transactions.chunks(batch_size) {
-        debug!("Processing {} accepted transactions", accepted_transactions_chunk.len());
-        rows_added +=
-            database.insert_transaction_acceptances(accepted_transactions_chunk).await.expect("Insert accepted transactions FAILED");
+    if accepted_transactions.len() > 0 {
+        rows_added += database.insert_transaction_acceptances(&accepted_transactions).await.unwrap();
     }
 
     info!(
