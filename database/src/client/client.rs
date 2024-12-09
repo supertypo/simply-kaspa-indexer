@@ -24,7 +24,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 5;
+    const SCHEMA_VERSION: u8 = 6;
 
     pub async fn new(url: &String) -> Result<KaspaDbClient, Error> {
         Self::new_with_args(url, 10).await
@@ -95,6 +95,17 @@ impl KaspaDbClient {
                             version = 5;
                         } else {
                             panic!("\n{v4_v5_ddl}\nFound outdated schema v4. Set flag '-u' to upgrade, or apply manually ^")
+                        }
+                    }
+                    if version == 5 {
+                        let v5_v6_ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v5_to_v6.sql"));
+                        if upgrade_db {
+                            warn!("Upgrading schema from v5 to v6...");
+                            query::misc::execute_ddl(v5_v6_ddl, &self.pool).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            version = 6;
+                        } else {
+                            panic!("\n{v5_v6_ddl}\nFound outdated schema v5. Set flag '-u' to upgrade, or apply manually ^")
                         }
                     }
                     trace!("Schema version is v{version}")

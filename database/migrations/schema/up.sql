@@ -3,7 +3,7 @@ CREATE TABLE vars
     key   VARCHAR(255) PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT INTO vars (key, value) VALUES ('schema_version', '5');
+INSERT INTO vars (key, value) VALUES ('schema_version', '6');
 
 
 CREATE TABLE blocks
@@ -80,8 +80,11 @@ CREATE TABLE transactions_inputs
     previous_outpoint_index SMALLINT,
     signature_script        BYTEA,
     sig_op_count            SMALLINT,
+    block_time              BIGINT,
     PRIMARY KEY (transaction_id, index)
 );
+CREATE INDEX ON transactions_inputs (previous_outpoint_hash, previous_outpoint_index);
+CREATE INDEX ON transactions_inputs (block_time DESC);
 
 
 CREATE TABLE transactions_outputs
@@ -91,8 +94,11 @@ CREATE TABLE transactions_outputs
     amount                    BIGINT,
     script_public_key         BYTEA,
     script_public_key_address VARCHAR,
+    block_time                BIGINT,
     PRIMARY KEY (transaction_id, index)
 );
+CREATE INDEX ON transactions_outputs (script_public_key_address);
+CREATE INDEX ON transactions_outputs (block_time DESC);
 
 
 CREATE TABLE addresses_transactions

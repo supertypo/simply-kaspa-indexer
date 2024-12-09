@@ -106,7 +106,7 @@ async fn start_processing(
         warn!("VCP before synced is enabled. Starting VCP as soon as the filler has caught up to the previous run")
     }
     if cli_args.skip_resolving_addresses {
-        warn!("Skip resolving addresses is enabled")
+        info!("Skip resolving addresses is enabled")
     }
     if cli_args.skip_block_relations {
         info!("Block relations disabled")

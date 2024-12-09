@@ -89,10 +89,10 @@ pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postg
 }
 
 pub async fn insert_transaction_inputs(transaction_inputs: &[TransactionInput], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 6;
+    const COLS: usize = 7;
     let sql = format!(
         "INSERT INTO transactions_inputs (transaction_id, index, previous_outpoint_hash, previous_outpoint_index,
-            signature_script, sig_op_count)
+            signature_script, sig_op_count, block_time)
         VALUES {} ON CONFLICT DO NOTHING",
         generate_placeholders(transaction_inputs.len(), COLS)
     );
@@ -104,14 +104,15 @@ pub async fn insert_transaction_inputs(transaction_inputs: &[TransactionInput], 
         query = query.bind(&tin.previous_outpoint_index);
         query = query.bind(&tin.signature_script);
         query = query.bind(&tin.sig_op_count);
+        query = query.bind(&tin.block_time);
     }
     Ok(query.execute(pool).await?.rows_affected())
 }
 
 pub async fn insert_transaction_outputs(transaction_outputs: &[TransactionOutput], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 5;
+    const COLS: usize = 6;
     let sql = format!(
-        "INSERT INTO transactions_outputs (transaction_id, index, amount, script_public_key, script_public_key_address)
+        "INSERT INTO transactions_outputs (transaction_id, index, amount, script_public_key, script_public_key_address, block_time)
         VALUES {} ON CONFLICT DO NOTHING",
         generate_placeholders(transaction_outputs.len(), COLS)
     );
@@ -122,6 +123,7 @@ pub async fn insert_transaction_outputs(transaction_outputs: &[TransactionOutput
         query = query.bind(&tout.amount);
         query = query.bind(&tout.script_public_key);
         query = query.bind(&tout.script_public_key_address);
+        query = query.bind(&tout.block_time);
     }
     Ok(query.execute(pool).await?.rows_affected())
 }

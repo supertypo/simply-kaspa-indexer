@@ -6,6 +6,7 @@ pub struct TransactionOutput {
     pub amount: i64,
     pub script_public_key: Vec<u8>,
     pub script_public_key_address: Option<String>,
+    pub block_time: Option<i64>,
 }
 
 impl Eq for TransactionOutput {}
