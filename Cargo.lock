@@ -3278,6 +3278,7 @@ name = "simply-kaspa-mapping"
 version = "0.0.0"
 dependencies = [
  "bigdecimal",
+ "clap",
  "kaspa-rpc-core",
  "log",
  "simply-kaspa-database",

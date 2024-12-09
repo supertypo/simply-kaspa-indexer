@@ -108,8 +108,13 @@ async fn start_processing(
     if cli_args.skip_resolving_addresses {
         warn!("Skip resolving addresses is enabled")
     }
-    if cli_args.extra_data {
-        info!("Extra data is enabled")
+    if cli_args.skip_block_relations {
+        info!("Block relations disabled")
+    }
+    if let Some(include_fields) = &cli_args.include_fields {
+        info!("Include fields is set, the following (non-required) fields will be included: {:?}", include_fields);
+    } else if let Some(exclude_fields) = &cli_args.exclude_fields {
+        info!("Exclude fields is set, the following (non-required) fields will be excluded: {:?}", exclude_fields);
     }
 
     let run = Arc::new(AtomicBool::new(true));
@@ -120,7 +125,7 @@ async fn start_processing(
     let blocks_queue = Arc::new(ArrayQueue::new((base_buffer_blocks * cli_args.batch_scale) as usize));
     let txs_queue = Arc::new(ArrayQueue::new((base_buffer_txs * cli_args.batch_scale) as usize));
 
-    let mapper = KaspaDbMapper::new(cli_args.extra_data);
+    let mapper = KaspaDbMapper::new(&cli_args.exclude_fields, &cli_args.include_fields);
 
     let settings = Settings { cli_args: cli_args.clone(), net_bps, net_tps_max, checkpoint };
     let start_vcp = Arc::new(AtomicBool::new(false));

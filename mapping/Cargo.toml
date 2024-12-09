@@ -17,3 +17,4 @@ simply-kaspa-database.workspace = true
 kaspa-rpc-core.workspace = true
 bigdecimal.workspace = true
 log.workspace = true
+clap.workspace = true
