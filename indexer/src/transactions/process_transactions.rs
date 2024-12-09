@@ -33,8 +33,8 @@ pub async fn process_transactions(
     mapper: KaspaDbMapper,
 ) {
     let ttl = settings.cli_args.cache_ttl;
-    let cache_size = settings.net_tps_max as u64 * ttl.as_secs() * 2;
-    let tx_id_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(ttl).max_capacity(cache_size).build();
+    let cache_size = settings.net_tps_max as u64 * ttl * 2;
+    let tx_id_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(ttl)).max_capacity(cache_size).build();
 
     let batch_scale = settings.cli_args.batch_scale;
     let batch_size = (5000f64 * batch_scale) as usize;

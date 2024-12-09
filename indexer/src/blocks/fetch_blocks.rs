@@ -46,8 +46,9 @@ impl KaspaBlocksFetcher {
         txs_queue: Arc<ArrayQueue<Vec<RpcTransaction>>>,
     ) -> KaspaBlocksFetcher {
         let ttl = settings.cli_args.cache_ttl;
-        let cache_size = settings.net_bps as u64 * ttl.as_secs() * 2;
-        let block_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(ttl).max_capacity(cache_size).build();
+        let cache_size = settings.net_bps as u64 * ttl * 2;
+        let block_cache: Cache<KaspaHash, ()> =
+            Cache::builder().time_to_live(Duration::from_secs(ttl)).max_capacity(cache_size).build();
         KaspaBlocksFetcher {
             run,
             kaspad_pool,

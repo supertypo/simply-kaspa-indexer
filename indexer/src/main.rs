@@ -1,10 +1,11 @@
+use clap::Parser;
 use crossbeam_queue::ArrayQueue;
 use deadpool::managed::{Object, Pool};
 use futures_util::future::try_join_all;
 use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::NetworkId;
-use log::{info, warn};
+use log::{info, trace, warn};
 use std::env;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
@@ -15,7 +16,7 @@ use tokio::task;
 use simply_kaspa_database::client::client::KaspaDbClient;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
-use simply_kaspa_indexer::cli::cli_args::{get_cli_args, CliArgs};
+use simply_kaspa_indexer::cli::cli_args::CliArgs;
 use simply_kaspa_indexer::settings::settings::Settings;
 use simply_kaspa_indexer::signal::signal_handler::notify_on_signals;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
@@ -32,12 +33,13 @@ async fn main() {
     println!("**************************************************************");
     println!("https://hub.docker.com/r/supertypo/simply-kaspa-indexer");
     println!();
-    let cli_args = get_cli_args();
+    let cli_args = CliArgs::parse();
 
     env::set_var("RUST_LOG", &cli_args.log_level);
     env::set_var("RUST_LOG_STYLE", if cli_args.log_no_color { "never" } else { "always" });
     env_logger::builder().target(env_logger::Target::Stdout).format_target(false).format_timestamp_millis().init();
 
+    trace!("{:?}", cli_args);
     if cli_args.batch_scale < 0.1 || cli_args.batch_scale > 10.0 {
         panic!("Invalid batch-scale");
     }
