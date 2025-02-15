@@ -140,6 +140,13 @@ jobs:
             $(printf '${{ env.LEGACY_REPO }}@sha256:%s ' *)
 
       - name: Inspect image
+        if: github.event_name != 'release' || github.event.release.prerelease == true
         run: |
           docker buildx imagetools inspect ${{ env.MAIN_REPO }}:${{ steps.meta.outputs.version }}
           docker buildx imagetools inspect ${{ env.LEGACY_REPO }}:${{ steps.meta.outputs.version }}
+
+      - name: Inspect image release
+        if: github.event_name == 'release' && github.event.release.prerelease == false
+        run: |
+          docker buildx imagetools inspect ${{ env.MAIN_REPO }}:${{ steps.meta_release.outputs.version }}
+          docker buildx imagetools inspect ${{ env.LEGACY_REPO }}:${{ steps.meta_release.outputs.version }}
