@@ -13,7 +13,8 @@ RUN apk --no-cache add \
   linux-headers \
   wasm-pack \
   openssl-dev \
-  postgresql-dev
+  postgresql-dev \
+  curl
 
 WORKDIR /work
 
@@ -56,10 +57,7 @@ RUN ln -s /usr/local/bin/simply-kaspa-indexer /usr/local/bin/kaspa-db-filler-ng
 USER 13337:13337
 
 ARG VERSION
-ARG COMMIT_ID
-
-ENV VERSION=$VERSION \
-  COMMIT_ID=$COMMIT_ID
+ENV VERSION=$VERSION
 
 ENTRYPOINT ["simply-kaspa-indexer"]
 CMD ["--help"]

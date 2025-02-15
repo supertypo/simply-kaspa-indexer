@@ -28,6 +28,7 @@ echo "============================================================="
 (cd "$REPO_DIR" && git fetch && git checkout $TAG > /dev/null && (git pull 2>/dev/null | true))
 
 tag=$(cd "$REPO_DIR" && git log -n1 --format="%cs.%h")
+gitDescribe=$(cd "$REPO_DIR" && git describe --tags --dirty --always)
 
 docker=docker
 id -nG $USER | grep -qw docker || docker="sudo $docker"
@@ -40,6 +41,7 @@ plain_build() {
 
   $docker build --pull \
     --build-arg REPO_DIR="$REPO_DIR" \
+    --build-arg VERSION="$gitDescribe" \
     --tag ${DOCKER_REPO1}:$tag "$BUILD_DIR"
 
   $docker tag ${DOCKER_REPO1}:$tag ${DOCKER_REPO2}:$tag
@@ -83,6 +85,7 @@ multi_arch_build() {
 
   $docker buildx build --pull --platform=$(echo $ARCHES | sed 's/ /,/g') $dockerRepoArgs \
     --build-arg REPO_DIR="$REPO_DIR" \
+    --build-arg VERSION="$gitDescribe" \
     --tag $DOCKER_REPO1:$tag \
     --tag $DOCKER_REPO2:$tag "$BUILD_DIR"
   echo "============================================================="
