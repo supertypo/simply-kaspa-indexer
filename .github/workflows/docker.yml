@@ -2,6 +2,12 @@ name: Docker Native Image
 
 on:
   push:
+    branches:
+      - "**"
+  release:
+    types:
+      - published
+      - prereleased
 
 env:
   MAIN_REPO: supertypo/simply-kaspa-indexer
