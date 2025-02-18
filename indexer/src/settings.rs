@@ -9,5 +9,7 @@ pub struct Settings {
     pub net_bps: u8,
     pub net_tps_max: u16,
     #[schema(value_type = String)]
-    pub checkpoint: KaspaHash,
+    pub block_checkpoint: KaspaHash,
+    #[schema(value_type = String)]
+    pub vcp_checkpoint: KaspaHash,
 }

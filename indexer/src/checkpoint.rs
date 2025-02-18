@@ -1,5 +1,5 @@
 use crate::settings::Settings;
-use crate::vars::save_checkpoint;
+use crate::vars::save_block_checkpoint;
 use crate::web::model::metrics::Metrics;
 use crossbeam_queue::ArrayQueue;
 use log::{debug, error, info, warn};
@@ -96,7 +96,7 @@ pub async fn process_checkpoints(
                 }
                 if cp_ok_blocks && cp_ok_txs {
                     info!("Saving block_checkpoint {}", checkpoint_string);
-                    save_checkpoint(&checkpoint_string, &database).await.unwrap();
+                    save_block_checkpoint(&checkpoint_string, &database).await.unwrap();
                     let mut metrics = metrics.write().await;
                     metrics.checkpoint.origin = Some(format!("{:?}", checkpoint.origin));
                     metrics.checkpoint.block = Some(checkpoint.into());

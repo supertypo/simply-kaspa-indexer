@@ -1,5 +1,6 @@
 use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
+use crate::vars::save_block_checkpoint;
 use crate::virtual_chain::accept_transactions::accept_transactions;
 use crate::virtual_chain::add_chain_blocks::add_chain_blocks;
 use crate::virtual_chain::remove_chain_blocks::remove_chain_blocks;
@@ -28,7 +29,7 @@ pub async fn process_virtual_chain(
 ) {
     let batch_scale = settings.cli_args.batch_scale;
     let disable_transaction_acceptance = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
-    let mut start_hash = settings.checkpoint;
+    let mut start_hash = settings.vcp_checkpoint;
 
     let start_time = Instant::now();
     let mut synced = false;
@@ -82,6 +83,7 @@ pub async fn process_virtual_chain(
                                 sleep(Duration::from_secs(1)).await;
                             }
                             start_hash = last_accepting_block.header.hash;
+                            save_block_checkpoint(&hex::encode(start_hash.as_bytes()), &database).await.unwrap();
                         }
                         // Default batch size is 1800 on 1 bps:
                         if !synced && added_blocks_count < 200 {
