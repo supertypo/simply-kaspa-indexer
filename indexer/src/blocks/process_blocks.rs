@@ -25,7 +25,6 @@ pub async fn process_blocks(
     metrics: Arc<RwLock<Metrics>>,
     start_vcp: Arc<AtomicBool>,
     rpc_blocks_queue: Arc<ArrayQueue<BlockData>>,
-    checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
     database: KaspaDbClient,
     mapper: KaspaDbMapper,
 ) {

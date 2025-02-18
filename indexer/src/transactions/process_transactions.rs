@@ -31,7 +31,6 @@ pub async fn process_transactions(
     run: Arc<AtomicBool>,
     metrics: Arc<RwLock<Metrics>>,
     txs_queue: Arc<ArrayQueue<TransactionData>>,
-    checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
     database: KaspaDbClient,
     mapper: KaspaDbMapper,
 ) {

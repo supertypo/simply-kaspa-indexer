@@ -5,10 +5,9 @@ use crate::virtual_chain::accept_transactions::accept_transactions;
 use crate::virtual_chain::add_chain_blocks::add_chain_blocks;
 use crate::virtual_chain::remove_chain_blocks::remove_chain_blocks;
 use crate::web::model::metrics::Metrics;
-use crossbeam_queue::ArrayQueue;
 use deadpool::managed::{Object, Pool};
 use kaspa_rpc_core::api::rpc::RpcApi;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_kaspad::pool::manager::KaspadManager;
@@ -23,7 +22,6 @@ pub async fn process_virtual_chain(
     run: Arc<AtomicBool>,
     metrics: Arc<RwLock<Metrics>>,
     start_vcp: Arc<AtomicBool>,
-    checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
     kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
     database: KaspaDbClient,
 ) {
@@ -78,10 +76,6 @@ pub async fn process_virtual_chain(
                             metrics.components.virtual_chain_processor.last_block = Some(checkpoint_block.clone().into());
                             drop(metrics);
 
-                            while checkpoint_queue.push(checkpoint_block.clone()).is_err() {
-                                warn!("Checkpoint queue is full");
-                                sleep(Duration::from_secs(1)).await;
-                            }
                             start_hash = last_accepting_block.header.hash;
                             save_block_checkpoint(&hex::encode(start_hash.as_bytes()), &database).await.unwrap();
                         }

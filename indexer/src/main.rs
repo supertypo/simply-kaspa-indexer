@@ -133,7 +133,6 @@ async fn start_processing(
     let queue_capacity = (cli_args.batch_scale * 1000f64) as usize;
     let blocks_queue = Arc::new(ArrayQueue::new(queue_capacity));
     let txs_queue = Arc::new(ArrayQueue::new(queue_capacity));
-    let checkpoint_queue = Arc::new(ArrayQueue::new(30000));
 
     let mapper = KaspaDbMapper::new(cli_args.clone());
 
@@ -169,11 +168,9 @@ async fn start_processing(
             metrics.clone(),
             start_vcp.clone(),
             blocks_queue.clone(),
-            checkpoint_queue.clone(),
             database.clone(),
             mapper.clone(),
         )),
-        task::spawn(process_checkpoints(settings.clone(), run.clone(), metrics.clone(), checkpoint_queue.clone(), database.clone())),
     ];
     if !settings.cli_args.is_disabled(CliDisable::TransactionProcessing) {
         tasks.push(task::spawn(process_transactions(
@@ -181,7 +178,6 @@ async fn start_processing(
             run.clone(),
             metrics.clone(),
             txs_queue.clone(),
-            checkpoint_queue.clone(),
             database.clone(),
             mapper.clone(),
         )))
@@ -192,7 +188,6 @@ async fn start_processing(
             run.clone(),
             metrics.clone(),
             start_vcp.clone(),
-            checkpoint_queue.clone(),
             kaspad_pool.clone(),
             database.clone(),
         )))
