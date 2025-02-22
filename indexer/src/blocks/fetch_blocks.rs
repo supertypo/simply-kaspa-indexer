@@ -22,7 +22,6 @@ use tokio::time::sleep;
 #[derive(Debug)]
 pub struct BlockData {
     pub block: RpcBlock,
-    pub synced: bool,
 }
 
 #[derive(Debug)]
@@ -71,7 +70,7 @@ impl KaspaBlocksFetcher {
             kaspad_pool,
             blocks_queue,
             txs_queue,
-            low_hash: settings.checkpoint,
+            low_hash: settings.block_checkpoint,
             last_sync_check: Instant::now() - Self::SYNC_CHECK_INTERVAL,
             synced: false,
             lag_count: 0,
@@ -181,7 +180,6 @@ impl KaspaBlocksFetcher {
             };
             let mut block_data = BlockData {
                 block: RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data },
-                synced: self.synced,
             };
             while self.run.load(Ordering::Relaxed) {
                 match self.blocks_queue.push(block_data) {

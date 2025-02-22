@@ -1,13 +1,13 @@
 use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
+use crate::vars::save_vcp_checkpoint;
 use crate::virtual_chain::accept_transactions::accept_transactions;
 use crate::virtual_chain::add_chain_blocks::add_chain_blocks;
 use crate::virtual_chain::remove_chain_blocks::remove_chain_blocks;
 use crate::web::model::metrics::Metrics;
-use crossbeam_queue::ArrayQueue;
 use deadpool::managed::{Object, Pool};
 use kaspa_rpc_core::api::rpc::RpcApi;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_kaspad::pool::manager::KaspadManager;
@@ -21,24 +21,17 @@ pub async fn process_virtual_chain(
     settings: Settings,
     run: Arc<AtomicBool>,
     metrics: Arc<RwLock<Metrics>>,
-    start_vcp: Arc<AtomicBool>,
-    checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
     kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
     database: KaspaDbClient,
 ) {
     let batch_scale = settings.cli_args.batch_scale;
     let disable_transaction_acceptance = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
-    let mut start_hash = settings.checkpoint;
+    let mut start_hash = settings.vcp_checkpoint;
 
     let start_time = Instant::now();
     let mut synced = false;
 
     while run.load(Ordering::Relaxed) {
-        if !start_vcp.load(Ordering::Relaxed) {
-            debug!("Virtual chain processor waiting for start notification");
-            sleep(Duration::from_secs(5)).await;
-            continue;
-        }
         debug!("Getting virtual chain from start_hash {}", start_hash.to_string());
         match kaspad_pool.get().await {
             Ok(kaspad) => {
@@ -75,13 +68,11 @@ pub async fn process_virtual_chain(
                             }
                             let mut metrics = metrics.write().await;
                             metrics.components.virtual_chain_processor.last_block = Some(checkpoint_block.clone().into());
+                            metrics.vcp_checkpoint = Some(checkpoint_block.into());
                             drop(metrics);
 
-                            while checkpoint_queue.push(checkpoint_block.clone()).is_err() {
-                                warn!("Checkpoint queue is full");
-                                sleep(Duration::from_secs(1)).await;
-                            }
                             start_hash = last_accepting_block.header.hash;
+                            save_vcp_checkpoint(&hex::encode(start_hash.as_bytes()), &database).await.unwrap();
                         }
                         // Default batch size is 1800 on 1 bps:
                         if !synced && added_blocks_count < 200 {

@@ -87,7 +87,22 @@ async fn indexer_health(metrics: Metrics, current_daa: Option<u64>) -> HealthInd
     });
 
     let net_bps = metrics.settings.as_ref().map(|s| s.net_bps as u64).unwrap_or(10);
-    health_details.push(indexer_details("checkpoint".to_string(), net_bps, current_daa, 120, 600, metrics.checkpoint.block.as_ref()));
+    health_details.push(indexer_details(
+        "block_checkpoint".to_string(),
+        net_bps,
+        current_daa,
+        120,
+        600,
+        metrics.block_checkpoint.as_ref(),
+    ));
+    health_details.push(indexer_details(
+        "vcp_checkpoint".to_string(),
+        net_bps,
+        current_daa,
+        120,
+        600,
+        metrics.vcp_checkpoint.as_ref(),
+    ));
     health_details.push(indexer_details(
         "component.block_fetcher".to_string(),
         net_bps,

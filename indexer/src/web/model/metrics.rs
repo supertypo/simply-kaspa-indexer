@@ -17,7 +17,8 @@ pub struct Metrics {
     pub settings: Option<Settings>,
     pub process: MetricsProcess,
     pub queues: MetricsQueues,
-    pub checkpoint: MetricsCheckpoint,
+    pub block_checkpoint: Option<MetricsBlock>,
+    pub vcp_checkpoint: Option<MetricsBlock>,
     pub components: MetricsComponent,
     pub database: MetricsDb,
 }
@@ -31,7 +32,8 @@ impl Metrics {
             settings: None,
             process: MetricsProcess::new(),
             queues: MetricsQueues::new(),
-            checkpoint: MetricsCheckpoint::new(),
+            block_checkpoint: None,
+            vcp_checkpoint: None,
             components: MetricsComponent::new(),
             database: MetricsDb::new(),
         }
@@ -98,26 +100,6 @@ impl Default for MetricsQueues {
 impl MetricsQueues {
     pub fn new() -> Self {
         Self { blocks: 0, blocks_capacity: 0, transactions: 0, transactions_capacity: 0 }
-    }
-}
-
-#[derive(ToSchema, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MetricsCheckpoint {
-    #[schema(example = "Vcp")]
-    pub origin: Option<String>,
-    pub block: Option<MetricsBlock>,
-}
-
-impl Default for MetricsCheckpoint {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl MetricsCheckpoint {
-    pub fn new() -> Self {
-        Self { origin: None, block: None }
     }
 }
 
