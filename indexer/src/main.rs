@@ -4,7 +4,7 @@ use deadpool::managed::{Object, Pool};
 use futures_util::future::try_join_all;
 use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
-use kaspa_wrpc_client::prelude::NetworkId;
+use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
 use log::{info, trace, warn};
 use simply_kaspa_cli::cli_args::{CliArgs, CliDisable};
 use simply_kaspa_database::client::KaspaDbClient;
@@ -86,7 +86,10 @@ async fn start_processing(
         }
     }
     let block_dag_info = block_dag_info.unwrap();
-    let net_bps = if block_dag_info.network.suffix.filter(|s| *s == 11).is_some() { 10 } else { 1 };
+    let net_bps = match block_dag_info.network {
+        NetworkId { network_type: NetworkType::Mainnet, suffix: None } => 1,
+        _ => 10,
+    };
     let net_tps_max = net_bps as u16 * 300;
     info!("Assuming {} block(s) per second for cache sizes", net_bps);
 
