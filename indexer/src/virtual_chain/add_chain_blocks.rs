@@ -5,7 +5,7 @@ use log::{debug, trace};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance;
 
-pub async fn add_chain_blocks(batch_scale: f64, added_hashes: &Vec<RpcHash>, database: &KaspaDbClient) -> u64 {
+pub async fn add_chain_blocks(batch_scale: f64, added_hashes: &[RpcHash], database: &KaspaDbClient) -> u64 {
     let batch_size = min((500f64 * batch_scale) as usize, 7500);
     if log::log_enabled!(log::Level::Debug) {
         let accepting_blocks = added_hashes.len();

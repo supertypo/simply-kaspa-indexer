@@ -7,7 +7,7 @@ use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance
 
 pub async fn accept_transactions(
     batch_scale: f64,
-    accepted_transaction_ids: &Vec<RpcAcceptedTransactionIds>,
+    accepted_transaction_ids: &[RpcAcceptedTransactionIds],
     database: &KaspaDbClient,
 ) -> u64 {
     let batch_size = min((500f64 * batch_scale) as usize, 7500);

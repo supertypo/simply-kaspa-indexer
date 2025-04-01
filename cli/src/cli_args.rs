@@ -100,6 +100,10 @@ pub struct CliArgs {
     pub batch_scale: f64,
     #[clap(short = 't', long, default_value = "60", help = "Cache ttl (secs). Adjusts tx/block caches for in-memory de-duplication")]
     pub cache_ttl: u64,
+    #[clap(long, default_value = "2", help = "Keep distance to virtual chain tip, higher value avoids reorgs. Is multiplied by net bps.")]
+    pub vcp_distance: u8,
+    #[clap(long, default_value = "5", help = "Poll interval for vcp (in seconds)")]
+    pub vcp_interval: u8,
     #[clap(short, long, help = "Ignore checkpoint and start from a specified block, 'p' for pruning point or 'v' for virtual")]
     pub ignore_checkpoint: Option<String>,
     #[clap(short, long, help = "Auto-upgrades older db schemas. Use with care")]
