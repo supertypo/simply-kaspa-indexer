@@ -11,7 +11,7 @@ use log::{debug, error, info, warn};
 use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_kaspad::pool::manager::KaspadManager;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -30,7 +30,7 @@ pub async fn process_virtual_chain(
     let batch_scale = settings.cli_args.batch_scale;
     let disable_transaction_acceptance = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
 
-    let poll_delay = Duration::from_secs(settings.cli_args.vcp_interval as u64);
+    let poll_interval = Duration::from_secs(settings.cli_args.vcp_interval as u64);
     let err_delay = Duration::from_secs(5);
 
     let mut start_hash = settings.checkpoint;
@@ -52,6 +52,7 @@ pub async fn process_virtual_chain(
             Ok(kaspad) => {
                 match kaspad.get_virtual_chain_from_block(start_hash, !disable_transaction_acceptance).await {
                     Ok(res) => {
+                        let start_request_time = Instant::now();
                         let added_blocks_count = res.added_chain_block_hashes.len();
                         if added_blocks_count > tip_distance {
                             let removed_chain_block_hashes = res.removed_chain_block_hashes.as_slice();
@@ -114,6 +115,9 @@ pub async fn process_virtual_chain(
                             log_time_to_synced(start_time);
                             synced = true;
                         }
+                        if synced {
+                            sleep(poll_interval.saturating_sub(Instant::now().duration_since(start_request_time))).await;
+                        }
                     }
                     Err(e) => {
                         error!("Failed getting virtual chain from start_hash {}: {}", start_hash.to_string(), e);
@@ -125,9 +129,6 @@ pub async fn process_virtual_chain(
                 error!("Failed getting kaspad connection from pool: {}", e);
                 sleep(err_delay).await
             }
-        }
-        if synced {
-            sleep(poll_delay).await;
         }
     }
 }
