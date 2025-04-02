@@ -100,13 +100,9 @@ pub struct CliArgs {
     pub batch_scale: f64,
     #[clap(short = 't', long, default_value = "60", help = "Cache ttl (secs). Adjusts tx/block caches for in-memory de-duplication")]
     pub cache_ttl: u64,
-    #[clap(
-        long,
-        default_value = "2",
-        help = "Keep distance to virtual chain tip, higher value avoids reorgs. Is multiplied by net bps."
-    )]
-    pub vcp_distance: u8,
-    #[clap(long, default_value = "4", help = "Poll interval for vcp (in seconds)")]
+    #[clap(long, default_value = "600", value_parser = clap::value_parser!(u16).range(1..), help = "Window size for automatic vcp tip distance adjustment (in seconds)")]
+    pub vcp_window: u16,
+    #[clap(long, default_value = "4", value_parser = clap::value_parser!(u8).range(1..), help = "Poll interval for vcp (in seconds)")]
     pub vcp_interval: u8,
     #[clap(short, long, help = "Ignore checkpoint and start from a specified block, 'p' for pruning point or 'v' for virtual")]
     pub ignore_checkpoint: Option<String>,

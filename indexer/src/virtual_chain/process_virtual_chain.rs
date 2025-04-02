@@ -11,6 +11,7 @@ use log::{debug, error, info, warn};
 use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_kaspad::pool::manager::KaspadManager;
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -28,12 +29,17 @@ pub async fn process_virtual_chain(
 ) {
     let batch_scale = settings.cli_args.batch_scale;
     let disable_transaction_acceptance = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
-    let tip_distance = settings.cli_args.vcp_distance as usize * settings.net_bps as usize;
-    let err_delay = Duration::from_secs(5);
-    let mut start_hash = settings.checkpoint;
 
+    let poll_delay = Duration::from_secs(settings.cli_args.vcp_interval as u64);
+    let err_delay = Duration::from_secs(5);
+
+    let mut start_hash = settings.checkpoint;
     let start_time = Instant::now();
     let mut synced = false;
+
+    let mut tip_distance = 5;
+    let mut recent_removals = VecDeque::new();
+    let tip_decrease_window = settings.cli_args.vcp_window.saturating_div(settings.cli_args.vcp_interval as u16).max(1) as usize;
 
     while run.load(Ordering::Relaxed) {
         if !start_vcp.load(Ordering::Relaxed) {
@@ -81,8 +87,20 @@ pub async fn process_virtual_chain(
                                     chrono::DateTime::from_timestamp_millis(checkpoint_block.timestamp as i64 / 1000 * 1000).unwrap()
                                 );
                             }
+                            if recent_removals.len() >= tip_decrease_window {
+                                recent_removals.pop_front();
+                            }
+                            recent_removals.push_back(rows_removed > 0);
+                            if rows_removed > 0 {
+                                tip_distance += 1;
+                                info!("Increased vcp tip distance to {tip_distance}");
+                            } else if recent_removals.len() == tip_decrease_window && recent_removals.iter().all(|&x| !x) {
+                                tip_distance = tip_distance.saturating_sub(1);
+                                info!("Decreased vcp tip distance to {tip_distance}");
+                            }
                             let mut metrics = metrics.write().await;
                             metrics.components.virtual_chain_processor.last_block = Some(checkpoint_block.clone().into());
+                            metrics.components.virtual_chain_processor.tip_distance = tip_distance as u64;
                             drop(metrics);
 
                             while checkpoint_queue.push(checkpoint_block.clone()).is_err() {
@@ -109,7 +127,7 @@ pub async fn process_virtual_chain(
             }
         }
         if synced {
-            sleep(Duration::from_secs(settings.cli_args.vcp_interval as u64)).await;
+            sleep(poll_delay).await;
         }
     }
 }

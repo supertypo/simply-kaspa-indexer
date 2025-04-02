@@ -207,6 +207,7 @@ impl MetricsComponentTransactionProcessor {
 pub struct MetricsComponentVirtualChainProcessor {
     pub enabled: bool,
     pub only_blocks: bool,
+    pub tip_distance: u64,
     pub last_block: Option<MetricsBlock>,
 }
 
@@ -218,7 +219,7 @@ impl Default for MetricsComponentVirtualChainProcessor {
 
 impl MetricsComponentVirtualChainProcessor {
     pub fn new() -> Self {
-        Self { enabled: false, only_blocks: false, last_block: None }
+        Self { enabled: false, only_blocks: false, tip_distance: 0, last_block: None }
     }
 }
 
