@@ -207,7 +207,12 @@ impl MetricsComponentTransactionProcessor {
 pub struct MetricsComponentVirtualChainProcessor {
     pub enabled: bool,
     pub only_blocks: bool,
-    pub tip_distance: u64,
+    #[schema(example = "6")]
+    pub tip_distance: Option<u64>,
+    #[schema(example = "1738706345528")]
+    pub tip_distance_timestamp: Option<u64>,
+    #[schema(example = "2025-04-03T22:47:33.938Z")]
+    pub tip_distance_date_time: Option<DateTime<Utc>>,
     pub last_block: Option<MetricsBlock>,
 }
 
@@ -219,7 +224,14 @@ impl Default for MetricsComponentVirtualChainProcessor {
 
 impl MetricsComponentVirtualChainProcessor {
     pub fn new() -> Self {
-        Self { enabled: false, only_blocks: false, tip_distance: 0, last_block: None }
+        Self {
+            enabled: false,
+            only_blocks: false,
+            tip_distance: None,
+            tip_distance_timestamp: None,
+            tip_distance_date_time: None,
+            last_block: None,
+        }
     }
 }
 

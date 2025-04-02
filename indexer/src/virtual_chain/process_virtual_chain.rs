@@ -11,10 +11,11 @@ use log::{debug, error, info, warn};
 use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_kaspad::pool::manager::KaspadManager;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use chrono::DateTime;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
@@ -37,9 +38,10 @@ pub async fn process_virtual_chain(
     let start_time = Instant::now();
     let mut synced = false;
 
-    let mut tip_distance = 5;
-    let mut recent_removals = VecDeque::new();
-    let tip_decrease_window = settings.cli_args.vcp_window.saturating_div(settings.cli_args.vcp_interval as u16).max(1) as usize;
+    let mut tip_distance = 10;
+    let mut tip_distance_timestamp = 0;
+    let mut tip_distance_history = VecDeque::new();
+    let tip_distance_window = settings.cli_args.vcp_window.saturating_div(settings.cli_args.vcp_interval as u16).max(1) as usize;
 
     while run.load(Ordering::Relaxed) {
         if !start_vcp.load(Ordering::Relaxed) {
@@ -88,20 +90,31 @@ pub async fn process_virtual_chain(
                                     chrono::DateTime::from_timestamp_millis(checkpoint_block.timestamp as i64 / 1000 * 1000).unwrap()
                                 );
                             }
-                            if recent_removals.len() >= tip_decrease_window {
-                                recent_removals.pop_front();
+                            if tip_distance_history.len() == tip_distance_window {
+                                tip_distance_history.pop_back();
                             }
-                            recent_removals.push_back(rows_removed > 0);
-                            if rows_removed > 0 {
+                            tip_distance_history.push_front(rows_removed > 0);
+                            let reorgs_count = tip_distance_history.iter().filter(|&&x| x).count();
+                            if reorgs_count >= 3 {
                                 tip_distance += 1;
-                                info!("Increased vcp tip distance to {tip_distance}");
-                            } else if recent_removals.len() == tip_decrease_window && recent_removals.iter().all(|&x| !x) {
-                                tip_distance = tip_distance.saturating_sub(1);
-                                info!("Decreased vcp tip distance to {tip_distance}");
+                                tip_distance_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+                                tip_distance_history.pop_front();
+                                tip_distance_history.push_front(false);
+                                debug!("Increased vcp tip distance to {tip_distance}");
+                            } else if synced && reorgs_count == 0 && tip_distance > 0 {
+                                tip_distance -= 1;
+                                tip_distance_timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+                                if tip_distance_history.len() == tip_distance_window {
+                                    tip_distance_history.pop_front();
+                                    tip_distance_history.push_front(true);
+                                }
+                                debug!("Decreased vcp tip distance to {tip_distance}");
                             }
                             let mut metrics = metrics.write().await;
                             metrics.components.virtual_chain_processor.last_block = Some(checkpoint_block.clone().into());
-                            metrics.components.virtual_chain_processor.tip_distance = tip_distance as u64;
+                            metrics.components.virtual_chain_processor.tip_distance = Some(tip_distance as u64);
+                            metrics.components.virtual_chain_processor.tip_distance_timestamp = Some(tip_distance_timestamp as u64);
+                            metrics.components.virtual_chain_processor.tip_distance_date_time = DateTime::from_timestamp_millis(tip_distance_timestamp as i64);
                             drop(metrics);
 
                             while checkpoint_queue.push(checkpoint_block.clone()).is_err() {
