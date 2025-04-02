@@ -29,6 +29,7 @@ pub async fn process_virtual_chain(
     let batch_scale = settings.cli_args.batch_scale;
     let disable_transaction_acceptance = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
     let tip_distance = settings.cli_args.vcp_distance as usize * settings.net_bps as usize;
+    let err_delay = Duration::from_secs(5);
     let mut start_hash = settings.checkpoint;
 
     let start_time = Instant::now();
@@ -37,7 +38,7 @@ pub async fn process_virtual_chain(
     while run.load(Ordering::Relaxed) {
         if !start_vcp.load(Ordering::Relaxed) {
             debug!("Virtual chain processor waiting for start notification");
-            sleep(Duration::from_secs(5)).await;
+            sleep(err_delay).await;
             continue;
         }
         debug!("Getting virtual chain from start_hash {}", start_hash.to_string());
@@ -59,21 +60,24 @@ pub async fn process_virtual_chain(
                                 daa_score: last_accepting_block.header.daa_score,
                                 blue_score: last_accepting_block.header.blue_score,
                             };
+                            let start_commit_time = Instant::now();
                             let rows_removed = remove_chain_blocks(batch_scale, removed_chain_block_hashes, &database).await;
                             if !disable_transaction_acceptance {
                                 let rows_added = accept_transactions(batch_scale, accepted_transaction_ids, &database).await;
                                 info!(
-                                    "Committed {} accepted and {} rejected transactions. Last accepted: {}",
+                                    "Committed {} accepted and {} rejected transactions in {}ms. Last accepted: {}",
                                     rows_added,
                                     rows_removed,
+                                    Instant::now().duration_since(start_commit_time).as_millis(),
                                     chrono::DateTime::from_timestamp_millis(checkpoint_block.timestamp as i64 / 1000 * 1000).unwrap()
                                 );
                             } else {
                                 let rows_added = add_chain_blocks(batch_scale, added_chain_block_hashes, &database).await;
                                 info!(
-                                    "Committed {} added and {} removed chain blocks. Last added: {}",
+                                    "Committed {} added and {} removed chain blocks in {}ms. Last added: {}",
                                     rows_added,
                                     rows_removed,
+                                    Instant::now().duration_since(start_commit_time).as_millis(),
                                     chrono::DateTime::from_timestamp_millis(checkpoint_block.timestamp as i64 / 1000 * 1000).unwrap()
                                 );
                             }
@@ -95,17 +99,17 @@ pub async fn process_virtual_chain(
                     }
                     Err(e) => {
                         error!("Failed getting virtual chain from start_hash {}: {}", start_hash.to_string(), e);
-                        sleep(Duration::from_secs(settings.cli_args.vcp_interval as u64)).await;
+                        sleep(err_delay).await;
                     }
                 }
             }
             Err(e) => {
                 error!("Failed getting kaspad connection from pool: {}", e);
-                sleep(Duration::from_secs(5)).await
+                sleep(err_delay).await
             }
         }
         if synced {
-            sleep(Duration::from_secs(2)).await;
+            sleep(Duration::from_secs(settings.cli_args.vcp_interval as u64)).await;
         }
     }
 }
