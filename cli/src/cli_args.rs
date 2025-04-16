@@ -8,6 +8,8 @@ pub enum CliEnable {
     None,
     /// Enables resolving transactions_inputs previous_outpoint
     TransactionsInputsResolve,
+    /// Enables (pruning point) utxo set import on startup (default is only on empty db)
+    UtxoImport,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]
@@ -34,6 +36,8 @@ pub enum CliDisable {
     TransactionsOutputsTable,
     /// Disables the addresses_transactions (or scripts_transactions) table
     AddressesTransactionsTable,
+    /// Disables initial utxo set import
+    InitialUtxoImport,
     /// Start VCP as soon as the filler has passed the previous run. Use with care
     VcpWaitForSync,
 }
@@ -82,8 +86,10 @@ pub enum CliField {
 #[command(name = "simply-kaspa-indexer", version = env!("VERGEN_GIT_DESCRIBE"))]
 #[serde(rename_all = "camelCase")]
 pub struct CliArgs {
-    #[clap(short = 's', long, help = "The url to a kaspad instance, e.g 'ws://localhost:17110'. Leave empty to use the Kaspa PNN")]
+    #[clap(short = 's', long, help = "RPC url to a kaspad instance, e.g 'ws://localhost:17110'. Leave empty to use the Kaspa PNN")]
     pub rpc_url: Option<String>,
+    #[clap(short = 's', long, help = "P2P socket address to a kaspad instance, e.g 'localhost:16111'.")]
+    pub p2p_url: Option<String>,
     #[clap(short, long, default_value = "mainnet", help = "The network type and suffix, e.g. 'testnet-11'")]
     pub network: String,
     #[clap(short, long, default_value = "postgres://postgres:postgres@localhost:5432/postgres", help = "PostgreSQL url")]

@@ -6,7 +6,7 @@ use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
 use log::{info, trace, warn};
-use simply_kaspa_cli::cli_args::{CliArgs, CliDisable};
+use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
@@ -27,6 +27,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::task;
+use simply_kaspa_indexer::utxo_set::import_utxo_set;
 
 #[tokio::main]
 async fn main() {
@@ -99,6 +100,7 @@ async fn start_processing(
     let net_tps_max = net_bps as u16 * 300;
     info!("Assuming {} block(s) per second for cache sizes", net_bps);
 
+    let mut utxo_set_import = cli_args.is_enabled(CliEnable::UtxoImport);
     let checkpoint: KaspaHash;
     if let Some(ignore_checkpoint) = cli_args.ignore_checkpoint.clone() {
         warn!("Checkpoint ignored due to user request (-i). This might lead to inconsistencies.");
@@ -116,8 +118,14 @@ async fn start_processing(
         checkpoint = KaspaHash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
         info!("Starting from checkpoint {}", checkpoint);
     } else {
-        checkpoint = *block_dag_info.virtual_parent_hashes.first().expect("Virtual parent not found");
-        warn!("Checkpoint not found, starting from virtual_parent {}", checkpoint);
+        if !cli_args.is_disabled(CliDisable::InitialUtxoImport) {
+            checkpoint = *block_dag_info.virtual_parent_hashes.first().expect("Virtual parent not found");
+            warn!("Checkpoint not found, starting from virtual_parent {}", checkpoint);
+        } else {
+            utxo_set_import = true;
+            checkpoint = block_dag_info.pruning_point_hash;
+            warn!("Checkpoint not found, starting from pruning_point {}", checkpoint);
+        }
     }
     if let Some(disable) = &cli_args.disable {
         info!("Disable functionality is set, the following functionality will be disabled: {:?}", disable);
@@ -159,6 +167,10 @@ async fn start_processing(
     metrics.components.virtual_chain_processor.enabled = !settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing);
     metrics.components.virtual_chain_processor.only_blocks = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
     let metrics = Arc::new(RwLock::new(metrics));
+
+    if utxo_set_import {
+        import_utxo_set(settings.clone()).await;
+    }
 
     let mut block_fetcher = KaspaBlocksFetcher::new(
         settings.clone(),
