@@ -1,0 +1,50 @@
+name: Release binaries
+
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  build-and-upload:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            arch: amd64
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y pkg-config libssl-dev libpq-dev gcc protobuf-compiler
+
+      - name: Build binary
+        run: |
+          RUSTFLAGS="-C target-feature=-crt-static -C link-args=-s" \
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Compress binary with arch suffix
+        run: |
+          BIN=target/${{ matrix.target }}/release/simply-kaspa-indexer
+          chmod 755 "$BIN"
+          cp "$BIN" "simply-kaspa-indexer-${{ matrix.arch }}"
+          gzip -f "simply-kaspa-indexer-${{ matrix.arch }}"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: simply-kaspa-indexer-${{ matrix.arch }}.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
