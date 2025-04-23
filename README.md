@@ -9,8 +9,8 @@ A schema migration script has been developed and is available [here](https://git
 A compatible version of the kaspa-rest-server is available [here](https://github.com/kaspa-ng/kaspa-rest-server).
 
 ## Binary releases
-For now, binary releases are only available for Docker.  
-Visit https://hub.docker.com/r/supertypo/simply-kaspa-indexer for more information.
+For now, binary releases are built for linux/amd64 and linux/arm64.
+Docker images are available from https://hub.docker.com/r/supertypo/simply-kaspa-indexer
 
 ## Important notes
 
