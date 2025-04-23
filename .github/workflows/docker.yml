@@ -146,3 +146,15 @@ jobs:
         run: |
           docker buildx imagetools inspect ${{ vars.DOCKER_REPO }}:${{ steps.meta_release.outputs.version }}
           docker buildx imagetools inspect ${{ vars.DOCKER_LEGACY_REPO }}:${{ steps.meta_release.outputs.version }}
+
+      - name: Create Docker image reference file
+        if: github.event_name == 'release'
+        run: echo "${{ vars.DOCKER_REPO }}:${{ github.event.release.tag_name }}" > docker-image.txt
+
+      - name: Upload Docker image reference file
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: docker-image.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
