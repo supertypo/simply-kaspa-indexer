@@ -60,7 +60,6 @@ pub async fn process_virtual_chain(
                         if added_blocks_count > tip_distance {
                             let removed_chain_block_hashes = res.removed_chain_block_hashes.as_slice();
                             let added_chain_block_hashes = &res.added_chain_block_hashes[..added_blocks_count - tip_distance];
-                            let accepted_transaction_ids = &res.accepted_transaction_ids[..added_blocks_count - tip_distance];
                             let last_accepting_block =
                                 kaspad.get_block(*added_chain_block_hashes.last().unwrap(), false).await.unwrap();
                             let checkpoint_block = CheckpointBlock {
@@ -73,6 +72,7 @@ pub async fn process_virtual_chain(
                             let start_commit_time = Instant::now();
                             let rows_removed = remove_chain_blocks(batch_scale, removed_chain_block_hashes, &database).await;
                             if !disable_transaction_acceptance {
+                                let accepted_transaction_ids = &res.accepted_transaction_ids[..added_blocks_count - tip_distance];
                                 let rows_added = accept_transactions(batch_scale, accepted_transaction_ids, &database).await;
                                 info!(
                                     "Committed {} accepted and {} rejected transactions in {}ms. Last accepted: {}",
