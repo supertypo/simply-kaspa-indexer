@@ -230,7 +230,7 @@ impl UtxoSetImporter {
                     script_public_key: self.include_script_public_key.then_some(script_public_key.script().to_vec()),
                     script_public_key_address: self
                         .include_script_public_key_address
-                        .then(|| extract_script_pub_key_address(&script_public_key, self.prefix).map(|a| a.address_to_string()).ok())
+                        .then(|| extract_script_pub_key_address(&script_public_key, self.prefix).map(|a| a.payload_to_string()).ok())
                         .flatten(),
                     block_time: self.include_block_time.then_some(0),
                 }
