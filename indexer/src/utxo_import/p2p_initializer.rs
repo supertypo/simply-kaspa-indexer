@@ -47,7 +47,7 @@ impl P2pInitializer {
             timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64,
             address: None,
             id: Vec::from(Uuid::new_v4().as_bytes()),
-            user_agent: format!("{}-{}", env!("CARGO_PKG_NAME"), self.cli_args.version()),
+            user_agent: format!("/{}:{}/", env!("CARGO_PKG_NAME"), self.cli_args.version()),
             disable_relay_tx: true,
             subnetwork_id: None,
             network: format!("kaspa-{}", self.cli_args.network.to_lowercase()),
