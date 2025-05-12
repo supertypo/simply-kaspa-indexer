@@ -3,6 +3,7 @@ use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
 use crate::web::model::metrics::Metrics;
 use crossbeam_queue::ArrayQueue;
+use kaspa_consensus_core::subnets::SUBNETWORK_ID_COINBASE;
 use kaspa_hashes::Hash as KaspaHash;
 use log::{debug, info, trace, warn};
 use moka::sync::Cache;
@@ -49,6 +50,7 @@ pub async fn process_transactions(
     let disable_transactions_outputs = settings.cli_args.is_disabled(CliDisable::TransactionsOutputsTable);
     let disable_blocks_transactions = settings.cli_args.is_disabled(CliDisable::BlocksTransactionsTable);
     let disable_address_transactions = settings.cli_args.is_disabled(CliDisable::AddressesTransactionsTable);
+    let disable_coinbase = settings.cli_args.is_disabled(CliDisable::CoinbaseTransactions);
     let exclude_tx_out_script_public_key_address = settings.cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress);
     let exclude_tx_out_script_public_key = settings.cli_args.is_excluded(CliField::TxOutScriptPublicKey);
 
@@ -94,6 +96,9 @@ pub async fn process_transactions(
             });
             for rpc_transaction in transaction_data.transactions {
                 let subnetwork_id = rpc_transaction.subnetwork_id.to_string();
+                if disable_coinbase && rpc_transaction.subnetwork_id == SUBNETWORK_ID_COINBASE {
+                    continue;
+                }
                 let subnetwork_key = match subnetwork_map.get(&subnetwork_id) {
                     Some(&subnetwork_key) => subnetwork_key,
                     None => {

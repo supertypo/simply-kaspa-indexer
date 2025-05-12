@@ -38,6 +38,8 @@ pub enum CliDisable {
     TransactionsOutputsTable,
     /// Disables the addresses_transactions (or scripts_transactions) table
     AddressesTransactionsTable,
+    /// Disables persistence of coinbase transactions
+    CoinbaseTransactions,
     /// Disables initial utxo set import
     InitialUtxoImport,
     /// Start VCP as soon as the filler has passed the previous run. Use with care
