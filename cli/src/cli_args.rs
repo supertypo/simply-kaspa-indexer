@@ -38,6 +38,8 @@ pub enum CliDisable {
     TransactionsOutputsTable,
     /// Disables the addresses_transactions (or scripts_transactions) table
     AddressesTransactionsTable,
+    /// Disables persistence of coinbase only blocks
+    CoinbaseOnlyBlocks,
     /// Disables persistence of coinbase transactions
     CoinbaseTransactions,
     /// Disables initial utxo set import

@@ -36,6 +36,7 @@ pub async fn process_blocks(
     let disable_vcp_wait_for_sync = settings.disable_vcp_wait_for_sync;
     let disable_blocks = settings.cli_args.is_disabled(CliDisable::BlocksTable);
     let disable_block_relations = settings.cli_args.is_disabled(CliDisable::BlockParentTable);
+    let disable_coinbase_only_blocks = settings.cli_args.is_disabled(CliDisable::CoinbaseOnlyBlocks);
     let mut first_block = true;
     let mut vcp_started = false;
     let mut blocks = vec![];
@@ -47,10 +48,6 @@ pub async fn process_blocks(
     while run.load(Ordering::Relaxed) {
         if let Some(block_data) = rpc_blocks_queue.pop() {
             let synced = block_data.synced;
-            let block = mapper.map_block(&block_data.block);
-            if !disable_block_relations {
-                blocks_parents.extend(mapper.map_block_parents(&block_data.block));
-            }
             checkpoint_blocks.push(CheckpointBlock {
                 origin: CheckpointOrigin::Blocks,
                 hash: block_data.block.header.hash.into(),
@@ -59,7 +56,14 @@ pub async fn process_blocks(
                 blue_score: block_data.block.header.blue_score,
             });
             if !disable_blocks {
-                blocks.push(block);
+                let is_coinbase_only = block_data.block.verbose_data.as_ref().map_or(false, |v| v.transaction_ids.len() == 1);
+                if !disable_coinbase_only_blocks || !is_coinbase_only {
+                    let block = mapper.map_block(&block_data.block);
+                    blocks.push(block);
+                }
+            }
+            if !disable_block_relations {
+                blocks_parents.extend(mapper.map_block_parents(&block_data.block));
             }
 
             if checkpoint_blocks.len() >= batch_size
