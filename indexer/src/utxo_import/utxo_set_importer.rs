@@ -90,9 +90,9 @@ impl UtxoSetImporter {
                 };
                 if let Some(params) = params {
                     if let Some(rpc_url) = &self.cli_args.rpc_url {
-                        Some(format!("{}:{}", Url::parse(rpc_url).unwrap().host().unwrap().to_string(), params.default_p2p_port()))
+                        Some(format!("{}:{}", Url::parse(rpc_url).unwrap().host().unwrap(), params.default_p2p_port()))
                     } else {
-                        Some(format!("{}:{}", params.dns_seeders.choose(&mut rng()).unwrap().to_string(), params.default_p2p_port()))
+                        Some(format!("{}:{}", params.dns_seeders.choose(&mut rng()).unwrap(), params.default_p2p_port()))
                     }
                 } else {
                     None

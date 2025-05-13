@@ -124,15 +124,13 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     } else if let Ok(saved_block_checkpoint) = load_block_checkpoint(&database).await {
         checkpoint = KaspaHash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
         info!("Starting from checkpoint {}", checkpoint);
+    } else if cli_args.is_disabled(CliDisable::InitialUtxoImport) {
+        checkpoint = *block_dag_info.virtual_parent_hashes.first().expect("Virtual parent not found");
+        warn!("Checkpoint not found, starting from virtual_parent {}", checkpoint);
     } else {
-        if cli_args.is_disabled(CliDisable::InitialUtxoImport) {
-            checkpoint = *block_dag_info.virtual_parent_hashes.first().expect("Virtual parent not found");
-            warn!("Checkpoint not found, starting from virtual_parent {}", checkpoint);
-        } else {
-            utxo_set_import = true;
-            checkpoint = block_dag_info.pruning_point_hash;
-            warn!("Checkpoint not found, starting from pruning_point {}", checkpoint);
-        }
+        utxo_set_import = true;
+        checkpoint = block_dag_info.pruning_point_hash;
+        warn!("Checkpoint not found, starting from pruning_point {}", checkpoint);
     }
 
     let checkpoint_block = match kaspad_pool.get().await.unwrap().get_block(checkpoint, false).await {
