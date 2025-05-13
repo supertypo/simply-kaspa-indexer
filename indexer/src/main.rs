@@ -232,7 +232,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     }
 
     tasks.push(task::spawn(async move {
-        if let Err(e) = pruner(run.clone(), cli_args.clone(), database.clone()).await {
+        if let Err(e) = pruner(cli_args.clone(), run.clone(), metrics.clone(), database.clone()).await {
             error!("Database pruner failed: {e}");
         }
     }));

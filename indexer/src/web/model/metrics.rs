@@ -129,6 +129,7 @@ pub struct MetricsComponent {
     pub block_processor: MetricsComponentBlockProcessor,
     pub transaction_processor: MetricsComponentTransactionProcessor,
     pub virtual_chain_processor: MetricsComponentVirtualChainProcessor,
+    pub db_pruner: MetricsComponentDbPruner,
 }
 
 impl Default for MetricsComponent {
@@ -145,6 +146,7 @@ impl MetricsComponent {
             block_processor: MetricsComponentBlockProcessor::new(),
             transaction_processor: MetricsComponentTransactionProcessor::new(),
             virtual_chain_processor: MetricsComponentVirtualChainProcessor::new(),
+            db_pruner: MetricsComponentDbPruner::new(),
         }
     }
 }
@@ -255,6 +257,46 @@ impl MetricsComponentVirtualChainProcessor {
             tip_distance_timestamp: None,
             tip_distance_date_time: None,
             last_block: None,
+        }
+    }
+}
+
+#[derive(ToSchema, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsComponentDbPruner {
+    pub enabled: bool,
+    pub cron: Option<String>,
+    pub retention_days: Option<u16>,
+    pub running: Option<bool>,
+    pub last_cutoff_timestamp: Option<u64>,
+    pub last_cutoff_date_time: Option<DateTime<Utc>>,
+    pub last_run_timestamp: Option<u64>,
+    pub last_run_date_time: Option<DateTime<Utc>>,
+    pub last_run_duration: Option<u64>,
+    pub last_run_duration_pretty: Option<String>,
+    pub last_rows_deleted: Option<u64>,
+}
+
+impl Default for MetricsComponentDbPruner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetricsComponentDbPruner {
+    pub fn new() -> Self {
+        Self {
+            enabled: false,
+            cron: None,
+            retention_days: None,
+            running: None,
+            last_cutoff_timestamp: None,
+            last_cutoff_date_time: None,
+            last_run_timestamp: None,
+            last_run_date_time: None,
+            last_run_duration: None,
+            last_run_duration_pretty: None,
+            last_rows_deleted: None,
         }
     }
 }
