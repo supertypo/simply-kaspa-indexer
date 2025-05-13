@@ -1,7 +1,12 @@
+use std::future::Future;
+use std::io;
+use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
-use log::{debug, info, trace, warn, LevelFilter};
+use log::{debug, error, info, trace, warn, LevelFilter};
 use regex::Regex;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Error, Pool, Postgres};
@@ -264,39 +269,77 @@ impl KaspaDbClient {
         query::delete::delete_transaction_acceptances(block_hashes, &self.pool).await
     }
 
-    pub async fn delete_old_block_parent(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::delete_old_block_parent(block_time_lt, &self.pool).await
+    pub async fn prune(&self, run: Arc<AtomicBool>, block_time_lt: i64) -> Result<u64, Error> {
+        let mut total_rows_affected = 0;
+        let mut errors = vec![];
+        let steps: Vec<(&str, Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<u64, Error>> + Send>> + Send>)> = vec![
+            ("block_parent", Box::new(|| Box::pin(self.prune_block_parent(block_time_lt)))),
+            ("blocks_transactions", Box::new(|| Box::pin(self.prune_blocks_transactions(block_time_lt)))),
+            ("blocks", Box::new(|| Box::pin(self.prune_blocks(block_time_lt)))),
+            ("transactions_acceptances", Box::new(|| Box::pin(self.prune_transactions_acceptances(block_time_lt)))),
+            ("spent transactions_outputs", Box::new(|| Box::pin(self.prune_spent_transactions_outputs(block_time_lt)))),
+            ("transactions_inputs", Box::new(|| Box::pin(self.prune_transactions_inputs(block_time_lt)))),
+            ("transactions", Box::new(|| Box::pin(self.prune_transactions(block_time_lt)))),
+            ("addresses_transactions", Box::new(|| Box::pin(self.prune_addresses_transactions(block_time_lt)))),
+            ("scripts_transactions", Box::new(|| Box::pin(self.prune_scripts_transactions(block_time_lt)))),
+        ];
+        for (label, task) in steps {
+            if run.load(Ordering::Relaxed) {
+                info!("Pruning {label} (block_time_lt = {block_time_lt})");
+                match task().await {
+                    Ok(rows_affected) => {
+                        info!("Pruned {label}, {rows_affected} rows deleted");
+                        total_rows_affected += rows_affected;
+                    }
+                    Err(e) => {
+                        error!("{label}: {e}");
+                        errors.push(format!("{label}: {e}"));
+                    }
+                }
+            } else {
+                errors.push(format!("{label}: shutdown"));
+            }
+        }
+        if errors.is_empty() {
+            Ok(total_rows_affected)
+        } else {
+            Err(Error::Io(io::Error::new(io::ErrorKind::Other, errors.join(", "))))
+        }
     }
 
-    pub async fn delete_old_blocks_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::delete_old_blocks_transactions(block_time_lt, &self.pool).await
+    pub async fn prune_block_parent(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_block_parent(block_time_lt, &self.pool).await
     }
 
-    pub async fn delete_old_blocks(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::delete_old_blocks(block_time_lt, &self.pool).await
+    pub async fn prune_blocks_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_blocks_transactions(block_time_lt, &self.pool).await
     }
 
-    pub async fn delete_old_transactions_acceptances(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::delete_old_transactions_acceptances(block_time_lt, &self.pool).await
+    pub async fn prune_blocks(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_blocks(block_time_lt, &self.pool).await
     }
 
-    pub async fn delete_old_transactions_outputs(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::delete_old_transactions_outputs(block_time_lt, &self.pool).await
+    pub async fn prune_transactions_acceptances(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_transactions_acceptances(block_time_lt, &self.pool).await
     }
 
-    pub async fn delete_old_transactions_inputs(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::delete_old_transactions_inputs(block_time_lt, &self.pool).await
+    pub async fn prune_spent_transactions_outputs(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_spent_transactions_outputs(block_time_lt, &self.pool).await
     }
 
-    pub async fn delete_old_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::delete_old_transactions(block_time_lt, &self.pool).await
+    pub async fn prune_transactions_inputs(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_transactions_inputs(block_time_lt, &self.pool).await
     }
 
-    pub async fn delete_old_addresses_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::delete_old_addresses_transactions(block_time_lt, &self.pool).await
+    pub async fn prune_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_transactions(block_time_lt, &self.pool).await
     }
 
-    pub async fn delete_old_scripts_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::delete_old_scripts_transactions(block_time_lt, &self.pool).await
+    pub async fn prune_addresses_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_addresses_transactions(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_scripts_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_scripts_transactions(block_time_lt, &self.pool).await
     }
 }

@@ -121,7 +121,7 @@ pub struct CliArgs {
     #[clap(long, default_missing_value = "0 4 * * *", num_args = 0..=1, help = "Enables db pruning, supply a cron expression or default will be used. Default: '0 4 * * *' = daily 04:00 (UTC)")]
     pub prune_db: Option<String>,
     #[clap(long, default_value = "7", help = "Data retention (in days) for database pruning if pruning is enabled")]
-    pub prune_db_retention_days: u32,
+    pub prune_db_retention_days: u16,
     #[clap(long, help = "Enable optional functionality", value_enum, use_value_delimiter = true)]
     pub enable: Option<Vec<CliEnable>>,
     #[clap(long, help = "Disable specific functionality", value_enum, use_value_delimiter = true)]
