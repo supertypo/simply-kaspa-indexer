@@ -264,8 +264,8 @@ impl KaspaDbClient {
         query::delete::delete_transaction_acceptances(block_hashes, &self.pool).await
     }
 
-    pub async fn delete_old_block_parents(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::delete_old_block_parents(block_time_lt, &self.pool).await
+    pub async fn delete_old_block_parent(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::delete_old_block_parent(block_time_lt, &self.pool).await
     }
 
     pub async fn delete_old_blocks_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {

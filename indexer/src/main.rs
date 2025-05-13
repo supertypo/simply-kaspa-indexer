@@ -5,12 +5,13 @@ use futures_util::future::try_join_all;
 use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
-use log::{info, trace, warn};
+use log::{error, info, trace, warn};
 use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
 use simply_kaspa_indexer::checkpoint::{process_checkpoints, CheckpointBlock, CheckpointOrigin};
+use simply_kaspa_indexer::prune::pruner;
 use simply_kaspa_indexer::settings::Settings;
 use simply_kaspa_indexer::signal::signal_handler::notify_on_signals;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
@@ -231,5 +232,12 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             database.clone(),
         )))
     }
+
+    tasks.push(task::spawn(async move {
+        if let Err(e) = pruner(run.clone(), cli_args.clone(), database.clone()).await {
+            error!("Database pruner failed: {e}");
+        }
+    }));
+
     try_join_all(tasks).await.unwrap();
 }

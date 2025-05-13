@@ -9,7 +9,7 @@ pub async fn delete_transaction_acceptances(block_hashes: &[Hash], pool: &Pool<P
         .rows_affected())
 }
 
-pub async fn delete_old_block_parents(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
+pub async fn delete_old_block_parent(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "DELETE FROM block_parent bp USING blocks b WHERE bp.block_hash = b.hash AND b.timestamp < $1";
     Ok(sqlx::query(sql).bind(block_time_lt).execute(pool).await?.rows_affected())
 }
@@ -52,7 +52,11 @@ pub async fn delete_old_transactions(block_time_lt: i64, pool: &Pool<Postgres>) 
 }
 
 pub async fn delete_old_addresses_transactions(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    Ok(sqlx::query("DELETE FROM addresses_transactions WHERE block_time < $1").bind(block_time_lt).execute(pool).await?.rows_affected())
+    Ok(sqlx::query("DELETE FROM addresses_transactions WHERE block_time < $1")
+        .bind(block_time_lt)
+        .execute(pool)
+        .await?
+        .rows_affected())
 }
 
 pub async fn delete_old_scripts_transactions(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {

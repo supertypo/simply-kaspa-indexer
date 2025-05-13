@@ -35,9 +35,9 @@ kaspa-p2p-lib = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1
 kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.0" }
 kaspa-hashes = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.0" }
 kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.0" }
-kaspa-utils = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.0" }
 kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.0" }
 tokio = { version = "1.43.0", features = ["default", "signal"] }
+tokio-cron-scheduler = "0.14.0"
 tonic = { version = "0.12.3", features = ["tls", "gzip"] }
 futures-util = { version = "0.3.31", default-features = false }
 sqlx = { version = "0.8.3", features = ["runtime-tokio", "runtime-tokio-native-tls", "postgres"] }
