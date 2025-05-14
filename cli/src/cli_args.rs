@@ -118,7 +118,7 @@ pub struct CliArgs {
     pub upgrade_db: bool,
     #[clap(short = 'c', long, help = "(Re-)initializes the database schema. Use with care")]
     pub initialize_db: bool,
-    #[clap(long, default_missing_value = "0 4 * * *", num_args = 0..=1, help = "Enables db pruning, supply a cron expression or default will be used. Default: '0 4 * * *' = daily 04:00 (UTC)")]
+    #[clap(long, default_missing_value = "0 4 * * *", num_args = 0..=1, help = "Enables db pruning. Supply a cron expression (spaces may be replaced by underscores). Default: '0 4 * * *' = daily 04:00 (UTC)")]
     pub prune_db: Option<String>,
     #[clap(long, default_value = "7", help = "Data retention (in days) for database pruning if pruning is enabled")]
     pub prune_db_retention_days: u16,

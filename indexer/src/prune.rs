@@ -18,6 +18,7 @@ pub async fn pruner(
     database: KaspaDbClient,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(cron) = cli_args.prune_db.clone() {
+        let cron = cron.replace("_", " ");
         warn!("\x1b[33mDatabase pruning enabled. Cron: '{cron}'. Retention: {} days\x1b[0m", cli_args.prune_db_retention_days);
         let mut metrics_rw = metrics.write().await;
         metrics_rw.components.db_pruner.enabled = true;
