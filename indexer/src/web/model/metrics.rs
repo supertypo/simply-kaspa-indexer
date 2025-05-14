@@ -274,6 +274,7 @@ pub struct MetricsComponentDbPruner {
     pub last_run_date_time: Option<DateTime<Utc>>,
     pub last_run_duration: Option<u64>,
     pub last_run_duration_pretty: Option<String>,
+    pub last_run_ok: Option<bool>,
     pub last_rows_deleted: Option<u64>,
 }
 
@@ -296,6 +297,7 @@ impl MetricsComponentDbPruner {
             last_run_date_time: None,
             last_run_duration: None,
             last_run_duration_pretty: None,
+            last_run_ok: None,
             last_rows_deleted: None,
         }
     }
