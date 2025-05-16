@@ -1,12 +1,14 @@
-use crate::web::model::metrics::Metrics;
+use crate::web::model::metrics::{Metrics, MetricsComponentDbPrunerResult, MetricsComponentDbPrunerRetention};
 use chrono::{DateTime, Utc};
-use log::{info, warn};
-use simply_kaspa_cli::cli_args::CliArgs;
+use log::{error, info, warn};
+use serde_json::to_string_pretty;
+use simply_kaspa_cli::cli_args::{CliArgs, PruningConfig};
 use simply_kaspa_database::client::KaspaDbClient;
+use std::error::Error;
+use std::future::Future;
 use std::ops::Sub;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -16,21 +18,66 @@ pub async fn pruner(
     run: Arc<AtomicBool>,
     metrics: Arc<RwLock<Metrics>>,
     database: KaspaDbClient,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(cron) = cli_args.prune_db.clone() {
+) -> Result<(), Box<dyn Error>> {
+    if let Some(cron) = cli_args.pruning.prune_db.clone() {
+        let mut pruning_config = cli_args.pruning.clone();
+        let default = pruning_config.retention;
+        pruning_config.retention_block_parent = pruning_config.retention_block_parent.or(default);
+        pruning_config.retention_blocks_transactions = pruning_config.retention_blocks_transactions.or(default);
+        pruning_config.retention_blocks = pruning_config.retention_blocks.or(default);
+        pruning_config.retention_transactions_acceptances = pruning_config.retention_transactions_acceptances.or(default);
+        pruning_config.retention_transactions_outputs = pruning_config.retention_transactions_outputs.or(default);
+        pruning_config.retention_transactions_inputs = pruning_config.retention_transactions_inputs.or(default);
+        pruning_config.retention_transactions = pruning_config.retention_transactions.or(default);
+        pruning_config.retention_addresses_transactions = pruning_config.retention_addresses_transactions.or(default);
+        pruning_config.retention_scripts_transactions = pruning_config.retention_scripts_transactions.or(default);
+
         let cron = cron.replace("_", " ");
-        warn!("\x1b[33mDatabase pruning enabled. Cron: '{cron}'. Retention: {} days\x1b[0m", cli_args.prune_db_retention_days);
-        let mut metrics_rw = metrics.write().await;
-        metrics_rw.components.db_pruner.enabled = true;
-        metrics_rw.components.db_pruner.cron = Some(cron.clone());
-        metrics_rw.components.db_pruner.retention_days = Some(cli_args.prune_db_retention_days);
-        drop(metrics_rw);
+        info!("Database pruning enabled:\n{}", to_string_pretty(&pruning_config).unwrap());
+        {
+            let mut metrics_rw = metrics.write().await;
+            metrics_rw.components.db_pruner.enabled = true;
+            metrics_rw.components.db_pruner.cron = Some(cron.clone());
+            metrics_rw.components.db_pruner.retention = Some(vec![
+                MetricsComponentDbPrunerRetention {
+                    name: "block_parent".to_string(),
+                    retention: pruning_config.retention_block_parent,
+                },
+                MetricsComponentDbPrunerRetention {
+                    name: "blocks_transactions".to_string(),
+                    retention: pruning_config.retention_blocks_transactions,
+                },
+                MetricsComponentDbPrunerRetention { name: "blocks".to_string(), retention: pruning_config.retention_blocks },
+                MetricsComponentDbPrunerRetention {
+                    name: "transactions_acceptances".to_string(),
+                    retention: pruning_config.retention_transactions_acceptances,
+                },
+                MetricsComponentDbPrunerRetention {
+                    name: "transactions_outputs".to_string(),
+                    retention: pruning_config.retention_transactions_outputs,
+                },
+                MetricsComponentDbPrunerRetention {
+                    name: "transactions_inputs".to_string(),
+                    retention: pruning_config.retention_transactions_inputs,
+                },
+                MetricsComponentDbPrunerRetention {
+                    name: "transactions".to_string(),
+                    retention: pruning_config.retention_transactions,
+                },
+                MetricsComponentDbPrunerRetention {
+                    name: "addresses_transactions".to_string(),
+                    retention: pruning_config.retention_addresses_transactions,
+                },
+                MetricsComponentDbPrunerRetention {
+                    name: "scripts_transactions".to_string(),
+                    retention: pruning_config.retention_scripts_transactions,
+                },
+            ])
+        }
 
         let run_clone = run.clone();
-        let metrics_clone = metrics.clone();
-        let database = database.clone();
         let job = Job::new_async(format!("0 {}", cron), move |_, _| {
-            Box::pin(prune(run_clone.clone(), metrics_clone.clone(), cli_args.prune_db_retention_days, database.clone()))
+            Box::pin(prune(pruning_config.clone(), run_clone.clone(), metrics.clone(), database.clone()))
         })
         .unwrap();
         let scheduler = JobScheduler::new().await?;
@@ -40,38 +87,192 @@ pub async fn pruner(
             sleep(Duration::from_secs(2)).await;
         }
     } else {
-        info!("Database pruning disabled");
+        info!("Database pruning is disabled. Disk usage will grow indefinitely");
     }
     Ok(())
 }
 
-pub async fn prune(run: Arc<AtomicBool>, metrics: Arc<RwLock<Metrics>>, retention_days: u16, database: KaspaDbClient) {
-    let now = DateTime::from_timestamp_millis(Utc::now().timestamp_millis()).unwrap();
-    let cutoff = now.sub(chrono::Duration::days(retention_days.into()));
+pub async fn prune(pruning_config: PruningConfig, run: Arc<AtomicBool>, metrics: Arc<RwLock<Metrics>>, database: KaspaDbClient) {
+    info!("\x1b[33mDatabase pruning started\x1b[0m");
+    let common_start_time = Utc::now();
+    let mut step_errors = 0;
+    {
+        let mut metrics_rw = metrics.write().await;
+        metrics_rw.components.db_pruner.running = Some(true);
+        metrics_rw.components.db_pruner.start_time = Some(common_start_time);
+        metrics_rw.components.db_pruner.results = Some(vec![]);
+    }
+
+    if !run.load(Ordering::Relaxed) {
+        return;
+    }
+    let database_clone = database.clone();
+    let step_pruning_point = common_start_time.sub(pruning_config.retention_block_parent.unwrap());
+    step_errors += prune_step(
+        "block_parent",
+        metrics.clone(),
+        |step_pruning_point| async move { database_clone.prune_block_parent(step_pruning_point).await },
+        step_pruning_point,
+    )
+    .await as i32;
+
+    if !run.load(Ordering::Relaxed) {
+        return;
+    }
+    let database_clone = database.clone();
+    let step_pruning_point = common_start_time.sub(pruning_config.retention_blocks_transactions.unwrap());
+    step_errors += prune_step(
+        "blocks_transactions",
+        metrics.clone(),
+        |step_pruning_point| async move { database_clone.prune_blocks_transactions(step_pruning_point).await },
+        step_pruning_point,
+    )
+    .await as i32;
+
+    if !run.load(Ordering::Relaxed) {
+        return;
+    }
+    let database_clone = database.clone();
+    let step_pruning_point = common_start_time.sub(pruning_config.retention_blocks.unwrap());
+    step_errors += prune_step(
+        "blocks",
+        metrics.clone(),
+        |step_pruning_point| async move { database_clone.prune_blocks(step_pruning_point).await },
+        step_pruning_point,
+    )
+    .await as i32;
+
+    if !run.load(Ordering::Relaxed) {
+        return;
+    }
+    let database_clone = database.clone();
+    let step_pruning_point = common_start_time.sub(pruning_config.retention_transactions_acceptances.unwrap());
+    step_errors += prune_step(
+        "transactions_acceptances",
+        metrics.clone(),
+        |step_pruning_point| async move { database_clone.prune_transactions_acceptances(step_pruning_point).await },
+        step_pruning_point,
+    )
+    .await as i32;
+
+    if !run.load(Ordering::Relaxed) {
+        return;
+    }
+    let database_clone = database.clone();
+    let step_pruning_point = common_start_time.sub(pruning_config.retention_transactions_outputs.unwrap());
+    step_errors += prune_step(
+        "spent transactions_outputs",
+        metrics.clone(),
+        |step_pruning_point| async move { database_clone.prune_spent_transactions_outputs(step_pruning_point).await },
+        step_pruning_point,
+    )
+    .await as i32;
+
+    if !run.load(Ordering::Relaxed) {
+        return;
+    }
+    let database_clone = database.clone();
+    let step_pruning_point = common_start_time.sub(pruning_config.retention_transactions_inputs.unwrap());
+    step_errors += prune_step(
+        "transactions_inputs",
+        metrics.clone(),
+        |step_pruning_point| async move { database_clone.prune_transactions_inputs(step_pruning_point).await },
+        step_pruning_point,
+    )
+    .await as i32;
+
+    if !run.load(Ordering::Relaxed) {
+        return;
+    }
+    let database_clone = database.clone();
+    let step_pruning_point = common_start_time.sub(pruning_config.retention_transactions.unwrap());
+    step_errors += prune_step(
+        "transactions",
+        metrics.clone(),
+        |step_pruning_point| async move { database_clone.prune_transactions(step_pruning_point).await },
+        step_pruning_point,
+    )
+    .await as i32;
+
+    if !run.load(Ordering::Relaxed) {
+        return;
+    }
+    let database_clone = database.clone();
+    let step_pruning_point = common_start_time.sub(pruning_config.retention_addresses_transactions.unwrap());
+    step_errors += prune_step(
+        "addresses_transactions",
+        metrics.clone(),
+        |step_pruning_point| async move { database_clone.prune_addresses_transactions(step_pruning_point).await },
+        step_pruning_point,
+    )
+    .await as i32;
+
+    if !run.load(Ordering::Relaxed) {
+        return;
+    }
+    let database_clone = database.clone();
+    let step_pruning_point = common_start_time.sub(pruning_config.retention_scripts_transactions.unwrap());
+    step_errors += prune_step(
+        "scripts_transactions",
+        metrics.clone(),
+        |step_pruning_point| async move { database_clone.prune_scripts_transactions(step_pruning_point).await },
+        step_pruning_point,
+    )
+    .await as i32;
+
+    if step_errors == 0 {
+        info!("\x1b[32mDatabase pruning completed successfully!\x1b[0m");
+    } else {
+        warn!("\x1b[33mDatabase pruning completed with one or more errors\x1b[0m");
+    }
     let mut metrics_rw = metrics.write().await;
-    metrics_rw.components.db_pruner.running = Some(true);
-    metrics_rw.components.db_pruner.last_cutoff_timestamp = Some(cutoff.timestamp_millis().try_into().unwrap());
-    metrics_rw.components.db_pruner.last_cutoff_date_time = Some(cutoff);
-    metrics_rw.components.db_pruner.last_run_timestamp = Some(now.timestamp_millis().try_into().unwrap());
-    metrics_rw.components.db_pruner.last_run_date_time = Some(now);
-    drop(metrics_rw);
-    info!("\x1b[33mDatabase pruning started, retention_days = {retention_days}\x1b[0m");
-    let start = Instant::now();
-    let result = database.prune(run, cutoff.timestamp_millis()).await;
-    let duration = Duration::from_millis(start.elapsed().as_millis().try_into().unwrap());
-    let mut metrics_rw = metrics.write().await;
-    metrics_rw.components.db_pruner.running = Some(false);
-    metrics_rw.components.db_pruner.last_run_duration = Some(duration.as_millis().try_into().unwrap());
-    metrics_rw.components.db_pruner.last_run_duration_pretty = Some(humantime::format_duration(duration).to_string());
-    match result {
-        Ok(total_rows_affected) => {
-            info!("\x1b[32mDatabase pruning completed successfully!\x1b[0m");
-            metrics_rw.components.db_pruner.last_rows_deleted = Some(total_rows_affected);
-            metrics_rw.components.db_pruner.last_run_ok = Some(true);
+    metrics_rw.components.db_pruner.completed_time = Some(Utc::now());
+    metrics_rw.components.db_pruner.completed_successfully = Some(step_errors == 0);
+}
+
+pub async fn prune_step<F, Fut, E>(
+    step_name: &'static str,
+    metrics: Arc<RwLock<Metrics>>,
+    db_call: F,
+    cutoff_time: DateTime<Utc>,
+) -> bool
+where
+    F: FnOnce(i64) -> Fut,
+    Fut: Future<Output = Result<u64, E>> + Send + 'static,
+    E: Error + Send + Sync + 'static,
+{
+    info!("Pruning {step_name} rows older than {cutoff_time}");
+    let start_time = Utc::now();
+    let mut metrics_result = MetricsComponentDbPrunerResult {
+        name: step_name.to_string(),
+        start_time,
+        cutoff_time,
+        duration: None,
+        success: None,
+        rows_deleted: None,
+    };
+    {
+        let mut metrics_rw = metrics.write().await;
+        metrics_rw.components.db_pruner.results.as_mut().unwrap().push(metrics_result.clone());
+    }
+    let step_result = db_call(cutoff_time.timestamp_millis()).await;
+
+    let success = step_result.is_ok();
+    metrics_result.success = Some(success);
+    metrics_result.duration = Some(Utc::now().signed_duration_since(start_time).to_std().unwrap());
+
+    match step_result {
+        Ok(rows_affected) => {
+            info!("Pruned {step_name}, {rows_affected} rows deleted");
+            metrics_result.rows_deleted = Some(rows_affected);
         }
         Err(e) => {
-            warn!("\x1b[33mDatabase pruning completed with error(s): {}\x1b[0m", e);
-            metrics_rw.components.db_pruner.last_run_ok = Some(false);
+            error!("Pruning {step_name} failed with error: {e}");
+            metrics_result.rows_deleted = None;
         }
-    };
+    }
+    let mut metrics_rw = metrics.write().await;
+    metrics_rw.components.db_pruner.results.as_mut().unwrap().pop();
+    metrics_rw.components.db_pruner.results.as_mut().unwrap().push(metrics_result);
+    !success
 }
