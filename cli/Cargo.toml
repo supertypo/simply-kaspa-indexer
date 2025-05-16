@@ -20,3 +20,5 @@ vergen-git2.workspace = true
 clap.workspace = true
 utoipa.workspace = true
 serde.workspace = true
+humantime.workspace = true
+humantime-serde.workspace = true

@@ -146,13 +146,13 @@ async fn indexer_health(metrics: Metrics, current_daa: Option<u64>) -> HealthInd
     }
 
     if metrics.components.db_pruner.enabled {
-        let ok = metrics.components.db_pruner.last_run_ok;
-        let last_run = metrics.components.db_pruner.last_run_date_time.unwrap_or(DateTime::UNIX_EPOCH);
+        let ok = metrics.components.db_pruner.completed_successfully;
+        let start_time = metrics.components.db_pruner.start_time.unwrap_or(DateTime::UNIX_EPOCH);
         health_details.push(HealthIndexerDetails {
             name: "component.db_pruner".to_string(),
             status: ok.map(|ok| if ok { HealthStatus::UP } else { HealthStatus::WARN }).unwrap_or(HealthStatus::UP),
             reason: ok
-                .map(|ok| format!("{}: {}", last_run, if ok { "Success" } else { "Failure" }))
+                .map(|ok| format!("{}: {}", start_time, if ok { "Success" } else { "Failure" }))
                 .unwrap_or("Not yet run".to_string()),
         });
     } else {
