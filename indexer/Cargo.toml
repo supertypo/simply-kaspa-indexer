@@ -44,7 +44,6 @@ serde_with.workspace = true
 serde_json.workspace = true
 sysinfo.workspace = true
 bytesize.workspace = true
-iso8601-duration.workspace = true
 humantime.workspace = true
 humantime-serde.workspace = true
 url.workspace = true

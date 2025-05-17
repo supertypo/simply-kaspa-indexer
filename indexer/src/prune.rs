@@ -1,9 +1,10 @@
-use crate::web::model::metrics::{Metrics, MetricsComponentDbPrunerResult, MetricsComponentDbPrunerRetention};
+use crate::web::model::metrics::{Metrics, MetricsComponentDbPrunerResult};
 use chrono::{DateTime, Utc};
 use log::{error, info, warn};
 use serde_json::to_string_pretty;
 use simply_kaspa_cli::cli_args::{CliArgs, PruningConfig};
 use simply_kaspa_database::client::KaspaDbClient;
+use std::collections::HashMap;
 use std::error::Error;
 use std::future::Future;
 use std::ops::Sub;
@@ -21,7 +22,7 @@ pub async fn pruner(
 ) -> Result<(), Box<dyn Error>> {
     if let Some(cron) = cli_args.pruning.prune_db.clone() {
         let mut pruning_config = cli_args.pruning.clone();
-        let default = pruning_config.retention.or(Some(Duration::from_secs(7 * 24 * 60 * 60)));
+        let default = pruning_config.retention;
         pruning_config.retention_block_parent = pruning_config.retention_block_parent.or(default);
         pruning_config.retention_blocks_transactions = pruning_config.retention_blocks_transactions.or(default);
         pruning_config.retention_blocks = pruning_config.retention_blocks.or(default);
@@ -38,41 +39,19 @@ pub async fn pruner(
             let mut metrics_rw = metrics.write().await;
             metrics_rw.components.db_pruner.enabled = true;
             metrics_rw.components.db_pruner.cron = Some(cron.clone());
-            metrics_rw.components.db_pruner.retention = Some(vec![
-                MetricsComponentDbPrunerRetention {
-                    name: "block_parent".to_string(),
-                    retention: pruning_config.retention_block_parent,
-                },
-                MetricsComponentDbPrunerRetention {
-                    name: "blocks_transactions".to_string(),
-                    retention: pruning_config.retention_blocks_transactions,
-                },
-                MetricsComponentDbPrunerRetention { name: "blocks".to_string(), retention: pruning_config.retention_blocks },
-                MetricsComponentDbPrunerRetention {
-                    name: "transactions_acceptances".to_string(),
-                    retention: pruning_config.retention_transactions_acceptances,
-                },
-                MetricsComponentDbPrunerRetention {
-                    name: "transactions_outputs".to_string(),
-                    retention: pruning_config.retention_transactions_outputs,
-                },
-                MetricsComponentDbPrunerRetention {
-                    name: "transactions_inputs".to_string(),
-                    retention: pruning_config.retention_transactions_inputs,
-                },
-                MetricsComponentDbPrunerRetention {
-                    name: "transactions".to_string(),
-                    retention: pruning_config.retention_transactions,
-                },
-                MetricsComponentDbPrunerRetention {
-                    name: "addresses_transactions".to_string(),
-                    retention: pruning_config.retention_addresses_transactions,
-                },
-                MetricsComponentDbPrunerRetention {
-                    name: "scripts_transactions".to_string(),
-                    retention: pruning_config.retention_scripts_transactions,
-                },
-            ])
+
+            let mut retention = HashMap::new();
+            retention.insert("block_parent".to_string(), format_duration(pruning_config.retention_block_parent));
+            retention.insert("blocks_transactions".to_string(), format_duration(pruning_config.retention_blocks_transactions));
+            retention.insert("blocks".to_string(), format_duration(pruning_config.retention_blocks));
+            retention
+                .insert("transactions_acceptances".to_string(), format_duration(pruning_config.retention_transactions_acceptances));
+            retention.insert("transactions_outputs".to_string(), format_duration(pruning_config.retention_transactions_outputs));
+            retention.insert("transactions_inputs".to_string(), format_duration(pruning_config.retention_transactions_inputs));
+            retention.insert("transactions".to_string(), format_duration(pruning_config.retention_transactions));
+            retention.insert("addresses_transactions".to_string(), format_duration(pruning_config.retention_addresses_transactions));
+            retention.insert("scripts_transactions".to_string(), format_duration(pruning_config.retention_scripts_transactions));
+            metrics_rw.components.db_pruner.retention = Some(retention);
         }
 
         let run_clone = run.clone();
@@ -100,125 +79,143 @@ pub async fn prune(pruning_config: PruningConfig, run: Arc<AtomicBool>, metrics:
         let mut metrics_rw = metrics.write().await;
         metrics_rw.components.db_pruner.running = Some(true);
         metrics_rw.components.db_pruner.start_time = Some(common_start_time);
-        metrics_rw.components.db_pruner.results = Some(vec![]);
+        metrics_rw.components.db_pruner.results = Some(HashMap::new());
     }
 
     if !run.load(Ordering::Relaxed) {
         return;
     }
-    let database_clone = database.clone();
-    let step_pruning_point = common_start_time.sub(pruning_config.retention_block_parent.unwrap());
-    step_errors += prune_step(
-        "block_parent",
-        metrics.clone(),
-        |step_pruning_point| async move { database_clone.prune_block_parent(step_pruning_point).await },
-        step_pruning_point,
-    )
-    .await as i32;
+    if let Some(retention) = pruning_config.retention_block_parent {
+        let database_clone = database.clone();
+        let step_pruning_point = common_start_time.sub(retention);
+        step_errors += prune_step(
+            "block_parent",
+            metrics.clone(),
+            |step_pruning_point| async move { database_clone.prune_block_parent(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
+    }
 
     if !run.load(Ordering::Relaxed) {
         return;
     }
-    let database_clone = database.clone();
-    let step_pruning_point = common_start_time.sub(pruning_config.retention_blocks_transactions.unwrap());
-    step_errors += prune_step(
-        "blocks_transactions",
-        metrics.clone(),
-        |step_pruning_point| async move { database_clone.prune_blocks_transactions(step_pruning_point).await },
-        step_pruning_point,
-    )
-    .await as i32;
+    if let Some(retention) = pruning_config.retention_blocks_transactions {
+        let database_clone = database.clone();
+        let step_pruning_point = common_start_time.sub(retention);
+        step_errors += prune_step(
+            "blocks_transactions",
+            metrics.clone(),
+            |step_pruning_point| async move { database_clone.prune_blocks_transactions(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
+    }
 
     if !run.load(Ordering::Relaxed) {
         return;
     }
-    let database_clone = database.clone();
-    let step_pruning_point = common_start_time.sub(pruning_config.retention_blocks.unwrap());
-    step_errors += prune_step(
-        "blocks",
-        metrics.clone(),
-        |step_pruning_point| async move { database_clone.prune_blocks(step_pruning_point).await },
-        step_pruning_point,
-    )
-    .await as i32;
+    if let Some(retention) = pruning_config.retention_blocks {
+        let database_clone = database.clone();
+        let step_pruning_point = common_start_time.sub(retention);
+        step_errors += prune_step(
+            "blocks",
+            metrics.clone(),
+            |step_pruning_point| async move { database_clone.prune_blocks(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
+    }
 
     if !run.load(Ordering::Relaxed) {
         return;
     }
-    let database_clone = database.clone();
-    let step_pruning_point = common_start_time.sub(pruning_config.retention_transactions_acceptances.unwrap());
-    step_errors += prune_step(
-        "transactions_acceptances",
-        metrics.clone(),
-        |step_pruning_point| async move { database_clone.prune_transactions_acceptances(step_pruning_point).await },
-        step_pruning_point,
-    )
-    .await as i32;
+    if let Some(retention) = pruning_config.retention_transactions_acceptances {
+        let database_clone = database.clone();
+        let step_pruning_point = common_start_time.sub(retention);
+        step_errors += prune_step(
+            "transactions_acceptances",
+            metrics.clone(),
+            |step_pruning_point| async move { database_clone.prune_transactions_acceptances(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
+    }
 
     if !run.load(Ordering::Relaxed) {
         return;
     }
-    let database_clone = database.clone();
-    let step_pruning_point = common_start_time.sub(pruning_config.retention_transactions_outputs.unwrap());
-    step_errors += prune_step(
-        "spent transactions_outputs",
-        metrics.clone(),
-        |step_pruning_point| async move { database_clone.prune_spent_transactions_outputs(step_pruning_point).await },
-        step_pruning_point,
-    )
-    .await as i32;
+    if let Some(retention) = pruning_config.retention_transactions_outputs {
+        let database_clone = database.clone();
+        let step_pruning_point = common_start_time.sub(retention);
+        step_errors += prune_step(
+            "spent transactions_outputs",
+            metrics.clone(),
+            |step_pruning_point| async move { database_clone.prune_spent_transactions_outputs(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
+    }
 
     if !run.load(Ordering::Relaxed) {
         return;
     }
-    let database_clone = database.clone();
-    let step_pruning_point = common_start_time.sub(pruning_config.retention_transactions_inputs.unwrap());
-    step_errors += prune_step(
-        "transactions_inputs",
-        metrics.clone(),
-        |step_pruning_point| async move { database_clone.prune_transactions_inputs(step_pruning_point).await },
-        step_pruning_point,
-    )
-    .await as i32;
+    if let Some(retention) = pruning_config.retention_transactions_inputs {
+        let database_clone = database.clone();
+        let step_pruning_point = common_start_time.sub(retention);
+        step_errors += prune_step(
+            "transactions_inputs",
+            metrics.clone(),
+            |step_pruning_point| async move { database_clone.prune_transactions_inputs(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
+    }
 
     if !run.load(Ordering::Relaxed) {
         return;
     }
-    let database_clone = database.clone();
-    let step_pruning_point = common_start_time.sub(pruning_config.retention_transactions.unwrap());
-    step_errors += prune_step(
-        "transactions",
-        metrics.clone(),
-        |step_pruning_point| async move { database_clone.prune_transactions(step_pruning_point).await },
-        step_pruning_point,
-    )
-    .await as i32;
+    if let Some(retention) = pruning_config.retention_transactions {
+        let database_clone = database.clone();
+        let step_pruning_point = common_start_time.sub(retention);
+        step_errors += prune_step(
+            "transactions",
+            metrics.clone(),
+            |step_pruning_point| async move { database_clone.prune_transactions(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
+    }
 
     if !run.load(Ordering::Relaxed) {
         return;
     }
-    let database_clone = database.clone();
-    let step_pruning_point = common_start_time.sub(pruning_config.retention_addresses_transactions.unwrap());
-    step_errors += prune_step(
-        "addresses_transactions",
-        metrics.clone(),
-        |step_pruning_point| async move { database_clone.prune_addresses_transactions(step_pruning_point).await },
-        step_pruning_point,
-    )
-    .await as i32;
+    if let Some(retention) = pruning_config.retention_addresses_transactions {
+        let database_clone = database.clone();
+        let step_pruning_point = common_start_time.sub(retention);
+        step_errors += prune_step(
+            "addresses_transactions",
+            metrics.clone(),
+            |step_pruning_point| async move { database_clone.prune_addresses_transactions(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
+    }
 
     if !run.load(Ordering::Relaxed) {
         return;
     }
-    let database_clone = database.clone();
-    let step_pruning_point = common_start_time.sub(pruning_config.retention_scripts_transactions.unwrap());
-    step_errors += prune_step(
-        "scripts_transactions",
-        metrics.clone(),
-        |step_pruning_point| async move { database_clone.prune_scripts_transactions(step_pruning_point).await },
-        step_pruning_point,
-    )
-    .await as i32;
+    if let Some(retention) = pruning_config.retention_scripts_transactions {
+        let database_clone = database.clone();
+        let step_pruning_point = common_start_time.sub(retention);
+        step_errors += prune_step(
+            "scripts_transactions",
+            metrics.clone(),
+            |step_pruning_point| async move { database_clone.prune_scripts_transactions(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
+    }
 
     if step_errors == 0 {
         info!("\x1b[32mDatabase pruning completed successfully!\x1b[0m");
@@ -253,7 +250,7 @@ where
     };
     {
         let mut metrics_rw = metrics.write().await;
-        metrics_rw.components.db_pruner.results.as_mut().unwrap().push(metrics_result.clone());
+        metrics_rw.components.db_pruner.results.as_mut().unwrap().insert(step_name.to_string(), metrics_result.clone());
     }
     let step_result = db_call(cutoff_time.timestamp_millis()).await;
 
@@ -272,7 +269,10 @@ where
         }
     }
     let mut metrics_rw = metrics.write().await;
-    metrics_rw.components.db_pruner.results.as_mut().unwrap().pop();
-    metrics_rw.components.db_pruner.results.as_mut().unwrap().push(metrics_result);
+    metrics_rw.components.db_pruner.results.as_mut().unwrap().insert(step_name.to_string(), metrics_result.clone());
     !success
+}
+
+fn format_duration(duration: Option<Duration>) -> Option<String> {
+    duration.map(|d| humantime::format_duration(d).to_string())
 }

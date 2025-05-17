@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use simply_kaspa_database::models::query::database_details::DatabaseDetails;
 use simply_kaspa_database::models::query::table_details::TableDetails;
+use std::collections::HashMap;
 use std::time::Duration;
 use utoipa::ToSchema;
 
@@ -269,8 +270,8 @@ pub struct MetricsComponentDbPruner {
     pub cron: Option<String>,
     pub running: Option<bool>,
     pub start_time: Option<DateTime<Utc>>,
-    pub retention: Option<Vec<MetricsComponentDbPrunerRetention>>,
-    pub results: Option<Vec<MetricsComponentDbPrunerResult>>,
+    pub retention: Option<HashMap<String, Option<String>>>,
+    pub results: Option<HashMap<String, MetricsComponentDbPrunerResult>>,
     pub completed_time: Option<DateTime<Utc>>,
     pub completed_successfully: Option<bool>,
 }
@@ -294,14 +295,6 @@ impl MetricsComponentDbPruner {
             completed_successfully: None,
         }
     }
-}
-
-#[derive(ToSchema, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MetricsComponentDbPrunerRetention {
-    pub name: String,
-    #[serde(with = "humantime_serde")]
-    pub retention: Option<Duration>,
 }
 
 #[derive(ToSchema, Clone, Serialize, Deserialize)]
