@@ -21,7 +21,7 @@ pub async fn pruner(
 ) -> Result<(), Box<dyn Error>> {
     if let Some(cron) = cli_args.pruning.prune_db.clone() {
         let mut pruning_config = cli_args.pruning.clone();
-        let default = pruning_config.retention;
+        let default = pruning_config.retention.or(Some(Duration::from_secs(7 * 24 * 60 * 60)));
         pruning_config.retention_block_parent = pruning_config.retention_block_parent.or(default);
         pruning_config.retention_blocks_transactions = pruning_config.retention_blocks_transactions.or(default);
         pruning_config.retention_blocks = pruning_config.retention_blocks.or(default);
