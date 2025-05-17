@@ -240,14 +240,8 @@ where
 {
     info!("Pruning {step_name} rows older than {cutoff_time}");
     let start_time = Utc::now();
-    let mut metrics_result = MetricsComponentDbPrunerResult {
-        name: step_name.to_string(),
-        start_time,
-        cutoff_time,
-        duration: None,
-        success: None,
-        rows_deleted: None,
-    };
+    let mut metrics_result =
+        MetricsComponentDbPrunerResult { start_time, cutoff_time, duration: None, success: None, rows_deleted: None };
     {
         let mut metrics_rw = metrics.write().await;
         metrics_rw.components.db_pruner.results.as_mut().unwrap().insert(step_name.to_string(), metrics_result.clone());
