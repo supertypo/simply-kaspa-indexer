@@ -300,7 +300,6 @@ impl MetricsComponentDbPruner {
 #[derive(ToSchema, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetricsComponentDbPrunerResult {
-    pub name: String,
     pub start_time: DateTime<Utc>,
     pub cutoff_time: DateTime<Utc>,
     pub success: Option<bool>,
