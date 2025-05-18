@@ -14,8 +14,13 @@ pub async fn prune_block_parent(block_time_lt: i64, pool: &Pool<Postgres>) -> Re
     Ok(sqlx::query(sql).bind(block_time_lt).execute(pool).await?.rows_affected())
 }
 
-pub async fn prune_blocks_transactions(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
+pub async fn prune_blocks_transactions_using_blocks(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "DELETE FROM blocks_transactions bt USING blocks b WHERE bt.block_hash = b.hash AND b.timestamp < $1";
+    Ok(sqlx::query(sql).bind(block_time_lt).execute(pool).await?.rows_affected())
+}
+
+pub async fn prune_transactions_acceptances_using_blocks(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
+    let sql = "DELETE FROM transactions_acceptances ta USING blocks b WHERE ta.block_hash = b.hash AND b.timestamp < $1";
     Ok(sqlx::query(sql).bind(block_time_lt).execute(pool).await?.rows_affected())
 }
 
@@ -23,7 +28,13 @@ pub async fn prune_blocks(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u
     Ok(sqlx::query("DELETE FROM blocks WHERE timestamp < $1").bind(block_time_lt).execute(pool).await?.rows_affected())
 }
 
-pub async fn prune_transactions_acceptances(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
+pub async fn prune_blocks_transactions_using_transactions(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
+    let sql =
+        "DELETE FROM blocks_transactions bt USING transactions t WHERE bt.transaction_id = t.transaction_id AND t.block_time < $1";
+    Ok(sqlx::query(sql).bind(block_time_lt).execute(pool).await?.rows_affected())
+}
+
+pub async fn prune_transactions_acceptances_using_transactions(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "DELETE FROM transactions_acceptances ta USING transactions t WHERE t.transaction_id = ta.transaction_id AND t.block_time < $1";
     Ok(sqlx::query(sql).bind(block_time_lt).execute(pool).await?.rows_affected())
 }

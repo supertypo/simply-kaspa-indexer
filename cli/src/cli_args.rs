@@ -137,6 +137,32 @@ pub struct CliArgs {
     pub exclude_fields: Option<Vec<CliField>>,
 }
 
+impl CliArgs {
+    pub fn is_enabled(&self, feature: CliEnable) -> bool {
+        self.enable.as_ref().map_or(false, |enable| enable.contains(&feature))
+    }
+
+    pub fn is_disabled(&self, feature: CliDisable) -> bool {
+        self.disable.as_ref().map_or(false, |disable| disable.contains(&feature))
+    }
+
+    pub fn is_excluded(&self, field: CliField) -> bool {
+        if let Some(exclude_fields) = self.exclude_fields.clone() {
+            exclude_fields.contains(&field)
+        } else {
+            false
+        }
+    }
+
+    pub fn version(&self) -> String {
+        env!("VERGEN_GIT_DESCRIBE").to_string()
+    }
+
+    pub fn commit_id(&self) -> String {
+        env!("VERGEN_GIT_SHA").to_string()
+    }
+}
+
 #[derive(Debug, Clone, Args, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PruningConfig {
@@ -174,29 +200,22 @@ pub struct PruningConfig {
     pub retention_scripts_transactions: Option<Duration>,
 }
 
-impl CliArgs {
-    pub fn is_enabled(&self, feature: CliEnable) -> bool {
-        self.enable.as_ref().map_or(false, |enable| enable.contains(&feature))
+impl PruningConfig {
+    pub fn resolve(&self, specific: Option<Duration>) -> Option<Duration> {
+        specific.or(self.retention)
     }
 
-    pub fn is_disabled(&self, feature: CliDisable) -> bool {
-        self.disable.as_ref().map_or(false, |disable| disable.contains(&feature))
-    }
-
-    pub fn is_excluded(&self, field: CliField) -> bool {
-        if let Some(exclude_fields) = self.exclude_fields.clone() {
-            exclude_fields.contains(&field)
-        } else {
-            false
-        }
-    }
-
-    pub fn version(&self) -> String {
-        env!("VERGEN_GIT_DESCRIBE").to_string()
-    }
-
-    pub fn commit_id(&self) -> String {
-        env!("VERGEN_GIT_SHA").to_string()
+    pub fn resolved(mut self) -> Self {
+        self.retention_block_parent = self.resolve(self.retention_block_parent);
+        self.retention_blocks_transactions = self.resolve(self.retention_blocks_transactions);
+        self.retention_blocks = self.resolve(self.retention_blocks);
+        self.retention_transactions_acceptances = self.resolve(self.retention_transactions_acceptances);
+        self.retention_transactions_outputs = self.resolve(self.retention_transactions_outputs);
+        self.retention_transactions_inputs = self.resolve(self.retention_transactions_inputs);
+        self.retention_transactions = self.resolve(self.retention_transactions);
+        self.retention_addresses_transactions = self.resolve(self.retention_addresses_transactions);
+        self.retention_scripts_transactions = self.resolve(self.retention_scripts_transactions);
+        self
     }
 }
 
