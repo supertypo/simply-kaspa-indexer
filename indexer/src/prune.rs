@@ -1,5 +1,5 @@
 use crate::web::model::metrics::{Metrics, MetricsComponentDbPrunerResult};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use log::{error, info, warn};
 use serde_json::to_string_pretty;
 use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliField, PruningConfig};
@@ -68,7 +68,7 @@ pub async fn prune(
     database: KaspaDbClient,
 ) {
     info!("\x1b[33mDatabase pruning started\x1b[0m");
-    let common_start_time = Utc::now();
+    let common_start_time = now();
     let mut step_errors = 0;
     {
         let mut metrics_rw = metrics.write().await;
@@ -238,7 +238,7 @@ pub async fn prune(
         warn!("\x1b[33mDatabase pruning completed with one or more errors\x1b[0m");
     }
     let mut metrics_rw = metrics.write().await;
-    metrics_rw.components.db_pruner.completed_time = Some(Utc::now());
+    metrics_rw.components.db_pruner.completed_time = Some(now());
     metrics_rw.components.db_pruner.completed_successfully = Some(step_errors == 0);
 }
 
@@ -254,7 +254,7 @@ where
     E: Error + Send + Sync + 'static,
 {
     info!("Pruning {step_name} rows older than {cutoff_time}");
-    let start_time = Utc::now();
+    let start_time = now();
     let mut metrics_result =
         MetricsComponentDbPrunerResult { start_time, cutoff_time, duration: None, success: None, rows_deleted: None };
     {
@@ -265,7 +265,7 @@ where
 
     let success = step_result.is_ok();
     metrics_result.success = Some(success);
-    metrics_result.duration = Some(Utc::now().signed_duration_since(start_time).to_std().unwrap());
+    metrics_result.duration = Some(now().signed_duration_since(start_time).to_std().unwrap());
 
     match step_result {
         Ok(rows_affected) => {
@@ -284,4 +284,8 @@ where
 
 fn format_duration(duration: Option<Duration>) -> Option<String> {
     duration.map(|d| humantime::format_duration(d).to_string())
+}
+
+fn now() -> DateTime<Utc> {
+    Utc::now().with_nanosecond(0).unwrap()
 }
