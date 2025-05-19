@@ -42,12 +42,22 @@ pub async fn prune_transactions_acceptances_using_transactions(block_time_lt: i6
 pub async fn prune_spent_transactions_outputs(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "
         DELETE FROM transactions_outputs to_
-        USING transactions t,
-              transactions_inputs ti
+        USING transactions t
         WHERE to_.transaction_id = t.transaction_id
           AND t.block_time < $1
-          AND ti.previous_outpoint_hash = to_.transaction_id
-          AND ti.previous_outpoint_index = to_.index;
+          AND (
+            EXISTS (
+              SELECT 1
+              FROM transactions_inputs ti
+              WHERE ti.previous_outpoint_hash = to_.transaction_id
+                AND ti.previous_outpoint_index = to_.index
+            )
+            OR NOT EXISTS (
+              SELECT 1
+              FROM transactions_acceptances ta
+              WHERE ta.transaction_id = to_.transaction_id
+            )
+          );
         ";
     Ok(sqlx::query(sql).bind(block_time_lt).execute(pool).await?.rows_affected())
 }
