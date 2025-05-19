@@ -120,21 +120,6 @@ pub async fn prune(
     if !run.load(Ordering::Relaxed) {
         return;
     }
-    if let Some(retention) = pruning_config.retention_blocks {
-        let db = database.clone();
-        let step_pruning_point = common_start_time.sub(retention);
-        step_errors += prune_step(
-            "blocks",
-            metrics.clone(),
-            |step_pruning_point| async move { db.prune_blocks(step_pruning_point).await },
-            step_pruning_point,
-        )
-        .await as i32;
-    }
-
-    if !run.load(Ordering::Relaxed) {
-        return;
-    }
     if let Some(retention) = pruning_config.retention_transactions_acceptances {
         let db = database.clone();
         let step_pruning_point = common_start_time.sub(retention);
@@ -155,6 +140,21 @@ pub async fn prune(
             )
             .await as i32;
         }
+    }
+
+    if !run.load(Ordering::Relaxed) {
+        return;
+    }
+    if let Some(retention) = pruning_config.retention_blocks {
+        let db = database.clone();
+        let step_pruning_point = common_start_time.sub(retention);
+        step_errors += prune_step(
+            "blocks",
+            metrics.clone(),
+            |step_pruning_point| async move { db.prune_blocks(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
     }
 
     if !run.load(Ordering::Relaxed) {
