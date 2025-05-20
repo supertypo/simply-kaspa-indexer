@@ -39,14 +39,18 @@ effective_cache_size = 8GB
 ```
 In addition, I highly recommend running Postgres on ZFS with compression=lz4 (or zstd) for space savings as well as for improving performance. Make sure to also set recordsize=16k.
 
-### Tn11 (10bps) note
-The indexer is able to keep up with the 10bps testnet (TN11) under full load (2000+tps) as long as Postgres is running on a sufficiently high-end NVMe.  
+### 10bps note
+The indexer is able to keep up with fully satured 10bps (2000+tps) as long as Postgres is running on a sufficiently high-end NVMe.  
 By disabling optional tables and fields you can bring the requirements down if running on lesser hardware.
 
 ### Historical data
 The indexer will begin collecting data from the point in time when it's started.  
 If you have an archival node, you can specify the start-block using the --ignore_checkpoint argument and specify an older start block.  
 Please make contact with us on the [Kaspa Discord](https://kaspa.org) if you need a pg_dump-file of historical records.
+
+### Pruning
+Pruning can be activated by supplying --prune-db, optionally a cron expression can be supplied, e.g. --prune-db=\"30 6 * * *\" (06:30Z every day).  
+Additionally retention time must be supplied. E.g. --retention=14d, or by the more fine masked --retention-<...> arguments.
 
 # License
 MIT, which means this software can be freely modified to any specific need and redistributed (under certain terms).  
@@ -270,6 +274,27 @@ Options:
 
   -c, --initialize-db
           (Re-)initializes the database schema. Use with care
+
+      --prune-db [<PRUNE_DB>]
+          Enables db pruning. Optional cron expression. Default: '0 4 * * *' = daily 04:00 (UTC)
+
+      --retention <RETENTION>
+          Global data retention for db pruning. Ex: 60d, 24h, etc
+
+      --retention-block-parent <RETENTION_BLOCK_PARENT>
+          Retention for block_parent table
+
+      --retention-blocks-transactions <RETENTION_BLOCKS_TRANSACTIONS>
+          Retention for blocks_transactions table
+
+      --retention-blocks <RETENTION_BLOCKS>
+          Retention for blocks table
+
+      --retention-transactions <RETENTION_TRANSACTIONS>
+          Retention for transactions_* tables
+
+      --retention-addresses-transactions <RETENTION_ADDRESSES_TRANSACTIONS>
+          Retention for addresses_transactions, scripts_transactions tables
 
       --enable <ENABLE>
           Enable optional functionality
