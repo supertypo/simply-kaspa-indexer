@@ -5,7 +5,7 @@ use crate::web::web_server;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use deadpool::managed::Pool;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use simply_kaspa_database::client::KaspaDbClient;
@@ -143,6 +143,24 @@ async fn indexer_health(metrics: Metrics, current_daa: Option<u64>) -> HealthInd
             600,
             metrics.components.virtual_chain_processor.last_block.as_ref(),
         ));
+    }
+
+    if metrics.components.db_pruner.enabled {
+        let ok = metrics.components.db_pruner.completed_successfully;
+        let start_time = metrics.components.db_pruner.start_time.unwrap_or(DateTime::UNIX_EPOCH);
+        health_details.push(HealthIndexerDetails {
+            name: "component.db_pruner".to_string(),
+            status: ok.map(|ok| if ok { HealthStatus::UP } else { HealthStatus::WARN }).unwrap_or(HealthStatus::UP),
+            reason: ok
+                .map(|ok| format!("{}: {}", start_time, if ok { "Success" } else { "Failure" }))
+                .unwrap_or("Not yet run".to_string()),
+        });
+    } else {
+        health_details.push(HealthIndexerDetails {
+            name: "component.db_pruner".to_string(),
+            status: HealthStatus::UP,
+            reason: "Disabled".to_string(),
+        });
     }
 
     if health_details.iter().any(|h| h.status == HealthStatus::DOWN) {

@@ -1,10 +1,9 @@
-use std::str::FromStr;
-use std::time::Duration;
-
 use log::{debug, info, trace, warn, LevelFilter};
 use regex::Regex;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Error, Pool, Postgres};
+use std::str::FromStr;
+use std::time::Duration;
 
 use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
@@ -27,7 +26,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 9;
+    const SCHEMA_VERSION: u8 = 10;
 
     pub async fn new(url: &str) -> Result<KaspaDbClient, Error> {
         Self::new_with_args(url, 10).await
@@ -144,6 +143,17 @@ impl KaspaDbClient {
                             panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
                         }
                     }
+                    if version == 9 {
+                        let ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v9_to_v10.sql"));
+                        if upgrade_db {
+                            warn!("\n{ddl}\nUpgrading schema from v{version} to v{}. ^", version + 1);
+                            query::misc::execute_ddl(ddl, &self.pool).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            version += 1;
+                        } else {
+                            panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
+                        }
+                    }
                     trace!("Schema version is v{version}")
                 }
                 version = self.select_var("schema_version").await?.parse::<u8>().unwrap();
@@ -251,5 +261,49 @@ impl KaspaDbClient {
 
     pub async fn delete_transaction_acceptances(&self, block_hashes: &[Hash]) -> Result<u64, Error> {
         query::delete::delete_transaction_acceptances(block_hashes, &self.pool).await
+    }
+
+    pub async fn prune_block_parent(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_block_parent(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_blocks_transactions_using_blocks(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_blocks_transactions_using_blocks(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_transactions_acceptances_using_blocks(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_transactions_acceptances_using_blocks(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_blocks(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_blocks(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_blocks_transactions_using_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_blocks_transactions_using_transactions(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_transactions_acceptances_using_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_transactions_acceptances_using_transactions(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_spent_transactions_outputs(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_spent_transactions_outputs(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_transactions_inputs(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_transactions_inputs(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_transactions(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_addresses_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_addresses_transactions(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_scripts_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_scripts_transactions(block_time_lt, &self.pool).await
     }
 }

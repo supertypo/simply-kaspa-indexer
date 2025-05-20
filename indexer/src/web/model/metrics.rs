@@ -6,6 +6,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use simply_kaspa_database::models::query::database_details::DatabaseDetails;
 use simply_kaspa_database::models::query::table_details::TableDetails;
+use std::collections::HashMap;
+use std::time::Duration;
 use utoipa::ToSchema;
 
 #[derive(ToSchema, Clone, Serialize, Deserialize)]
@@ -129,6 +131,7 @@ pub struct MetricsComponent {
     pub block_processor: MetricsComponentBlockProcessor,
     pub transaction_processor: MetricsComponentTransactionProcessor,
     pub virtual_chain_processor: MetricsComponentVirtualChainProcessor,
+    pub db_pruner: MetricsComponentDbPruner,
 }
 
 impl Default for MetricsComponent {
@@ -145,6 +148,7 @@ impl MetricsComponent {
             block_processor: MetricsComponentBlockProcessor::new(),
             transaction_processor: MetricsComponentTransactionProcessor::new(),
             virtual_chain_processor: MetricsComponentVirtualChainProcessor::new(),
+            db_pruner: MetricsComponentDbPruner::new(),
         }
     }
 }
@@ -257,6 +261,51 @@ impl MetricsComponentVirtualChainProcessor {
             last_block: None,
         }
     }
+}
+
+#[derive(ToSchema, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsComponentDbPruner {
+    pub enabled: bool,
+    pub cron: Option<String>,
+    pub running: Option<bool>,
+    pub start_time: Option<DateTime<Utc>>,
+    pub retention: Option<HashMap<String, Option<String>>>,
+    pub results: Option<HashMap<String, MetricsComponentDbPrunerResult>>,
+    pub completed_time: Option<DateTime<Utc>>,
+    pub completed_successfully: Option<bool>,
+}
+
+impl Default for MetricsComponentDbPruner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetricsComponentDbPruner {
+    pub fn new() -> Self {
+        Self {
+            enabled: false,
+            cron: None,
+            running: None,
+            start_time: None,
+            retention: None,
+            results: None,
+            completed_time: None,
+            completed_successfully: None,
+        }
+    }
+}
+
+#[derive(ToSchema, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsComponentDbPrunerResult {
+    pub start_time: DateTime<Utc>,
+    pub cutoff_time: DateTime<Utc>,
+    pub success: Option<bool>,
+    #[serde(with = "humantime_serde")]
+    pub duration: Option<Duration>,
+    pub rows_deleted: Option<u64>,
 }
 
 #[derive(ToSchema, Clone, Serialize, Deserialize)]

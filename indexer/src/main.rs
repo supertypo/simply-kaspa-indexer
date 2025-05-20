@@ -5,12 +5,13 @@ use futures_util::future::try_join_all;
 use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
-use log::{info, trace, warn};
+use log::{error, info, trace, warn};
 use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
 use simply_kaspa_indexer::checkpoint::{process_checkpoints, CheckpointBlock, CheckpointOrigin};
+use simply_kaspa_indexer::prune::pruner;
 use simply_kaspa_indexer::settings::Settings;
 use simply_kaspa_indexer::signal::signal_handler::notify_on_signals;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
@@ -123,15 +124,13 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     } else if let Ok(saved_block_checkpoint) = load_block_checkpoint(&database).await {
         checkpoint = KaspaHash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
         info!("Starting from checkpoint {}", checkpoint);
+    } else if cli_args.is_disabled(CliDisable::InitialUtxoImport) {
+        checkpoint = *block_dag_info.virtual_parent_hashes.first().expect("Virtual parent not found");
+        warn!("Checkpoint not found, starting from virtual_parent {}", checkpoint);
     } else {
-        if cli_args.is_disabled(CliDisable::InitialUtxoImport) {
-            checkpoint = *block_dag_info.virtual_parent_hashes.first().expect("Virtual parent not found");
-            warn!("Checkpoint not found, starting from virtual_parent {}", checkpoint);
-        } else {
-            utxo_set_import = true;
-            checkpoint = block_dag_info.pruning_point_hash;
-            warn!("Checkpoint not found, starting from pruning_point {}", checkpoint);
-        }
+        utxo_set_import = true;
+        checkpoint = block_dag_info.pruning_point_hash;
+        warn!("Checkpoint not found, starting from pruning_point {}", checkpoint);
     }
 
     let checkpoint_block = match kaspad_pool.get().await.unwrap().get_block(checkpoint, false).await {
@@ -231,5 +230,12 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             database.clone(),
         )))
     }
+
+    tasks.push(task::spawn(async move {
+        if let Err(e) = pruner(cli_args.clone(), run.clone(), metrics.clone(), database.clone()).await {
+            error!("Database pruner failed: {e}");
+        }
+    }));
+
     try_join_all(tasks).await.unwrap();
 }

@@ -1,5 +1,9 @@
-use clap::{Parser, ValueEnum};
+use clap::builder::TypedValueParser;
+use clap::error::{Error, ErrorKind};
+use clap::{Args, Parser, ValueEnum};
 use serde::{Deserialize, Serialize};
+use std::ffi::OsStr;
+use std::time::Duration;
 use utoipa::ToSchema;
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]
@@ -118,6 +122,8 @@ pub struct CliArgs {
     pub upgrade_db: bool,
     #[clap(short = 'c', long, help = "(Re-)initializes the database schema. Use with care")]
     pub initialize_db: bool,
+    #[clap(flatten)]
+    pub pruning: PruningConfig,
     #[clap(long, help = "Enable optional functionality", value_enum, use_value_delimiter = true)]
     pub enable: Option<Vec<CliEnable>>,
     #[clap(long, help = "Disable specific functionality", value_enum, use_value_delimiter = true)]
@@ -154,5 +160,58 @@ impl CliArgs {
 
     pub fn commit_id(&self) -> String {
         env!("VERGEN_GIT_SHA").to_string()
+    }
+}
+
+#[derive(Debug, Clone, Args, ToSchema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PruningConfig {
+    #[clap(long, default_missing_value = "0 4 * * *", num_args = 0..=1, help = "Enables db pruning. Optional cron expression. Default: '0 4 * * *' = daily 04:00 (UTC)")]
+    pub prune_db: Option<String>,
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Global data retention for db pruning. Ex: 60d, 24h, etc")]
+    #[serde(with = "humantime_serde")]
+    pub retention: Option<Duration>,
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for block_parent table")]
+    #[serde(with = "humantime_serde")]
+    pub retention_block_parent: Option<Duration>,
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for blocks_transactions table")]
+    #[serde(with = "humantime_serde")]
+    pub retention_blocks_transactions: Option<Duration>,
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for blocks table")]
+    #[serde(with = "humantime_serde")]
+    pub retention_blocks: Option<Duration>,
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for transactions_* tables")]
+    #[serde(with = "humantime_serde")]
+    pub retention_transactions: Option<Duration>,
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for addresses_transactions, scripts_transactions tables")]
+    #[serde(with = "humantime_serde")]
+    pub retention_addresses_transactions: Option<Duration>,
+}
+
+impl PruningConfig {
+    pub fn resolve(&self, specific: Option<Duration>) -> Option<Duration> {
+        specific.or(self.retention)
+    }
+
+    pub fn resolved(mut self) -> Self {
+        self.retention_block_parent = self.resolve(self.retention_block_parent);
+        self.retention_blocks_transactions = self.resolve(self.retention_blocks_transactions);
+        self.retention_blocks = self.resolve(self.retention_blocks);
+        self.retention_transactions = self.resolve(self.retention_transactions);
+        self.retention_addresses_transactions = self.resolve(self.retention_addresses_transactions);
+        self
+    }
+}
+
+#[derive(Clone)]
+pub struct HumantimeDurationParser;
+
+impl TypedValueParser for HumantimeDurationParser {
+    type Value = Duration;
+
+    fn parse_ref(&self, _cmd: &clap::Command, _arg: Option<&clap::Arg>, raw: &OsStr) -> Result<Self::Value, clap::Error> {
+        let input = raw.to_string_lossy();
+        humantime::parse_duration(&input)
+            .map_err(|err| Error::raw(ErrorKind::ValueValidation, format!("Invalid duration '{}': {}", input, err)))
     }
 }
