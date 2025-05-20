@@ -1,5 +1,6 @@
 pub mod blocks;
 pub mod checkpoint;
+pub mod macros;
 pub mod prune;
 pub mod settings;
 pub mod signal;

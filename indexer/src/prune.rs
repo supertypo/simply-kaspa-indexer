@@ -1,3 +1,4 @@
+use crate::return_on_shutdown;
 use crate::web::model::metrics::{Metrics, MetricsComponentDbPrunerResult};
 use chrono::{DateTime, Timelike, Utc};
 use log::{error, info, warn};
@@ -33,13 +34,8 @@ pub async fn pruner(
             retention.insert("block_parent".to_string(), format_duration(pruning_config.retention_block_parent));
             retention.insert("blocks_transactions".to_string(), format_duration(pruning_config.retention_blocks_transactions));
             retention.insert("blocks".to_string(), format_duration(pruning_config.retention_blocks));
-            retention
-                .insert("transactions_acceptances".to_string(), format_duration(pruning_config.retention_transactions_acceptances));
-            retention.insert("transactions_outputs".to_string(), format_duration(pruning_config.retention_transactions_outputs));
-            retention.insert("transactions_inputs".to_string(), format_duration(pruning_config.retention_transactions_inputs));
             retention.insert("transactions".to_string(), format_duration(pruning_config.retention_transactions));
             retention.insert("addresses_transactions".to_string(), format_duration(pruning_config.retention_addresses_transactions));
-            retention.insert("scripts_transactions".to_string(), format_duration(pruning_config.retention_scripts_transactions));
             metrics_rw.components.db_pruner.retention = Some(retention);
         }
 
@@ -77,12 +73,10 @@ pub async fn prune(
         metrics_rw.components.db_pruner.results = Some(HashMap::new());
     }
 
-    if !run.load(Ordering::Relaxed) {
-        return;
-    }
     if let Some(retention) = pruning_config.retention_block_parent {
         let db = database.clone();
         let step_pruning_point = common_start_time.sub(retention);
+        return_on_shutdown!(run);
         step_errors += prune_step(
             "block_parent",
             metrics.clone(),
@@ -92,12 +86,10 @@ pub async fn prune(
         .await as i32;
     }
 
-    if !run.load(Ordering::Relaxed) {
-        return;
-    }
     if let Some(retention) = pruning_config.retention_blocks_transactions {
         let db = database.clone();
         let step_pruning_point = common_start_time.sub(retention);
+        return_on_shutdown!(run);
         if !cli_args.is_disabled(CliDisable::BlocksTable) && !cli_args.is_excluded(CliField::BlockTimestamp) {
             step_errors += prune_step(
                 "blocks_transactions (b)",
@@ -117,12 +109,10 @@ pub async fn prune(
         }
     }
 
-    if !run.load(Ordering::Relaxed) {
-        return;
-    }
-    if let Some(retention) = pruning_config.retention_transactions_acceptances {
-        let db = database.clone();
+    if let Some(retention) = pruning_config.retention_transactions {
         let step_pruning_point = common_start_time.sub(retention);
+        return_on_shutdown!(run);
+        let db = database.clone();
         if !cli_args.is_disabled(CliDisable::BlocksTable) && !cli_args.is_excluded(CliField::BlockTimestamp) {
             step_errors += prune_step(
                 "transactions_acceptances (b)",
@@ -140,29 +130,8 @@ pub async fn prune(
             )
             .await as i32;
         }
-    }
-
-    if !run.load(Ordering::Relaxed) {
-        return;
-    }
-    if let Some(retention) = pruning_config.retention_blocks {
+        return_on_shutdown!(run);
         let db = database.clone();
-        let step_pruning_point = common_start_time.sub(retention);
-        step_errors += prune_step(
-            "blocks",
-            metrics.clone(),
-            |step_pruning_point| async move { db.prune_blocks(step_pruning_point).await },
-            step_pruning_point,
-        )
-        .await as i32;
-    }
-
-    if !run.load(Ordering::Relaxed) {
-        return;
-    }
-    if let Some(retention) = pruning_config.retention_transactions_outputs {
-        let db = database.clone();
-        let step_pruning_point = common_start_time.sub(retention);
         step_errors += prune_step(
             "spent transactions_outputs",
             metrics.clone(),
@@ -170,14 +139,8 @@ pub async fn prune(
             step_pruning_point,
         )
         .await as i32;
-    }
-
-    if !run.load(Ordering::Relaxed) {
-        return;
-    }
-    if let Some(retention) = pruning_config.retention_transactions_inputs {
+        return_on_shutdown!(run);
         let db = database.clone();
-        let step_pruning_point = common_start_time.sub(retention);
         step_errors += prune_step(
             "transactions_inputs",
             metrics.clone(),
@@ -185,14 +148,8 @@ pub async fn prune(
             step_pruning_point,
         )
         .await as i32;
-    }
-
-    if !run.load(Ordering::Relaxed) {
-        return;
-    }
-    if let Some(retention) = pruning_config.retention_transactions {
+        return_on_shutdown!(run);
         let db = database.clone();
-        let step_pruning_point = common_start_time.sub(retention);
         step_errors += prune_step(
             "transactions",
             metrics.clone(),
@@ -202,34 +159,40 @@ pub async fn prune(
         .await as i32;
     }
 
-    if !run.load(Ordering::Relaxed) {
-        return;
-    }
-    if let Some(retention) = pruning_config.retention_addresses_transactions {
-        let db = database.clone();
+    if let Some(retention) = pruning_config.retention_blocks {
         let step_pruning_point = common_start_time.sub(retention);
+        return_on_shutdown!(run);
+        let db = database.clone();
         step_errors += prune_step(
-            "addresses_transactions",
+            "blocks",
             metrics.clone(),
-            |step_pruning_point| async move { db.prune_addresses_transactions(step_pruning_point).await },
+            |step_pruning_point| async move { db.prune_blocks(step_pruning_point).await },
             step_pruning_point,
         )
         .await as i32;
     }
 
-    if !run.load(Ordering::Relaxed) {
-        return;
-    }
-    if let Some(retention) = pruning_config.retention_scripts_transactions {
-        let db = database.clone();
+    if let Some(retention) = pruning_config.retention_addresses_transactions {
         let step_pruning_point = common_start_time.sub(retention);
-        step_errors += prune_step(
-            "scripts_transactions",
-            metrics.clone(),
-            |step_pruning_point| async move { db.prune_scripts_transactions(step_pruning_point).await },
-            step_pruning_point,
-        )
-        .await as i32;
+        return_on_shutdown!(run);
+        let db = database.clone();
+        if !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress) {
+            step_errors += prune_step(
+                "addresses_transactions",
+                metrics.clone(),
+                |step_pruning_point| async move { db.prune_addresses_transactions(step_pruning_point).await },
+                step_pruning_point,
+            )
+            .await as i32;
+        } else {
+            step_errors += prune_step(
+                "scripts_transactions",
+                metrics.clone(),
+                |step_pruning_point| async move { db.prune_scripts_transactions(step_pruning_point).await },
+                step_pruning_point,
+            )
+            .await as i32;
+        }
     }
 
     if step_errors == 0 {

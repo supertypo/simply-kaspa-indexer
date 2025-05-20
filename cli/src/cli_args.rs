@@ -171,33 +171,21 @@ pub struct PruningConfig {
     #[clap(long, value_parser = HumantimeDurationParser, help = "Global data retention for db pruning. Ex: 60d, 24h, etc")]
     #[serde(with = "humantime_serde")]
     pub retention: Option<Duration>,
-    #[clap(long, value_parser = HumantimeDurationParser, help = "Data retention for block_parent table, if pruning is enabled")]
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for block_parent table")]
     #[serde(with = "humantime_serde")]
     pub retention_block_parent: Option<Duration>,
-    #[clap(long, value_parser = HumantimeDurationParser, help = "Data retention for blocks_transactions table, if pruning is enabled")]
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for blocks_transactions table")]
     #[serde(with = "humantime_serde")]
     pub retention_blocks_transactions: Option<Duration>,
-    #[clap(long, value_parser = HumantimeDurationParser, help = "Data retention for blocks table, if pruning is enabled")]
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for blocks table")]
     #[serde(with = "humantime_serde")]
     pub retention_blocks: Option<Duration>,
-    #[clap(long, value_parser = HumantimeDurationParser, help = "Data retention for transactions_acceptances table, if pruning is enabled")]
-    #[serde(with = "humantime_serde")]
-    pub retention_transactions_acceptances: Option<Duration>,
-    #[clap(long, value_parser = HumantimeDurationParser, help = "Data retention for transactions_outputs table, if pruning is enabled")]
-    #[serde(with = "humantime_serde")]
-    pub retention_transactions_outputs: Option<Duration>,
-    #[clap(long, value_parser = HumantimeDurationParser, help = "Data retention for transactions_inputs table, if pruning is enabled")]
-    #[serde(with = "humantime_serde")]
-    pub retention_transactions_inputs: Option<Duration>,
-    #[clap(long, value_parser = HumantimeDurationParser, help = "Data retention for transactions table, if pruning is enabled")]
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for transactions_* tables")]
     #[serde(with = "humantime_serde")]
     pub retention_transactions: Option<Duration>,
-    #[clap(long, value_parser = HumantimeDurationParser, help = "Data retention for addresses_transactions table, if pruning is enabled")]
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for addresses_transactions, scripts_transactions tables")]
     #[serde(with = "humantime_serde")]
     pub retention_addresses_transactions: Option<Duration>,
-    #[clap(long, value_parser = HumantimeDurationParser, help = "Data retention for scripts_transactions table, if pruning is enabled")]
-    #[serde(with = "humantime_serde")]
-    pub retention_scripts_transactions: Option<Duration>,
 }
 
 impl PruningConfig {
@@ -209,12 +197,8 @@ impl PruningConfig {
         self.retention_block_parent = self.resolve(self.retention_block_parent);
         self.retention_blocks_transactions = self.resolve(self.retention_blocks_transactions);
         self.retention_blocks = self.resolve(self.retention_blocks);
-        self.retention_transactions_acceptances = self.resolve(self.retention_transactions_acceptances);
-        self.retention_transactions_outputs = self.resolve(self.retention_transactions_outputs);
-        self.retention_transactions_inputs = self.resolve(self.retention_transactions_inputs);
         self.retention_transactions = self.resolve(self.retention_transactions);
         self.retention_addresses_transactions = self.resolve(self.retention_addresses_transactions);
-        self.retention_scripts_transactions = self.resolve(self.retention_scripts_transactions);
         self
     }
 }
