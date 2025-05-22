@@ -39,25 +39,31 @@ pub async fn prune_transactions_acceptances_using_transactions(block_time_lt: i6
     Ok(sqlx::query(sql).bind(block_time_lt).execute(pool).await?.rows_affected())
 }
 
-pub async fn prune_spent_transactions_outputs(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
+pub async fn prune_unspendable_transactions_outputs(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "
+        WITH to_delete AS MATERIALIZED (
+            SELECT to_.transaction_id, to_.index
+            FROM transactions_outputs to_
+            JOIN transactions t ON t.transaction_id = to_.transaction_id
+            WHERE t.block_time < $1
+            AND (
+                EXISTS (
+                    SELECT 1
+                    FROM transactions_inputs ti
+                    WHERE ti.previous_outpoint_hash = to_.transaction_id
+                      AND ti.previous_outpoint_index = to_.index
+                )
+                OR NOT EXISTS (
+                    SELECT 1
+                    FROM transactions_acceptances ta
+                    WHERE ta.transaction_id = to_.transaction_id
+                )
+            )
+        )
         DELETE FROM transactions_outputs to_
-        USING transactions t
-        WHERE to_.transaction_id = t.transaction_id
-          AND t.block_time < $1
-          AND (
-            EXISTS (
-              SELECT 1
-              FROM transactions_inputs ti
-              WHERE ti.previous_outpoint_hash = to_.transaction_id
-                AND ti.previous_outpoint_index = to_.index
-            )
-            OR NOT EXISTS (
-              SELECT 1
-              FROM transactions_acceptances ta
-              WHERE ta.transaction_id = to_.transaction_id
-            )
-          );
+        USING to_delete
+        WHERE to_.transaction_id = to_delete.transaction_id
+        AND to_.index = to_delete.index
         ";
     Ok(sqlx::query(sql).bind(block_time_lt).execute(pool).await?.rows_affected())
 }

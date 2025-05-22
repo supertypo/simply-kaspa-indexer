@@ -139,9 +139,9 @@ pub async fn prune(
         return_on_shutdown!(run);
         let db = database.clone();
         step_errors += prune_step(
-            "spent transactions_outputs",
+            "unspendable transactions_outputs",
             metrics.clone(),
-            |step_pruning_point| async move { db.prune_spent_transactions_outputs(step_pruning_point).await },
+            |step_pruning_point| async move { db.prune_unspendable_transactions_outputs(step_pruning_point).await },
             step_pruning_point,
         )
         .await as i32;
