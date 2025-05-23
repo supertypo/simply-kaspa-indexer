@@ -41,24 +41,26 @@ pub async fn prune_transactions_acceptances_using_transactions(block_time_lt: i6
 
 pub async fn prune_unspendable_transactions_outputs(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "
-        WITH to_delete AS MATERIALIZED (
-            SELECT to_.transaction_id, to_.index
-            FROM transactions_outputs to_
-            JOIN transactions t ON t.transaction_id = to_.transaction_id
-            WHERE t.block_time < $1
-            AND (
-                EXISTS (
-                    SELECT 1
-                    FROM transactions_inputs ti
-                    WHERE ti.previous_outpoint_hash = to_.transaction_id
-                      AND ti.previous_outpoint_index = to_.index
-                )
-                OR NOT EXISTS (
-                    SELECT 1
-                    FROM transactions_acceptances ta
-                    WHERE ta.transaction_id = to_.transaction_id
-                )
-            )
+        WITH relevant_transactions AS MATERIALIZED (
+          SELECT transaction_id
+          FROM transactions
+          WHERE block_time < 1747540800000
+        ),
+        to_delete AS MATERIALIZED (
+          SELECT to_.transaction_id, to_.index
+          FROM transactions_outputs to_
+          JOIN relevant_transactions rt ON rt.transaction_id = to_.transaction_id
+          WHERE EXISTS (
+            SELECT 1
+            FROM transactions_inputs ti
+            WHERE ti.previous_outpoint_hash = rt.transaction_id
+            AND ti.previous_outpoint_index = to_.index
+          )
+          OR NOT EXISTS (
+            SELECT 1
+            FROM transactions_acceptances ta
+            WHERE ta.transaction_id = rt.transaction_id
+          )
         )
         DELETE FROM transactions_outputs to_
         USING to_delete
