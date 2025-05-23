@@ -175,11 +175,7 @@ impl UtxoSetImporter {
                             acceptance_committed_count += acceptance_count;
                             outputs_committed_count += output_count;
                             if utxo_chunk_count % IBD_BATCH_SIZE == 0 {
-                                self.print_progress(
-                                    utxo_chunk_count,
-                                    acceptance_committed_count,
-                                    outputs_committed_count,
-                                );
+                                self.print_progress(utxo_chunk_count, acceptance_committed_count, outputs_committed_count);
                                 adaptor
                                     .send(
                                         peer_key,
@@ -249,11 +245,8 @@ impl UtxoSetImporter {
         let mut unique_acceptances = HashSet::new();
         let tx_acceptances: Vec<TransactionAcceptance> = transaction_outputs
             .iter()
-            .filter_map(|o| {
-                unique_acceptances
-                    .insert(&o.transaction_id)
-                    .then(|| TransactionAcceptance { transaction_id: Some(o.transaction_id.clone()), block_hash: None })
-            })
+            .filter(|o| unique_acceptances.insert(&o.transaction_id))
+            .map(|o| TransactionAcceptance { transaction_id: Some(o.transaction_id.clone()), block_hash: None })
             .collect();
         let acceptance_count = self.database.insert_transaction_acceptances(&tx_acceptances).await.unwrap();
         let output_count = self.database.insert_transaction_outputs(&transaction_outputs).await.unwrap();
