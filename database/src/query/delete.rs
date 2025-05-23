@@ -44,9 +44,15 @@ pub async fn prune_unspendable_transactions_outputs(block_time_lt: i64, pool: &P
         WITH relevant_transactions AS MATERIALIZED (
           SELECT transaction_id
           FROM transactions
-          WHERE block_time < 1747540800000
-        ),
-        to_delete AS MATERIALIZED (
+          WHERE block_time < 747540800000
+        ), rejected AS MATERIALIZED (
+          SELECT transaction_id
+          FROM relevant_transactions rt
+          WHERE NOT EXISTS (
+            SELECT 1 FROM transactions_acceptances ta
+            WHERE ta.transaction_id = rt.transaction_id
+          )
+        ), spent AS MATERIALIZED (
           SELECT to_.transaction_id, to_.index
           FROM transactions_outputs to_
           JOIN relevant_transactions rt ON rt.transaction_id = to_.transaction_id
@@ -56,16 +62,11 @@ pub async fn prune_unspendable_transactions_outputs(block_time_lt: i64, pool: &P
             WHERE ti.previous_outpoint_hash = rt.transaction_id
             AND ti.previous_outpoint_index = to_.index
           )
-          OR NOT EXISTS (
-            SELECT 1
-            FROM transactions_acceptances ta
-            WHERE ta.transaction_id = rt.transaction_id
-          )
         )
         DELETE FROM transactions_outputs to_
-        USING to_delete
-        WHERE to_.transaction_id = to_delete.transaction_id
-        AND to_.index = to_delete.index
+        USING rejected, spent
+        WHERE to_.transaction_id = rejected.transaction_id
+        OR (to_.transaction_id = spent.transaction_id AND to_.index = spent.index)
         ";
     Ok(sqlx::query(sql).bind(block_time_lt).execute(pool).await?.rows_affected())
 }
