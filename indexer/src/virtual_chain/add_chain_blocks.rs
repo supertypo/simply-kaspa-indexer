@@ -15,7 +15,7 @@ pub async fn add_chain_blocks(batch_scale: f64, added_hashes: &[RpcHash], databa
     let mut rows_added = 0;
     for added_hashes_chunk in added_hashes.chunks(batch_size) {
         let accepted_transactions: Vec<_> =
-            added_hashes_chunk.iter().map(|b| TransactionAcceptance { transaction_id: None, block_hash: (*b).into() }).collect();
+            added_hashes_chunk.iter().map(|b| TransactionAcceptance { transaction_id: None, block_hash: Some((*b).into()) }).collect();
         rows_added += database.insert_transaction_acceptances(&accepted_transactions).await.unwrap();
     }
     rows_added
