@@ -177,7 +177,6 @@ impl UtxoSetImporter {
                             if utxo_chunk_count % IBD_BATCH_SIZE == 0 {
                                 self.print_progress(
                                     utxo_chunk_count,
-                                    utxos_count,
                                     acceptance_committed_count,
                                     outputs_committed_count,
                                 );
@@ -192,14 +191,16 @@ impl UtxoSetImporter {
                                     .await?;
                                 let mut metrics = self.metrics.write().await;
                                 metrics.components.utxo_importer.utxos_imported = Some(utxos_count);
+                                metrics.components.utxo_importer.acceptances_committed = Some(acceptance_committed_count);
                                 metrics.components.utxo_importer.outputs_committed = Some(outputs_committed_count);
                             }
                         }
                         Some(Payload::DonePruningPointUtxoSetChunks(_)) => {
-                            self.print_progress(utxo_chunk_count, utxos_count, acceptance_committed_count, outputs_committed_count);
+                            self.print_progress(utxo_chunk_count, acceptance_committed_count, outputs_committed_count);
                             info!("Pruning point UTXO set import completed successfully!");
                             let mut metrics = self.metrics.write().await;
                             metrics.components.utxo_importer.utxos_imported = Some(utxos_count);
+                            metrics.components.utxo_importer.acceptances_committed = Some(acceptance_committed_count);
                             metrics.components.utxo_importer.outputs_committed = Some(outputs_committed_count);
                             return Ok(());
                         }
@@ -259,10 +260,10 @@ impl UtxoSetImporter {
         (acceptance_count, output_count)
     }
 
-    fn print_progress(&self, utxo_chunk_count: u32, utxos_count: u64, acceptance_committed_count: u64, outputs_committed_count: u64) {
+    fn print_progress(&self, utxo_chunk_count: u32, acceptance_committed_count: u64, outputs_committed_count: u64) {
         info!(
-            "Imported {} UTXO chunks ({} total). {} accepted transactions, {} outputs",
-            utxo_chunk_count, utxos_count, acceptance_committed_count, outputs_committed_count,
+            "Imported {} UTXO chunks. Committed {} accepted transactions, {} outputs",
+            utxo_chunk_count, acceptance_committed_count, outputs_committed_count,
         );
     }
 }
