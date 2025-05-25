@@ -117,6 +117,15 @@ pub async fn prune(
         let step_pruning_point = common_start_time.sub(retention);
         return_on_shutdown!(run);
         let db = database.clone();
+        step_errors += prune_step(
+            "transactions_inputs",
+            metrics.clone(),
+            |step_pruning_point| async move { db.prune_transactions_inputs(step_pruning_point).await },
+            step_pruning_point,
+        )
+        .await as i32;
+        return_on_shutdown!(run);
+        let db = database.clone();
         if !cli_args.is_disabled(CliDisable::BlocksTable) && !cli_args.is_excluded(CliField::BlockTimestamp) {
             let retention = retention.min(pruning_config.retention_blocks.unwrap_or(Duration::MAX));
             let step_pruning_point = common_start_time.sub(retention);
@@ -136,15 +145,6 @@ pub async fn prune(
             )
             .await as i32;
         }
-        return_on_shutdown!(run);
-        let db = database.clone();
-        step_errors += prune_step(
-            "transactions_inputs",
-            metrics.clone(),
-            |step_pruning_point| async move { db.prune_transactions_inputs(step_pruning_point).await },
-            step_pruning_point,
-        )
-        .await as i32;
         return_on_shutdown!(run);
         let db = database.clone();
         step_errors += prune_step(

@@ -283,17 +283,17 @@ impl KaspaDbClient {
         query::delete::prune_blocks_transactions_using_transactions(block_time_lt, &self.pool).await
     }
 
-    pub async fn prune_transactions_acceptances_using_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::prune_transactions_acceptances_using_transactions(block_time_lt, &self.pool).await
-    }
-
-    // NB! If transactions_acceptances are pruned, unspent outputs will also be pruned
+    // NB! If transactions_acceptances are pruned, unspent outputs will also be pruned.
     pub async fn prune_unspendable_transactions_outputs(&self, block_time_lt: i64) -> Result<u64, Error> {
         query::delete::prune_unspendable_transactions_outputs(block_time_lt, &self.pool).await
     }
 
     pub async fn prune_transactions_inputs(&self, block_time_lt: i64) -> Result<u64, Error> {
         query::delete::prune_transactions_inputs(block_time_lt, &self.pool).await
+    }
+
+    pub async fn prune_transactions_acceptances_using_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
+        query::delete::prune_transactions_acceptances_using_transactions(block_time_lt, &self.pool).await
     }
 
     pub async fn prune_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
