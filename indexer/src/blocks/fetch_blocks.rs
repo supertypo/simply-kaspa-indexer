@@ -47,7 +47,6 @@ pub struct KaspaBlocksFetcher {
     lag_count: i32,
     tip_hashes: HashSet<KaspaHash>,
     block_cache: Cache<KaspaHash, ()>,
-    net_bps: u8,
 }
 
 impl KaspaBlocksFetcher {
@@ -78,7 +77,6 @@ impl KaspaBlocksFetcher {
             lag_count: 0,
             tip_hashes: HashSet::new(),
             block_cache,
-            net_bps: settings.net_bps,
         }
     }
 
@@ -118,7 +116,7 @@ impl KaspaBlocksFetcher {
                             let mut metrics = self.metrics.write().await;
                             metrics.queues.blocks = self.blocks_queue.len() as u64;
                             metrics.queues.transactions = self.txs_queue.len() as u64;
-                            metrics.components.block_fetcher.last_block = Some(MetricsBlock {
+                            metrics.components.block_fetcher.update_last_block(MetricsBlock {
                                 hash: last_block.verbose_data.unwrap().hash.to_string(),
                                 timestamp: last_block.header.timestamp,
                                 date_time: DateTime::from_timestamp_millis(last_block.header.timestamp as i64).unwrap(),

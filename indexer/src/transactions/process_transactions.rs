@@ -197,7 +197,7 @@ pub async fn process_transactions(
                 let last_block_time = last_checkpoint.timestamp;
 
                 let mut metrics = metrics.write().await;
-                metrics.components.transaction_processor.last_block = Some(last_checkpoint.into());
+                metrics.components.transaction_processor.update_last_block(last_checkpoint.into());
                 drop(metrics);
 
                 for checkpoint_block in checkpoint_blocks {

@@ -117,7 +117,7 @@ pub async fn process_virtual_chain(
                                 }
                             }
                             let mut metrics = metrics.write().await;
-                            metrics.components.virtual_chain_processor.last_block = Some(checkpoint_block.clone().into());
+                            metrics.components.virtual_chain_processor.update_last_block(checkpoint_block.clone().into());
                             metrics.components.virtual_chain_processor.tip_distance = Some(tip_distance as u64);
                             metrics.components.virtual_chain_processor.tip_distance_timestamp =
                                 dynamic_tip_distance.then_some(tip_distance_timestamp as u64);

@@ -199,6 +199,12 @@ impl MetricsComponentBlockFetcher {
     pub fn new() -> Self {
         Self { last_block: None }
     }
+
+    pub fn update_last_block(&mut self, last_block: MetricsBlock) {
+        if self.last_block.as_ref().map(|b| b.daa_score < last_block.daa_score).unwrap_or(true) {
+            self.last_block = Some(last_block);
+        }
+    }
 }
 
 #[derive(ToSchema, Clone, Serialize, Deserialize)]
@@ -216,6 +222,12 @@ impl Default for MetricsComponentBlockProcessor {
 impl MetricsComponentBlockProcessor {
     pub fn new() -> Self {
         Self { last_block: None }
+    }
+
+    pub fn update_last_block(&mut self, last_block: MetricsBlock) {
+        if self.last_block.as_ref().map(|b| b.daa_score < last_block.daa_score).unwrap_or(true) {
+            self.last_block = Some(last_block);
+        }
     }
 }
 
@@ -235,6 +247,12 @@ impl Default for MetricsComponentTransactionProcessor {
 impl MetricsComponentTransactionProcessor {
     pub fn new() -> Self {
         Self { enabled: false, last_block: None }
+    }
+
+    pub fn update_last_block(&mut self, last_block: MetricsBlock) {
+        if self.last_block.as_ref().map(|b| b.daa_score < last_block.daa_score).unwrap_or(true) {
+            self.last_block = Some(last_block);
+        }
     }
 }
 
@@ -267,6 +285,12 @@ impl MetricsComponentVirtualChainProcessor {
             tip_distance_timestamp: None,
             tip_distance_date_time: None,
             last_block: None,
+        }
+    }
+
+    pub fn update_last_block(&mut self, last_block: MetricsBlock) {
+        if self.last_block.as_ref().map(|b| b.daa_score < last_block.daa_score).unwrap_or(true) {
+            self.last_block = Some(last_block);
         }
     }
 }
