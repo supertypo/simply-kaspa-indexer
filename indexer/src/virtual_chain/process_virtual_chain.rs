@@ -69,7 +69,7 @@ pub async fn process_virtual_chain(
                                 daa_score: last_accepting_block.header.daa_score,
                                 blue_score: last_accepting_block.header.blue_score,
                             };
-                            loop {
+                            while run.load(Ordering::Relaxed) {
                                 if let Some(b) = &metrics.read().await.components.block_processor.last_block {
                                     // Don't allow VCP to run ahead of blocks processor by more than 1 minute
                                     if checkpoint_block.daa_score.saturating_sub(b.daa_score) < 60 * settings.net_bps as u64 {
@@ -77,7 +77,10 @@ pub async fn process_virtual_chain(
                                     }
                                 }
                                 trace!("Virtual chain processor is waiting for block_processor to catch up...");
-                                sleep(Duration::from_millis(500)).await;
+                                sleep(poll_interval).await;
+                                if !run.load(Ordering::Relaxed) {
+                                    return;
+                                }
                             }
                             let start_commit_time = Instant::now();
                             let rows_removed = remove_chain_blocks(batch_scale, removed_chain_block_hashes, &database).await;
