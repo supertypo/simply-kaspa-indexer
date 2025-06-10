@@ -41,7 +41,7 @@ pub async fn process_checkpoints(
     let disable_transaction_processing = settings.cli_args.is_disabled(CliDisable::TransactionProcessing);
 
     const CHECKPOINT_SAVE_INTERVAL: u64 = 60;
-    const CHECKPOINT_WARN_INTERVAL: u64 = 60;
+    const CHECKPOINT_WARN_INTERVAL: u64 = 120;
     const CHECKPOINT_FAILED_TIMEOUT: u64 = 600;
     let mut checkpoint_last_saved = Instant::now();
     let mut checkpoint_last_warned = Instant::now();

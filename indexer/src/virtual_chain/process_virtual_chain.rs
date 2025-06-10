@@ -8,7 +8,7 @@ use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
 use deadpool::managed::{Object, Pool};
 use kaspa_rpc_core::api::rpc::RpcApi;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use simply_kaspa_cli::cli_args::{CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_kaspad::pool::manager::KaspadManager;
@@ -69,6 +69,19 @@ pub async fn process_virtual_chain(
                                 daa_score: last_accepting_block.header.daa_score,
                                 blue_score: last_accepting_block.header.blue_score,
                             };
+                            loop {
+                                if let Some(b) = &metrics.read().await.components.block_processor.last_block {
+                                    // Don't allow VCP to run ahead of blocks processor by more than 1 minute
+                                    if checkpoint_block.daa_score.saturating_sub(b.daa_score) < 60 * settings.net_bps as u64 {
+                                        break;
+                                    }
+                                }
+                                trace!("Virtual chain processor is waiting for block_processor to catch up...");
+                                sleep(poll_interval).await;
+                                if !run.load(Ordering::Relaxed) {
+                                    return;
+                                }
+                            }
                             let start_commit_time = Instant::now();
                             let rows_removed = remove_chain_blocks(batch_scale, removed_chain_block_hashes, &database).await;
                             if !disable_transaction_acceptance {
@@ -116,15 +129,16 @@ pub async fn process_virtual_chain(
                                     debug!("Decreased vcp tip distance to {tip_distance}");
                                 }
                             }
-                            let mut metrics = metrics.write().await;
-                            metrics.components.virtual_chain_processor.update_last_block(checkpoint_block.clone().into());
-                            metrics.components.virtual_chain_processor.tip_distance = Some(tip_distance as u64);
-                            metrics.components.virtual_chain_processor.tip_distance_timestamp =
-                                dynamic_tip_distance.then_some(tip_distance_timestamp as u64);
-                            metrics.components.virtual_chain_processor.tip_distance_date_time = dynamic_tip_distance
-                                .then_some(DateTime::from_timestamp_millis(tip_distance_timestamp as i64))
-                                .flatten();
-                            drop(metrics);
+                            {
+                                let mut metrics = metrics.write().await;
+                                metrics.components.virtual_chain_processor.update_last_block(checkpoint_block.clone().into());
+                                metrics.components.virtual_chain_processor.tip_distance = Some(tip_distance as u64);
+                                metrics.components.virtual_chain_processor.tip_distance_timestamp =
+                                    dynamic_tip_distance.then_some(tip_distance_timestamp as u64);
+                                metrics.components.virtual_chain_processor.tip_distance_date_time = dynamic_tip_distance
+                                    .then_some(DateTime::from_timestamp_millis(tip_distance_timestamp as i64))
+                                    .flatten();
+                            }
 
                             while checkpoint_queue.push(checkpoint_block.clone()).is_err() {
                                 warn!("Checkpoint queue is full");
