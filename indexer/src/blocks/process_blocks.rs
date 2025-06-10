@@ -47,7 +47,10 @@ pub async fn process_blocks(
     while run.load(Ordering::Relaxed) {
         if let Some(block_data) = rpc_blocks_queue.pop() {
             let synced = block_data.synced;
-            let block = mapper.map_block(&block_data.block);
+
+            if !disable_blocks {
+                blocks.push(mapper.map_block(&block_data.block));
+            }
             if !disable_block_relations {
                 blocks_parents.extend(mapper.map_block_parents(&block_data.block));
             }
@@ -58,9 +61,6 @@ pub async fn process_blocks(
                 daa_score: block_data.block.header.daa_score,
                 blue_score: block_data.block.header.blue_score,
             });
-            if !disable_blocks {
-                blocks.push(block);
-            }
 
             if checkpoint_blocks.len() >= batch_size
                 || (!checkpoint_blocks.is_empty() && Instant::now().duration_since(last_commit_time).as_secs() > 2)
