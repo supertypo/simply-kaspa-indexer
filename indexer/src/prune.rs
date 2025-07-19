@@ -112,7 +112,7 @@ pub async fn prune(
             .await as i32;
         }
     }
-    
+
     if let Some(retention) = pruning_config.retention_blocks {
         let step_pruning_point = common_start_time.sub(retention);
         return_on_shutdown!(run);
@@ -123,7 +123,7 @@ pub async fn prune(
             |step_pruning_point| async move { db.prune_blocks(step_pruning_point).await },
             step_pruning_point,
         )
-            .await as i32;
+        .await as i32;
 
         if cli_args.is_disabled(CliDisable::TransactionAcceptance)
             && !cli_args.is_disabled(CliDisable::BlocksTable)
@@ -137,7 +137,7 @@ pub async fn prune(
                 |step_pruning_point| async move { db.prune_transactions_acceptances_using_blocks(step_pruning_point).await },
                 step_pruning_point,
             )
-                .await as i32;
+            .await as i32;
         }
     }
 
