@@ -193,6 +193,7 @@ pub async fn prune(
         warn!("\x1b[33mDatabase pruning completed with one or more errors\x1b[0m");
     }
     let mut metrics_rw = metrics.write().await;
+    metrics_rw.components.db_pruner.running = Some(false);
     metrics_rw.components.db_pruner.completed_time = Some(now());
     metrics_rw.components.db_pruner.completed_successfully = Some(step_errors == 0);
 }
