@@ -4146,6 +4146,7 @@ dependencies = [
  "simply-kaspa-database",
  "simply-kaspa-kaspad",
  "simply-kaspa-mapping",
+ "sqlx",
  "sysinfo 0.34.1",
  "tokio",
  "tokio-cron-scheduler",
