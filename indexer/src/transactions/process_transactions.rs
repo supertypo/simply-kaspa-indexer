@@ -1,6 +1,7 @@
 use crate::blocks::fetch_blocks::TransactionData;
 use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
+use crate::signal::signal_handler::SignalHandler;
 use crate::web::model::metrics::Metrics;
 use crossbeam_queue::ArrayQueue;
 use kaspa_hashes::Hash as KaspaHash;
@@ -18,7 +19,6 @@ use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use std::cmp::min;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -29,7 +29,7 @@ type SubnetworkMap = HashMap<String, i32>;
 
 pub async fn process_transactions(
     settings: Settings,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     txs_queue: Arc<ArrayQueue<TransactionData>>,
     checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
@@ -83,7 +83,7 @@ pub async fn process_transactions(
         info!("Address transaction mapping disabled");
     }
 
-    while run.load(Ordering::Relaxed) {
+    while !signal_handler.is_shutdown() {
         if let Some(transaction_data) = txs_queue.pop() {
             checkpoint_blocks.push(CheckpointBlock {
                 origin: CheckpointOrigin::Transactions,

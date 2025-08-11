@@ -1,5 +1,6 @@
 use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
+use crate::signal::signal_handler::SignalHandler;
 use crate::virtual_chain::accept_transactions::accept_transactions;
 use crate::virtual_chain::add_chain_blocks::add_chain_blocks;
 use crate::virtual_chain::remove_chain_blocks::remove_chain_blocks;
@@ -21,7 +22,7 @@ use tokio::time::sleep;
 
 pub async fn process_virtual_chain(
     settings: Settings,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     start_vcp: Arc<AtomicBool>,
     checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
@@ -44,7 +45,7 @@ pub async fn process_virtual_chain(
     let mut tip_distance_history = VecDeque::new();
     let tip_distance_window = settings.cli_args.vcp_window.saturating_div(settings.cli_args.vcp_interval as u16).max(1) as usize;
 
-    while run.load(Ordering::Relaxed) {
+    while !signal_handler.is_shutdown() {
         if !start_vcp.load(Ordering::Relaxed) {
             debug!("Virtual chain processor waiting for start notification");
             sleep(err_delay).await;
@@ -78,7 +79,7 @@ pub async fn process_virtual_chain(
                                 }
                                 trace!("Virtual chain processor is waiting for block_processor to catch up...");
                                 sleep(poll_interval).await;
-                                if !run.load(Ordering::Relaxed) {
+                                if signal_handler.is_shutdown() {
                                     return;
                                 }
                             }
