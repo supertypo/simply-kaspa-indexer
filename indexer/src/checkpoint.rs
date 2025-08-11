@@ -1,4 +1,5 @@
 use crate::settings::Settings;
+use crate::signal::signal_handler::SignalHandler;
 use crate::vars::save_checkpoint;
 use crate::web::model::metrics::Metrics;
 use crossbeam_queue::ArrayQueue;
@@ -7,7 +8,6 @@ use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -32,7 +32,7 @@ pub struct CheckpointBlock {
 
 pub async fn process_checkpoints(
     settings: Settings,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
     database: KaspaDbClient,
@@ -56,7 +56,7 @@ pub async fn process_checkpoints(
     let mut cp_ok_blocks: bool = false;
     let mut cp_ok_txs: bool = false;
 
-    while run.load(Ordering::Relaxed) {
+    while !signal_handler.is_shutdown() {
         if let Some(checkpoint_block) = checkpoint_queue.pop() {
             match checkpoint_block.origin {
                 CheckpointOrigin::Blocks => {

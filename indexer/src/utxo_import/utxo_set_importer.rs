@@ -1,3 +1,4 @@
+use crate::signal::signal_handler::SignalHandler;
 use crate::utxo_import::p2p_initializer::P2pInitializer;
 use crate::web::model::metrics::Metrics;
 use bigdecimal::ToPrimitive;
@@ -23,7 +24,6 @@ use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance
 use simply_kaspa_database::models::transaction_output::TransactionOutput;
 use std::collections::HashSet;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
@@ -37,7 +37,7 @@ pub const IBD_RETRIES: u32 = 10;
 
 pub struct UtxoSetImporter {
     cli_args: CliArgs,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     pruning_point_hash: KaspaHash,
     database: KaspaDbClient,
@@ -52,7 +52,7 @@ pub struct UtxoSetImporter {
 impl UtxoSetImporter {
     pub fn new(
         cli_args: CliArgs,
-        run: Arc<AtomicBool>,
+        signal_handler: SignalHandler,
         metrics: Arc<RwLock<Metrics>>,
         pruning_point_hash: KaspaHash,
         database: KaspaDbClient,
@@ -65,7 +65,7 @@ impl UtxoSetImporter {
         let include_block_time = !cli_args.is_excluded(CliField::TxOutBlockTime);
         UtxoSetImporter {
             cli_args,
-            run,
+            signal_handler,
             metrics,
             pruning_point_hash,
             database,
@@ -81,7 +81,7 @@ impl UtxoSetImporter {
     pub async fn start(&self) -> bool {
         let mut attempts = 0;
         let mut completed = false;
-        while self.run.load(Ordering::Relaxed) && !completed {
+        while !self.signal_handler.is_shutdown() && !completed {
             let address = if let Some(p2p_url) = &self.cli_args.p2p_url {
                 Some(p2p_url.clone())
             } else {
@@ -145,7 +145,7 @@ impl UtxoSetImporter {
         let mut outputs_committed_count = 0;
         let mut utxo_chunk_count = 0;
         let mut utxos_count: u64 = 0;
-        while self.run.load(Ordering::Relaxed) {
+        while !self.signal_handler.is_shutdown() {
             match timeout(Duration::from_secs(IBD_TIMEOUT_SECONDS), receiver.recv()).await {
                 Ok(op) => match op {
                     Some(msg) => match msg.payload {

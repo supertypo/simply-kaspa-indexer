@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use crate::blocks::fetch_blocks::BlockData;
 use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
+use crate::signal::signal_handler::SignalHandler;
 use crate::web::model::metrics::Metrics;
 use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
@@ -21,7 +22,7 @@ use tokio::time::sleep;
 
 pub async fn process_blocks(
     settings: Settings,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     start_vcp: Arc<AtomicBool>,
     rpc_blocks_queue: Arc<ArrayQueue<BlockData>>,
@@ -44,7 +45,7 @@ pub async fn process_blocks(
     let mut last_commit_time = Instant::now();
     let mut noop_delete_count = 0;
 
-    while run.load(Ordering::Relaxed) {
+    while !signal_handler.is_shutdown() {
         if let Some(block_data) = rpc_blocks_queue.pop() {
             let synced = block_data.synced;
 

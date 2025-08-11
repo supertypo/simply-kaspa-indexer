@@ -1,9 +1,9 @@
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::settings::Settings;
+use crate::signal::signal_handler::SignalHandler;
 use crate::web::model::metrics::{Metrics, MetricsBlock};
 use chrono::{DateTime, Utc};
 use crossbeam_queue::ArrayQueue;
@@ -36,7 +36,7 @@ pub struct TransactionData {
 
 pub struct KaspaBlocksFetcher {
     disable_transaction_processing: bool,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
     blocks_queue: Arc<ArrayQueue<BlockData>>,
@@ -54,7 +54,7 @@ impl KaspaBlocksFetcher {
 
     pub fn new(
         settings: Settings,
-        run: Arc<AtomicBool>,
+        signal_handler: SignalHandler,
         metrics: Arc<RwLock<Metrics>>,
         kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
         blocks_queue: Arc<ArrayQueue<BlockData>>,
@@ -66,7 +66,7 @@ impl KaspaBlocksFetcher {
             Cache::builder().time_to_live(Duration::from_secs(ttl)).max_capacity(cache_size).build();
         KaspaBlocksFetcher {
             disable_transaction_processing: settings.cli_args.is_disabled(CliDisable::TransactionProcessing),
-            run,
+            signal_handler,
             metrics,
             kaspad_pool,
             blocks_queue,
@@ -81,14 +81,9 @@ impl KaspaBlocksFetcher {
     }
 
     pub async fn start(&mut self) {
-        self.run.store(true, Ordering::Relaxed);
-        self.fetch_blocks().await;
-    }
-
-    async fn fetch_blocks(&mut self) {
         let start_time = Instant::now();
 
-        while self.run.load(Ordering::Relaxed) {
+        while !self.signal_handler.is_shutdown() {
             let last_fetch_time = Instant::now();
             debug!("Getting blocks with low_hash {}", self.low_hash.to_string());
             match self.kaspad_pool.get().await {
@@ -183,7 +178,7 @@ impl KaspaBlocksFetcher {
                 block: RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data },
                 synced: self.synced,
             };
-            while self.run.load(Ordering::Relaxed) {
+            while !self.signal_handler.is_shutdown() {
                 match self.blocks_queue.push(block_data) {
                     Ok(_) => break,
                     Err(v) => {
@@ -192,7 +187,7 @@ impl KaspaBlocksFetcher {
                     }
                 }
             }
-            while self.run.load(Ordering::Relaxed) {
+            while !self.signal_handler.is_shutdown() {
                 match self.txs_queue.push(transaction_data) {
                     Ok(_) => break,
                     Err(v) => {

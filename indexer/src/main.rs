@@ -13,7 +13,7 @@ use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
 use simply_kaspa_indexer::checkpoint::{process_checkpoints, CheckpointBlock, CheckpointOrigin};
 use simply_kaspa_indexer::prune::pruner;
 use simply_kaspa_indexer::settings::Settings;
-use simply_kaspa_indexer::signal::signal_handler::notify_on_signals;
+use simply_kaspa_indexer::signal::signal_handler::SignalHandler;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
 use simply_kaspa_indexer::utxo_import::utxo_set_importer::UtxoSetImporter;
 use simply_kaspa_indexer::vars::load_block_checkpoint;
@@ -24,7 +24,7 @@ use simply_kaspa_kaspad::pool::manager::KaspadManager;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use std::env;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -66,24 +66,20 @@ async fn main() {
 }
 
 async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>, database: KaspaDbClient) {
-    let run = Arc::new(AtomicBool::new(true));
-    task::spawn(notify_on_signals(run.clone()));
+    let signal_handler = SignalHandler::new().spawn();
 
-    let mut block_dag_info = None;
-    while block_dag_info.is_none() {
-        if let Ok(kaspad) = kaspad_pool.get().await {
-            if let Ok(bdi) = kaspad.get_block_dag_info().await {
-                block_dag_info = Some(bdi);
-            }
-        }
-        if block_dag_info.is_none() {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-        }
-        if !run.load(Ordering::Relaxed) {
+    let block_dag_info = loop {
+        if signal_handler.is_shutdown() {
             return;
         }
-    }
-    let block_dag_info = block_dag_info.unwrap();
+        if let Ok(kaspad) = kaspad_pool.get().await {
+            if let Ok(bdi) = kaspad.get_block_dag_info().await {
+                break bdi;
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    };
+
     let net_bps = match block_dag_info.network {
         NetworkId { network_type: NetworkType::Mainnet, suffix: None } => 10,
         _ => 10,
@@ -165,12 +161,18 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     metrics.components.virtual_chain_processor.only_blocks = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
     let metrics = Arc::new(RwLock::new(metrics));
 
-    let webserver = Arc::new(WebServer::new(settings.clone(), run.clone(), metrics.clone(), kaspad_pool.clone(), database.clone()));
+    let webserver =
+        Arc::new(WebServer::new(settings.clone(), signal_handler.clone(), metrics.clone(), kaspad_pool.clone(), database.clone()));
     let webserver_task = task::spawn(async move { webserver.run().await.unwrap() });
 
     if utxo_set_import {
-        let importer =
-            UtxoSetImporter::new(cli_args.clone(), run.clone(), metrics.clone(), block_dag_info.pruning_point_hash, database.clone());
+        let importer = UtxoSetImporter::new(
+            cli_args.clone(),
+            signal_handler.clone(),
+            metrics.clone(),
+            block_dag_info.pruning_point_hash,
+            database.clone(),
+        );
         if !importer.start().await {
             warn!("UTXO set import aborted");
             webserver_task.await.unwrap();
@@ -180,7 +182,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
 
     let mut block_fetcher = KaspaBlocksFetcher::new(
         settings.clone(),
-        run.clone(),
+        signal_handler.clone(),
         metrics.clone(),
         kaspad_pool.clone(),
         blocks_queue.clone(),
@@ -192,7 +194,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         task::spawn(async move { block_fetcher.start().await }),
         task::spawn(process_blocks(
             settings.clone(),
-            run.clone(),
+            signal_handler.clone(),
             metrics.clone(),
             start_vcp.clone(),
             blocks_queue.clone(),
@@ -200,12 +202,18 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             database.clone(),
             mapper.clone(),
         )),
-        task::spawn(process_checkpoints(settings.clone(), run.clone(), metrics.clone(), checkpoint_queue.clone(), database.clone())),
+        task::spawn(process_checkpoints(
+            settings.clone(),
+            signal_handler.clone(),
+            metrics.clone(),
+            checkpoint_queue.clone(),
+            database.clone(),
+        )),
     ];
     if !settings.cli_args.is_disabled(CliDisable::TransactionProcessing) {
         tasks.push(task::spawn(process_transactions(
             settings.clone(),
-            run.clone(),
+            signal_handler.clone(),
             metrics.clone(),
             txs_queue.clone(),
             checkpoint_queue.clone(),
@@ -216,7 +224,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     if !settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing) {
         tasks.push(task::spawn(process_virtual_chain(
             settings.clone(),
-            run.clone(),
+            signal_handler.clone(),
             metrics.clone(),
             start_vcp.clone(),
             checkpoint_queue.clone(),
@@ -226,7 +234,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     }
 
     tasks.push(task::spawn(async move {
-        if let Err(e) = pruner(cli_args.clone(), run.clone(), metrics.clone(), database.clone()).await {
+        if let Err(e) = pruner(cli_args.clone(), signal_handler.clone(), metrics.clone(), database.clone()).await {
             error!("Database pruner failed: {e}");
         }
     }));
