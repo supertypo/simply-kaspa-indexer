@@ -36,6 +36,7 @@ pub struct TransactionData {
 
 pub struct KaspaBlocksFetcher {
     disable_transaction_processing: bool,
+    poll_interval: Duration,
     signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
@@ -66,6 +67,7 @@ impl KaspaBlocksFetcher {
             Cache::builder().time_to_live(Duration::from_secs(ttl)).max_capacity(cache_size).build();
         KaspaBlocksFetcher {
             disable_transaction_processing: settings.cli_args.is_disabled(CliDisable::TransactionProcessing),
+            poll_interval: Duration::from_millis(settings.cli_args.block_interval),
             signal_handler,
             metrics,
             kaspad_pool,
@@ -127,7 +129,7 @@ impl KaspaBlocksFetcher {
                             txs_len as f64 / blocks_len as f64
                         );
                         if blocks_len < 50 {
-                            sleep(Duration::from_secs(2)).await;
+                            sleep(self.poll_interval).await;
                         }
                     }
                     Err(e) => {

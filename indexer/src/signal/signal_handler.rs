@@ -75,3 +75,9 @@ impl SignalHandler {
         let _ = self.shutdown_tx.send(());
     }
 }
+
+impl Default for SignalHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}

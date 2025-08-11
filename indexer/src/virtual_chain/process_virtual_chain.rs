@@ -32,7 +32,7 @@ pub async fn process_virtual_chain(
     let batch_scale = settings.cli_args.batch_scale;
     let disable_transaction_acceptance = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
 
-    let poll_interval = Duration::from_secs(settings.cli_args.vcp_interval as u64);
+    let poll_interval = Duration::from_millis(settings.cli_args.vcp_interval);
     let err_delay = Duration::from_secs(5);
 
     let mut start_hash = settings.checkpoint;
@@ -43,7 +43,7 @@ pub async fn process_virtual_chain(
     let mut tip_distance = if dynamic_tip_distance { 10 } else { 0 };
     let mut tip_distance_timestamp = 0;
     let mut tip_distance_history = VecDeque::new();
-    let tip_distance_window = settings.cli_args.vcp_window.saturating_div(settings.cli_args.vcp_interval as u16).max(1) as usize;
+    let tip_distance_window = (settings.cli_args.vcp_window * 1_000 / settings.cli_args.vcp_interval).max(1) as usize;
 
     while !signal_handler.is_shutdown() {
         if !start_vcp.load(Ordering::Relaxed) {
