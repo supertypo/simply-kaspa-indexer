@@ -1,6 +1,5 @@
 use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
-use crate::signal::signal_handler::SignalHandler;
 use crate::virtual_chain::accept_transactions::accept_transactions;
 use crate::virtual_chain::add_chain_blocks::add_chain_blocks;
 use crate::virtual_chain::remove_chain_blocks::remove_chain_blocks;
@@ -12,7 +11,8 @@ use kaspa_rpc_core::api::rpc::RpcApi;
 use log::{debug, error, info, trace, warn};
 use simply_kaspa_cli::cli_args::{CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
-use simply_kaspa_kaspad::pool::manager::KaspadManager;
+use simply_kaspa_kaspad::manager::KaspadManager;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

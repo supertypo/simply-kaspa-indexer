@@ -13,15 +13,15 @@ use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
 use simply_kaspa_indexer::checkpoint::{process_checkpoints, CheckpointBlock, CheckpointOrigin};
 use simply_kaspa_indexer::prune::pruner;
 use simply_kaspa_indexer::settings::Settings;
-use simply_kaspa_indexer::signal::signal_handler::SignalHandler;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
 use simply_kaspa_indexer::utxo_import::utxo_set_importer::UtxoSetImporter;
 use simply_kaspa_indexer::vars::load_block_checkpoint;
 use simply_kaspa_indexer::virtual_chain::process_virtual_chain::process_virtual_chain;
 use simply_kaspa_indexer::web::model::metrics::Metrics;
 use simply_kaspa_indexer::web::web_server::WebServer;
-use simply_kaspa_kaspad::pool::manager::KaspadManager;
+use simply_kaspa_kaspad::manager::KaspadManager;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::env;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
@@ -173,11 +173,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             block_dag_info.pruning_point_hash,
             database.clone(),
         );
-        if !importer.start().await {
-            warn!("UTXO set import aborted");
-            webserver_task.await.unwrap();
-            return;
-        }
+        importer.start().await;
     }
 
     let mut block_fetcher = KaspaBlocksFetcher::new(

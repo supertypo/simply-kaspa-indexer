@@ -1,7 +1,6 @@
 use crate::blocks::fetch_blocks::TransactionData;
 use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
-use crate::signal::signal_handler::SignalHandler;
 use crate::web::model::metrics::Metrics;
 use crossbeam_queue::ArrayQueue;
 use kaspa_hashes::Hash as KaspaHash;
@@ -17,6 +16,7 @@ use simply_kaspa_database::models::transaction_input::TransactionInput;
 use simply_kaspa_database::models::transaction_output::TransactionOutput;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 use crate::blocks::fetch_blocks::BlockData;
 use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
-use crate::signal::signal_handler::SignalHandler;
 use crate::web::model::metrics::Metrics;
 use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
@@ -17,6 +16,7 @@ use simply_kaspa_database::models::block::Block;
 use simply_kaspa_database::models::block_parent::BlockParent;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 

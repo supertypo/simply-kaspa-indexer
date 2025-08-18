@@ -1,11 +1,11 @@
 use crate::return_on_shutdown;
-use crate::signal::signal_handler::SignalHandler;
 use crate::web::model::metrics::{Metrics, MetricsComponentDbPrunerResult};
 use chrono::{DateTime, Timelike, Utc};
 use log::{error, info, warn};
 use serde_json::to_string_pretty;
 use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliField, PruningConfig};
 use simply_kaspa_database::client::KaspaDbClient;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::collections::HashMap;
 use std::error::Error;
 use std::future::Future;

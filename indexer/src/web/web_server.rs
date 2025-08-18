@@ -1,5 +1,4 @@
 use crate::settings::Settings;
-use crate::signal::signal_handler::SignalHandler;
 use crate::web::endpoint;
 use crate::web::endpoint::{health, metrics};
 use crate::web::model::metrics::Metrics;
@@ -11,7 +10,8 @@ use axum::{middleware, routing::get, Extension, Router};
 use deadpool::managed::{Object, Pool};
 use log::{info, trace, Level};
 use simply_kaspa_database::client::KaspaDbClient;
-use simply_kaspa_kaspad::pool::manager::KaspadManager;
+use simply_kaspa_kaspad::manager::KaspadManager;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::io::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;

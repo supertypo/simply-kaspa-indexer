@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::settings::Settings;
-use crate::signal::signal_handler::SignalHandler;
 use crate::web::model::metrics::{Metrics, MetricsBlock};
 use chrono::{DateTime, Utc};
 use crossbeam_queue::ArrayQueue;
@@ -15,7 +14,8 @@ use log::{debug, trace, warn};
 use log::{error, info};
 use moka::sync::Cache;
 use simply_kaspa_cli::cli_args::CliDisable;
-use simply_kaspa_kaspad::pool::manager::KaspadManager;
+use simply_kaspa_kaspad::manager::KaspadManager;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 

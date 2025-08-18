@@ -1,5 +1,4 @@
 use crate::settings::Settings;
-use crate::signal::signal_handler::SignalHandler;
 use crate::vars::save_checkpoint;
 use crate::web::model::metrics::Metrics;
 use crossbeam_queue::ArrayQueue;
@@ -7,6 +6,7 @@ use log::{debug, error, info, warn};
 use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

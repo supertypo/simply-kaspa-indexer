@@ -5,7 +5,8 @@ members = [
     "database",
     "mapping",
     "kaspad",
-    "indexer"
+    "indexer",
+    "signal"
 ]
 
 [profile.dev]
@@ -26,6 +27,7 @@ edition = "2021" # Rust edition
 
 [workspace.dependencies]
 simply-kaspa-cli = { path = "cli" }
+simply-kaspa-signal = { path = "signal" }
 simply-kaspa-database = { path = "database" }
 simply-kaspa-mapping = { path = "mapping" }
 simply-kaspa-kaspad = { path = "kaspad" }
