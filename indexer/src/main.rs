@@ -10,7 +10,7 @@ use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
-use simply_kaspa_indexer::checkpoint::{process_checkpoints, CheckpointBlock, CheckpointOrigin};
+use simply_kaspa_indexer::checkpoint::{CheckpointBlock, CheckpointOrigin, process_checkpoints};
 use simply_kaspa_indexer::prune::pruner;
 use simply_kaspa_indexer::settings::Settings;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
@@ -24,8 +24,8 @@ use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::env;
 use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::task;
@@ -70,9 +70,10 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             return;
         }
         if let Ok(kaspad) = kaspad_pool.get().await
-            && let Ok(bdi) = kaspad.get_block_dag_info().await {
-                break bdi;
-            }
+            && let Ok(bdi) = kaspad.get_block_dag_info().await
+        {
+            break bdi;
+        }
         tokio::time::sleep(Duration::from_secs(5)).await;
     };
 
@@ -240,10 +241,6 @@ fn configure_logging(cli_args: &CliArgs) {
         .format_target(false)
         .format_timestamp_millis()
         .parse_filters(&cli_args.log_level)
-        .write_style(if cli_args.log_no_color {
-            env_logger::WriteStyle::Never
-        } else {
-            env_logger::WriteStyle::Always
-        })
+        .write_style(if cli_args.log_no_color { env_logger::WriteStyle::Never } else { env_logger::WriteStyle::Always })
         .init();
 }

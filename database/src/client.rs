@@ -1,4 +1,4 @@
-use log::{debug, info, trace, warn, LevelFilter};
+use log::{LevelFilter, debug, info, trace, warn};
 use regex::Regex;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Error, Pool, Postgres};

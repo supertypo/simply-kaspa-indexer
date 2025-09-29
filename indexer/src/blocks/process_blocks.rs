@@ -1,6 +1,6 @@
 use std::cmp::min;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::blocks::fetch_blocks::BlockData;

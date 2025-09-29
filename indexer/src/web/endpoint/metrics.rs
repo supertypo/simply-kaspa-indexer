@@ -76,9 +76,9 @@ fn get_free_memory(system: &mut RwLockWriteGuard<System>) -> u64 {
     if let Some(max) = fs::read_to_string("/sys/fs/cgroup/memory.max").ok().and_then(|max| max.trim().parse::<u64>().ok())
         && let Some(current) =
             fs::read_to_string("/sys/fs/cgroup/memory.current").ok().and_then(|current| current.trim().parse::<u64>().ok())
-        {
-            return max - current;
-        };
+    {
+        return max - current;
+    };
     system.refresh_memory();
     let mut free_memory = system.available_memory();
     if free_memory == 0 {

@@ -149,11 +149,7 @@ impl CliArgs {
     }
 
     pub fn is_excluded(&self, field: CliField) -> bool {
-        if let Some(exclude_fields) = self.exclude_fields.clone() {
-            exclude_fields.contains(&field)
-        } else {
-            false
-        }
+        if let Some(exclude_fields) = self.exclude_fields.clone() { exclude_fields.contains(&field) } else { false }
     }
 
     pub fn version(&self) -> String {

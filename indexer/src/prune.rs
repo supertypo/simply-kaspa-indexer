@@ -12,7 +12,7 @@ use std::future::Future;
 use std::ops::Sub;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 pub async fn pruner(

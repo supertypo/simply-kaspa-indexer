@@ -12,7 +12,7 @@ use kaspa_p2p_lib::pb::{
     AddressesMessage, KaspadMessage, OutpointAndUtxoEntryPair, PongMessage, RequestNextPruningPointUtxoSetChunkMessage,
     RequestPruningPointUtxoSetMessage,
 };
-use kaspa_p2p_lib::{make_message, Adaptor, Hub, PeerKey};
+use kaspa_p2p_lib::{Adaptor, Hub, PeerKey, make_message};
 use kaspa_txscript::extract_script_pub_key_address;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
 use log::{debug, info, trace, warn};
@@ -28,7 +28,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tokio::time::{sleep, timeout};
 use url::Url;
 
