@@ -39,10 +39,7 @@ async fn main() {
     println!("----- https://github.com/supertypo/simply-kaspa-indexer/ -----");
     println!("--------------------------------------------------------------");
     let cli_args = CliArgs::parse();
-
-    env::set_var("RUST_LOG", &cli_args.log_level);
-    env::set_var("RUST_LOG_STYLE", if cli_args.log_no_color { "never" } else { "always" });
-    env_logger::builder().target(env_logger::Target::Stdout).format_target(false).format_timestamp_millis().init();
+    configure_logging(&cli_args);
 
     trace!("{:?}", cli_args);
     if cli_args.batch_scale < 0.1 || cli_args.batch_scale > 10.0 {
@@ -236,4 +233,18 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     }));
 
     try_join_all(tasks).await.unwrap();
+}
+
+fn configure_logging(cli_args: &CliArgs) {
+    env_logger::Builder::new()
+        .target(env_logger::Target::Stdout)
+        .format_target(false)
+        .format_timestamp_millis()
+        .parse_filters(&cli_args.log_level)
+        .write_style(if cli_args.log_no_color {
+            env_logger::WriteStyle::Never
+        } else {
+            env_logger::WriteStyle::Always
+        })
+        .init();
 }
