@@ -51,7 +51,7 @@ pub async fn process_virtual_chain(
             sleep(err_delay).await;
             continue;
         }
-        debug!("Getting virtual chain from start_hash {}", start_hash.to_string());
+        debug!("Getting virtual chain from start_hash {}", start_hash);
         match kaspad_pool.get().await {
             Ok(kaspad) => {
                 match kaspad.get_virtual_chain_from_block(start_hash, !disable_transaction_acceptance).await {
@@ -157,7 +157,7 @@ pub async fn process_virtual_chain(
                         }
                     }
                     Err(e) => {
-                        error!("Failed getting virtual chain from start_hash {}: {}", start_hash.to_string(), e);
+                        error!("Failed getting virtual chain from start_hash {}: {}", start_hash, e);
                         sleep(err_delay).await;
                     }
                 }

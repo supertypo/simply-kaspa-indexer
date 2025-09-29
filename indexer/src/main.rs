@@ -69,11 +69,10 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         if signal_handler.is_shutdown() {
             return;
         }
-        if let Ok(kaspad) = kaspad_pool.get().await {
-            if let Ok(bdi) = kaspad.get_block_dag_info().await {
+        if let Ok(kaspad) = kaspad_pool.get().await
+            && let Ok(bdi) = kaspad.get_block_dag_info().await {
                 break bdi;
             }
-        }
         tokio::time::sleep(Duration::from_secs(5)).await;
     };
 

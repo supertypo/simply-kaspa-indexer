@@ -121,7 +121,7 @@ impl UtxoSetImporter {
                     Err(e) => warn!("Peer connection failed: {e}, retrying..."),
                 }
             } else {
-                info!("UTXO set import skipped for network {}", self.network_id.to_string());
+                info!("UTXO set import skipped for network {}", self.network_id);
                 completed = true;
             }
         }

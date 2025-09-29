@@ -105,7 +105,7 @@ pub async fn process_transactions(
                 };
                 let transaction_id = rpc_transaction.verbose_data.as_ref().unwrap().transaction_id;
                 if tx_id_cache.contains_key(&transaction_id) {
-                    trace!("Known transaction_id {}, keeping block relation only", transaction_id.to_string());
+                    trace!("Known transaction_id {}, keeping block relation only", transaction_id);
                 } else {
                     let transaction = mapper.map_transaction(&rpc_transaction, subnetwork_key);
                     transactions.push(transaction);

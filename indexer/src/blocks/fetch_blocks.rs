@@ -87,7 +87,7 @@ impl KaspaBlocksFetcher {
 
         while !self.signal_handler.is_shutdown() {
             let last_fetch_time = Instant::now();
-            debug!("Getting blocks with low_hash {}", self.low_hash.to_string());
+            debug!("Getting blocks with low_hash {}", self.low_hash);
             match self.kaspad_pool.get().await {
                 Ok(kaspad) => match kaspad.get_blocks(Some(self.low_hash), true, !self.disable_transaction_processing).await {
                     Ok(response) => {
@@ -133,7 +133,7 @@ impl KaspaBlocksFetcher {
                         }
                     }
                     Err(e) => {
-                        error!("Failed getting blocks with low_hash {}: {}", self.low_hash.to_string(), e);
+                        error!("Failed getting blocks with low_hash {}: {}", self.low_hash, e);
                         sleep(Duration::from_secs(5)).await;
                     }
                 },
@@ -166,7 +166,7 @@ impl KaspaBlocksFetcher {
                 self.synced = true;
             }
             if self.block_cache.contains_key(&block_hash) {
-                trace!("Ignoring known block hash {}", block_hash.to_string());
+                trace!("Ignoring known block hash {}", block_hash);
                 continue;
             }
             let mut transaction_data = TransactionData {

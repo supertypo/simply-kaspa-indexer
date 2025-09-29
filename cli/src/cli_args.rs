@@ -141,11 +141,11 @@ pub struct CliArgs {
 
 impl CliArgs {
     pub fn is_enabled(&self, feature: CliEnable) -> bool {
-        self.enable.as_ref().map_or(false, |enable| enable.contains(&feature))
+        self.enable.as_ref().is_some_and(|enable| enable.contains(&feature))
     }
 
     pub fn is_disabled(&self, feature: CliDisable) -> bool {
-        self.disable.as_ref().map_or(false, |disable| disable.contains(&feature))
+        self.disable.as_ref().is_some_and(|disable| disable.contains(&feature))
     }
 
     pub fn is_excluded(&self, field: CliField) -> bool {

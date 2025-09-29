@@ -139,7 +139,7 @@ async fn log_responses(req: Request<Body>, next: Next) -> Response {
 
 pub fn set_server_path(base_path: &str) -> openapi::OpenApi {
     let mut openapi = ApiDoc::openapi();
-    if base_path.trim_end_matches("/") != "" {
+    if !base_path.trim_end_matches("/").is_empty() {
         openapi.servers = Some(vec![openapi::ServerBuilder::new().url(base_path).build()]);
     }
     openapi
