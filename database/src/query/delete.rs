@@ -142,6 +142,9 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
     let mut total_rows_affected = 0;
     let mut tx = pool.begin().await?;
 
+    // Force disable seqscan, as it will never be a good idea when pruning
+    sqlx::query("SET LOCAL enable_seqscan = off").execute(tx.as_mut()).await?;
+
     // Find & delete old transactions
     let sql = "DELETE FROM transactions WHERE ctid IN (SELECT t.ctid FROM transactions t WHERE t.block_time < $1 LIMIT $2) RETURNING transaction_id";
     let expired_txids = sqlx::query_scalar::<_, Hash>(sql).bind(block_time_lt).bind(batch_size).fetch_all(tx.as_mut()).await?;
