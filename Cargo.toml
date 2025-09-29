@@ -41,7 +41,6 @@ kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v
 tokio = { version = "1.47.1", features = ["default", "signal"] }
 tokio-cron-scheduler = "0.15.0"
 tonic = { version = "0.14.2", features = ["gzip"] }
-tonic-native-tls = "0.1.3"
 futures-util = { version = "0.3.31", default-features = false }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "runtime-tokio-native-tls", "postgres"] }
 deadpool = { version = "0.12.3", features = ["managed", "rt_tokio_1"] }
