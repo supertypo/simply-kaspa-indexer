@@ -81,7 +81,7 @@ pub async fn prune(
         step_errors += prune_step(
             "block_parent",
             metrics.clone(),
-            |step_pruning_point| async move { db.prune_block_parent(step_pruning_point).await },
+            |step_pruning_point| async move { db.prune_block_parent(step_pruning_point, cli_args.pruning.prune_batch_size).await },
             step_pruning_point,
         )
         .await as i32;
@@ -96,7 +96,9 @@ pub async fn prune(
             step_errors += prune_step(
                 "blocks_transactions (b)",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_blocks_transactions_using_blocks(step_pruning_point).await },
+                |step_pruning_point| async move {
+                    db.prune_blocks_transactions_using_blocks(step_pruning_point, cli_args.pruning.prune_batch_size).await
+                },
                 step_pruning_point,
             )
             .await as i32;
@@ -106,7 +108,9 @@ pub async fn prune(
             step_errors += prune_step(
                 "blocks_transactions (t)",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_blocks_transactions_using_transactions(step_pruning_point).await },
+                |step_pruning_point| async move {
+                    db.prune_blocks_transactions_using_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await
+                },
                 step_pruning_point,
             )
             .await as i32;
@@ -120,7 +124,7 @@ pub async fn prune(
         step_errors += prune_step(
             "blocks",
             metrics.clone(),
-            |step_pruning_point| async move { db.prune_blocks(step_pruning_point).await },
+            |step_pruning_point| async move { db.prune_blocks(step_pruning_point, cli_args.pruning.prune_batch_size).await },
             step_pruning_point,
         )
         .await as i32;
@@ -134,7 +138,9 @@ pub async fn prune(
             step_errors += prune_step(
                 "transactions_acceptances (b)",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_transactions_acceptances_using_blocks(step_pruning_point).await },
+                |step_pruning_point| async move {
+                    db.prune_transactions_acceptances_using_blocks(step_pruning_point, cli_args.pruning.prune_batch_size).await
+                },
                 step_pruning_point,
             )
             .await as i32;
@@ -155,7 +161,7 @@ pub async fn prune(
             step_errors += prune_step(
                 "transactions",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_transactions(step_pruning_point).await },
+                |step_pruning_point| async move { db.prune_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await },
                 step_pruning_point,
             )
             .await as i32;
@@ -172,7 +178,9 @@ pub async fn prune(
             step_errors += prune_step(
                 "addresses_transactions",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_addresses_transactions(step_pruning_point).await },
+                |step_pruning_point| async move {
+                    db.prune_addresses_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await
+                },
                 step_pruning_point,
             )
             .await as i32;
@@ -180,7 +188,9 @@ pub async fn prune(
             step_errors += prune_step(
                 "scripts_transactions",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_scripts_transactions(step_pruning_point).await },
+                |step_pruning_point| async move {
+                    db.prune_scripts_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await
+                },
                 step_pruning_point,
             )
             .await as i32;

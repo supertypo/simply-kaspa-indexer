@@ -263,35 +263,35 @@ impl KaspaDbClient {
         query::delete::delete_transaction_acceptances(block_hashes, &self.pool).await
     }
 
-    pub async fn prune_block_parent(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::prune_block_parent(block_time_lt, &self.pool).await
+    pub async fn prune_block_parent(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_block_parent(block_time_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_blocks_transactions_using_blocks(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::prune_blocks_transactions_using_blocks(block_time_lt, &self.pool).await
+    pub async fn prune_blocks_transactions_using_blocks(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_blocks_transactions_using_blocks(block_time_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_blocks_transactions_using_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::prune_blocks_transactions_using_transactions(block_time_lt, &self.pool).await
+    pub async fn prune_blocks_transactions_using_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_blocks_transactions_using_transactions(block_time_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_transactions_acceptances_using_blocks(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::prune_transactions_acceptances_using_blocks(block_time_lt, &self.pool).await
+    pub async fn prune_transactions_acceptances_using_blocks(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_transactions_acceptances_using_blocks(block_time_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_blocks(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::prune_blocks(block_time_lt, &self.pool).await
+    pub async fn prune_blocks(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_blocks(block_time_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::prune_transactions(block_time_lt, &self.pool).await
+    pub async fn prune_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_transactions(block_time_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_addresses_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::prune_addresses_transactions(block_time_lt, &self.pool).await
+    pub async fn prune_addresses_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_addresses_transactions(block_time_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_scripts_transactions(&self, block_time_lt: i64) -> Result<u64, Error> {
-        query::delete::prune_scripts_transactions(block_time_lt, &self.pool).await
+    pub async fn prune_scripts_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_scripts_transactions(block_time_lt, batch_size, &self.pool).await
     }
 }

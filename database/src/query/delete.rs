@@ -11,8 +11,7 @@ pub async fn delete_transaction_acceptances(block_hashes: &[Hash], pool: &Pool<P
         .rows_affected())
 }
 
-pub async fn prune_block_parent(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let batch_size = 100_000;
+pub async fn prune_block_parent(block_time_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = r#"
         DELETE FROM block_parent
         WHERE ctid IN (
@@ -34,8 +33,7 @@ pub async fn prune_block_parent(block_time_lt: i64, pool: &Pool<Postgres>) -> Re
     Ok(total_rows_affected)
 }
 
-pub async fn prune_blocks_transactions_using_blocks(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let batch_size = 100_000;
+pub async fn prune_blocks_transactions_using_blocks(block_time_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = r#"
         DELETE FROM blocks_transactions
         WHERE ctid IN (
@@ -57,8 +55,11 @@ pub async fn prune_blocks_transactions_using_blocks(block_time_lt: i64, pool: &P
     Ok(total_rows_affected)
 }
 
-pub async fn prune_blocks_transactions_using_transactions(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let batch_size = 100_000;
+pub async fn prune_blocks_transactions_using_transactions(
+    block_time_lt: i64,
+    batch_size: i32,
+    pool: &Pool<Postgres>,
+) -> Result<u64, Error> {
     let sql = r#"
         DELETE FROM blocks_transactions
         WHERE ctid IN (
@@ -80,8 +81,11 @@ pub async fn prune_blocks_transactions_using_transactions(block_time_lt: i64, po
     Ok(total_rows_affected)
 }
 
-pub async fn prune_transactions_acceptances_using_blocks(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let batch_size = 100_000;
+pub async fn prune_transactions_acceptances_using_blocks(
+    block_time_lt: i64,
+    batch_size: i32,
+    pool: &Pool<Postgres>,
+) -> Result<u64, Error> {
     let sql = r#"
         DELETE FROM transactions_acceptances
         WHERE ctid IN (
@@ -103,8 +107,7 @@ pub async fn prune_transactions_acceptances_using_blocks(block_time_lt: i64, poo
     Ok(total_rows_affected)
 }
 
-pub async fn prune_blocks(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let batch_size = 100_000;
+pub async fn prune_blocks(block_time_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = r#"
         DELETE FROM blocks
         WHERE ctid IN (
@@ -125,11 +128,10 @@ pub async fn prune_blocks(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u
     Ok(total_rows_affected)
 }
 
-pub async fn prune_transactions(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const BATCH_SIZE: i32 = 100_000;
+pub async fn prune_transactions(block_time_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let mut total_rows_affected = 0;
     loop {
-        let rows_affected = prune_transactions_chunk(block_time_lt, BATCH_SIZE, pool).await?;
+        let rows_affected = prune_transactions_chunk(block_time_lt, batch_size, pool).await?;
         if rows_affected == 0 {
             break;
         }
@@ -207,14 +209,44 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
     Ok(total_rows_affected)
 }
 
-pub async fn prune_addresses_transactions(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    Ok(sqlx::query("DELETE FROM addresses_transactions WHERE block_time < $1")
-        .bind(block_time_lt)
-        .execute(pool)
-        .await?
-        .rows_affected())
+pub async fn prune_addresses_transactions(block_time_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
+    let sql = r#"
+        DELETE FROM addresses_transactions
+        WHERE ctid IN (
+            SELECT a.ctid
+            FROM addresses_transactions a
+            WHERE a.block_time < $1
+            LIMIT $2
+        )
+    "#;
+    let mut total_rows_affected: u64 = 0;
+    loop {
+        let rows_affected = sqlx::query(sql).bind(block_time_lt).bind(batch_size).execute(pool).await?.rows_affected();
+        if rows_affected == 0 {
+            break;
+        }
+        total_rows_affected += rows_affected;
+    }
+    Ok(total_rows_affected)
 }
 
-pub async fn prune_scripts_transactions(block_time_lt: i64, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    Ok(sqlx::query("DELETE FROM scripts_transactions WHERE block_time < $1").bind(block_time_lt).execute(pool).await?.rows_affected())
+pub async fn prune_scripts_transactions(block_time_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
+    let sql = r#"
+        DELETE FROM scripts_transactions
+        WHERE ctid IN (
+            SELECT s.ctid
+            FROM scripts_transactions s
+            WHERE s.block_time < $1
+            LIMIT $2
+        )
+    "#;
+    let mut total_rows_affected: u64 = 0;
+    loop {
+        let rows_affected = sqlx::query(sql).bind(block_time_lt).bind(batch_size).execute(pool).await?.rows_affected();
+        if rows_affected == 0 {
+            break;
+        }
+        total_rows_affected += rows_affected;
+    }
+    Ok(total_rows_affected)
 }
