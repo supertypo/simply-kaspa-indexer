@@ -166,7 +166,7 @@ impl CliArgs {
 pub struct PruningConfig {
     #[clap(long, default_missing_value = "0 4 * * *", num_args = 0..=1, help = "Enables db pruning. Optional cron expression. Default: '0 4 * * *' = daily 04:00 (UTC)")]
     pub prune_db: Option<String>,
-    #[clap(long, default_value = "100_000", help = "Batch size for db pruning")]
+    #[clap(long, default_value = "100000", help = "Batch size for db pruning")]
     pub prune_batch_size: i32,
     #[clap(long, value_parser = HumantimeDurationParser, help = "Global data retention for db pruning. Ex: 60d, 24h, etc")]
     #[serde(with = "humantime_serde")]
