@@ -239,7 +239,7 @@ impl UtxoSetImporter {
                         .then(|| extract_script_pub_key_address(&script_public_key, self.prefix).map(|a| a.payload_to_string()).ok())
                         .flatten(),
                 };
-                (transaction_id, index, block_time, output)
+                (transaction_id, block_time, index, output)
             })
             .collect();
         let mut unique_acceptances = HashSet::new();
@@ -250,8 +250,8 @@ impl UtxoSetImporter {
             .map(|transaction_id| TransactionAcceptance { transaction_id: Some(transaction_id), block_hash: None })
             .collect();
         let acceptance_count = self.database.insert_transaction_acceptances(&tx_acceptances).await.unwrap();
-        let output_count = self.database.upsert_utxos(&transaction_outputs).await.unwrap();
-        (acceptance_count, output_count)
+        let _ = self.database.upsert_utxos(&transaction_outputs).await.unwrap();
+        (acceptance_count, transaction_outputs.len() as u64)
     }
 
     fn print_progress(&self, utxo_chunk_count: u32, acceptance_committed_count: u64, outputs_committed_count: u64) {

@@ -218,7 +218,7 @@ impl KaspaDbClient {
         query::insert::insert_transactions(resolve_previous_outpoints, transactions, &self.pool).await
     }
 
-    pub async fn upsert_utxos(&self, transaction_outputs: &[(Hash, i16, Option<i32>, TransactionOutput)]) -> Result<u64, Error> {
+    pub async fn upsert_utxos(&self, transaction_outputs: &[(Hash, Option<i64>, i16, TransactionOutput)]) -> Result<u64, Error> {
         query::upsert::upsert_utxos(transaction_outputs, &self.pool).await
     }
 
