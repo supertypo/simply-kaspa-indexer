@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use sqlx::{Error, Executor, Pool, Postgres, Row};
 
 use crate::models::address_transaction::AddressTransaction;
@@ -9,6 +8,7 @@ use crate::models::script_transaction::ScriptTransaction;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::types::hash::Hash;
+use crate::query::common::generate_placeholders;
 
 pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i32, Error> {
     sqlx::query("INSERT INTO subnetworks (subnetwork_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id")
@@ -202,8 +202,4 @@ pub async fn insert_transaction_acceptances(tx_acceptances: &[TransactionAccepta
         query = query.bind(&ta.block_hash);
     }
     Ok(query.execute(pool).await?.rows_affected())
-}
-
-fn generate_placeholders(rows: usize, columns: usize) -> String {
-    (0..rows).map(|i| format!("({})", (1..=columns).map(|c| format!("${}", c + i * columns)).join(","))).join(",")
 }

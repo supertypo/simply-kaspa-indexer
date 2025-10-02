@@ -12,7 +12,7 @@ use kaspa_p2p_lib::pb::{
     AddressesMessage, KaspadMessage, OutpointAndUtxoEntryPair, PongMessage, RequestNextPruningPointUtxoSetChunkMessage,
     RequestPruningPointUtxoSetMessage,
 };
-use kaspa_p2p_lib::{Adaptor, Hub, PeerKey, make_message};
+use kaspa_p2p_lib::{make_message, Adaptor, Hub, PeerKey};
 use kaspa_txscript::extract_script_pub_key_address;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
 use log::{debug, info, trace, warn};
@@ -22,13 +22,14 @@ use simply_kaspa_cli::cli_args::{CliArgs, CliField};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance;
 use simply_kaspa_database::models::transaction_output::TransactionOutput;
+use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use tokio::time::{sleep, timeout};
 use url::Url;
 
@@ -221,35 +222,36 @@ impl UtxoSetImporter {
     }
 
     async fn persist_utxos(&self, outpoint_and_utxo_entry_pair: Vec<OutpointAndUtxoEntryPair>) -> (u64, u64) {
-        // let transaction_outputs: Vec<TransactionOutput> = outpoint_and_utxo_entry_pair
-        //     .into_iter()
-        //     .map(|u| {
-        //         let outpoint = u.outpoint.unwrap();
-        //         let utxo_entry = u.utxo_entry.unwrap();
-        //         let script_public_key: ScriptPublicKey = utxo_entry.script_public_key.unwrap().try_into().unwrap();
-        //         TransactionOutput {
-        //             transaction_id: KaspaHash::from_slice(outpoint.transaction_id.unwrap().bytes.as_slice()).into(),
-        //             index: outpoint.index.to_i16().unwrap(),
-        //             amount: self.include_amount.then_some(utxo_entry.amount as i64),
-        //             script_public_key: self.include_script_public_key.then_some(script_public_key.script().to_vec()),
-        //             script_public_key_address: self
-        //                 .include_script_public_key_address
-        //                 .then(|| extract_script_pub_key_address(&script_public_key, self.prefix).map(|a| a.payload_to_string()).ok())
-        //                 .flatten(),
-        //             block_time: self.include_block_time.then_some(0),
-        //         }
-        //     })
-        //     .collect();
-        // let mut unique_acceptances = HashSet::new();
-        // let tx_acceptances: Vec<TransactionAcceptance> = transaction_outputs
-        //     .iter()
-        //     .filter(|o| unique_acceptances.insert(&o.transaction_id))
-        //     .map(|o| TransactionAcceptance { transaction_id: Some(o.transaction_id.clone()), block_hash: None })
-        //     .collect();
-        // let acceptance_count = self.database.insert_transaction_acceptances(&tx_acceptances).await.unwrap();
-        // let output_count = self.database.insert_transaction_outputs(&transaction_outputs).await.unwrap();
-        // (acceptance_count, output_count)
-        panic!("TODO")
+        let transaction_outputs: Vec<_> = outpoint_and_utxo_entry_pair
+            .into_iter()
+            .map(|u| {
+                let outpoint = u.outpoint.unwrap();
+                let utxo_entry = u.utxo_entry.unwrap();
+                let script_public_key: ScriptPublicKey = utxo_entry.script_public_key.unwrap().try_into().unwrap();
+                let transaction_id: SqlHash = KaspaHash::from_slice(outpoint.transaction_id.unwrap().bytes.as_slice()).into();
+                let index = outpoint.index.to_i16().unwrap();
+                let block_time = self.include_block_time.then_some(0);
+                let output = TransactionOutput {
+                    amount: self.include_amount.then_some(utxo_entry.amount as i64),
+                    script_public_key: self.include_script_public_key.then_some(script_public_key.script().to_vec()),
+                    script_public_key_address: self
+                        .include_script_public_key_address
+                        .then(|| extract_script_pub_key_address(&script_public_key, self.prefix).map(|a| a.payload_to_string()).ok())
+                        .flatten(),
+                };
+                (transaction_id, index, block_time, output)
+            })
+            .collect();
+        let mut unique_acceptances = HashSet::new();
+        let tx_acceptances: Vec<TransactionAcceptance> = transaction_outputs
+            .iter()
+            .map(|(transaction_id, _, _, _)| transaction_id)
+            .filter(|transaction_id| unique_acceptances.insert(transaction_id.clone()))
+            .map(|transaction_id| TransactionAcceptance { transaction_id: Some(transaction_id.clone()), block_hash: None })
+            .collect();
+        let acceptance_count = self.database.insert_transaction_acceptances(&tx_acceptances).await.unwrap();
+        let output_count = self.database.upsert_utxos(&transaction_outputs).await.unwrap();
+        (acceptance_count, output_count)
     }
 
     fn print_progress(&self, utxo_chunk_count: u32, acceptance_committed_count: u64, outputs_committed_count: u64) {

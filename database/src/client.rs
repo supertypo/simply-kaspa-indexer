@@ -15,6 +15,7 @@ use crate::models::script_transaction::ScriptTransaction;
 use crate::models::subnetwork::Subnetwork;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
+use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
 use crate::query;
 
@@ -215,6 +216,10 @@ impl KaspaDbClient {
 
     pub async fn insert_transactions(&self, resolve_previous_outpoints: bool, transactions: &[Transaction]) -> Result<u64, Error> {
         query::insert::insert_transactions(resolve_previous_outpoints, transactions, &self.pool).await
+    }
+
+    pub async fn upsert_utxos(&self, transaction_outputs: &[(Hash, i16, Option<i32>, TransactionOutput)]) -> Result<u64, Error> {
+        query::upsert::upsert_utxos(transaction_outputs, &self.pool).await
     }
 
     pub async fn insert_address_transactions(&self, address_transactions: &[AddressTransaction]) -> Result<u64, Error> {
