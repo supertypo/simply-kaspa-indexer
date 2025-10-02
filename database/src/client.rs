@@ -15,7 +15,6 @@ use crate::models::script_transaction::ScriptTransaction;
 use crate::models::subnetwork::Subnetwork;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
-use crate::models::transaction_input::TransactionInput;
 use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
 use crate::query;
@@ -219,14 +218,6 @@ impl KaspaDbClient {
         query::insert::insert_transactions(transactions, &self.pool).await
     }
 
-    pub async fn insert_transaction_inputs(
-        &self,
-        resolve_previous_outpoints: bool,
-        transaction_inputs: &[TransactionInput],
-    ) -> Result<u64, Error> {
-        query::insert::insert_transaction_inputs(resolve_previous_outpoints, transaction_inputs, &self.pool).await
-    }
-
     pub async fn insert_transaction_outputs(&self, transaction_outputs: &[TransactionOutput]) -> Result<u64, Error> {
         query::insert::insert_transaction_outputs(transaction_outputs, &self.pool).await
     }
@@ -239,12 +230,12 @@ impl KaspaDbClient {
         query::insert::insert_script_transactions(script_transactions, &self.pool).await
     }
 
-    pub async fn insert_address_transactions_from_inputs(&self, use_tx: bool, transaction_ids: &[Hash]) -> Result<u64, Error> {
-        query::insert::insert_address_transactions_from_inputs(use_tx, transaction_ids, &self.pool).await
+    pub async fn insert_address_transactions_from_inputs(&self, transaction_ids: &[Hash]) -> Result<u64, Error> {
+        query::insert::insert_address_transactions_from_inputs(transaction_ids, &self.pool).await
     }
 
-    pub async fn insert_script_transactions_from_inputs(&self, use_tx: bool, transaction_ids: &[Hash]) -> Result<u64, Error> {
-        query::insert::insert_script_transactions_from_inputs(use_tx, transaction_ids, &self.pool).await
+    pub async fn insert_script_transactions_from_inputs(&self, transaction_ids: &[Hash]) -> Result<u64, Error> {
+        query::insert::insert_script_transactions_from_inputs(transaction_ids, &self.pool).await
     }
 
     pub async fn insert_block_transactions(&self, block_transactions: &[BlockTransaction]) -> Result<u64, Error> {

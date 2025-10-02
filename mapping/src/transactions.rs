@@ -16,6 +16,10 @@ pub fn map_transaction(
     include_mass: bool,
     include_payload: bool,
     include_block_time: bool,
+    include_in: bool,
+    include_in_previous_outpoint: bool,
+    include_in_signature_script: bool,
+    include_in_sig_op_count: bool,
 ) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
     SqlTransaction {
@@ -25,6 +29,12 @@ pub fn map_transaction(
         mass: (include_mass && verbose_data.compute_mass != 0).then_some(verbose_data.compute_mass.to_i32().unwrap()),
         payload: (include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time.to_i64().unwrap()),
+        inputs: include_in.then_some(map_transaction_inputs(
+            transaction,
+            include_in_previous_outpoint,
+            include_in_signature_script,
+            include_in_sig_op_count,
+        )),
     }
 }
 
@@ -38,21 +48,15 @@ pub fn map_transaction_inputs(
     include_previous_outpoint: bool,
     include_signature_script: bool,
     include_sig_op_count: bool,
-    include_block_time: bool,
 ) -> Vec<SqlTransactionInput> {
-    let tx_verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
     transaction
         .inputs
         .iter()
-        .enumerate()
-        .map(|(i, input)| SqlTransactionInput {
-            transaction_id: tx_verbose_data.transaction_id.into(),
-            index: i.to_i16().unwrap(),
+        .map(|input| SqlTransactionInput {
             previous_outpoint_hash: include_previous_outpoint.then_some(input.previous_outpoint.transaction_id.into()),
             previous_outpoint_index: include_previous_outpoint.then_some(input.previous_outpoint.index.to_i16().unwrap()),
             signature_script: include_signature_script.then_some(input.signature_script.clone()),
             sig_op_count: include_sig_op_count.then_some(input.sig_op_count as i16),
-            block_time: include_block_time.then_some(tx_verbose_data.block_time.to_i64().unwrap()),
             previous_outpoint_script: None,
             previous_outpoint_amount: None,
         })

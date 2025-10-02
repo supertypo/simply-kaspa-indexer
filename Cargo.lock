@@ -4206,6 +4206,7 @@ dependencies = [
 name = "simply-kaspa-database"
 version = "0.0.0"
 dependencies = [
+ "hex",
  "itertools 0.14.0",
  "kaspa-hashes",
  "log",

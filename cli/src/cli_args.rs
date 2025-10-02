@@ -78,7 +78,7 @@ pub enum CliField {
     TxInPreviousOutpoint,
     TxInSignatureScript,
     TxInSigOpCount,
-    /// Excluding this will increase load for populating adress-/scripts_transactions
+    /// No longer in use
     TxInBlockTime,
     TxOutAmount,
     /// Excluding both this and script_public_key_address will disable adress-/scripts_transactions

@@ -3,7 +3,8 @@ CREATE TABLE vars
     key   VARCHAR(255) PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT INTO vars (key, value) VALUES ('schema_version', '10');
+INSERT INTO vars (key, value)
+VALUES ('schema_version', '10');
 
 
 CREATE TABLE blocks
@@ -43,6 +44,17 @@ CREATE TABLE subnetworks
 );
 
 
+CREATE TYPE transactions_inputs AS
+(
+    previous_outpoint_hash   BYTEA,
+    previous_outpoint_index  SMALLINT,
+    signature_script         BYTEA,
+    sig_op_count             SMALLINT,
+    previous_outpoint_script BYTEA,
+    previous_outpoint_amount BIGINT
+);
+
+
 CREATE TABLE transactions
 (
     transaction_id BYTEA PRIMARY KEY,
@@ -50,7 +62,8 @@ CREATE TABLE transactions
     hash           BYTEA,
     mass           INTEGER,
     payload        BYTEA,
-    block_time     BIGINT
+    block_time     BIGINT,
+    inputs         transactions_inputs[]
 );
 CREATE INDEX ON transactions (block_time DESC);
 
@@ -72,23 +85,6 @@ CREATE TABLE blocks_transactions
 CREATE INDEX ON blocks_transactions (transaction_id);
 
 
-CREATE TABLE transactions_inputs
-(
-    transaction_id           BYTEA,
-    index                    SMALLINT,
-    previous_outpoint_hash   BYTEA,
-    previous_outpoint_index  SMALLINT,
-    signature_script         BYTEA,
-    sig_op_count             SMALLINT,
-    block_time               BIGINT,
-    previous_outpoint_script BYTEA,
-    previous_outpoint_amount BIGINT,
-    PRIMARY KEY (transaction_id, index)
-);
--- Create index (optional, if you need to search txs for address)
---CREATE INDEX ON transactions_inputs (previous_outpoint_script, block_time DESC);
-
-
 CREATE TABLE transactions_outputs
 (
     transaction_id            BYTEA,
@@ -99,8 +95,6 @@ CREATE TABLE transactions_outputs
     block_time                BIGINT,
     PRIMARY KEY (transaction_id, index)
 );
--- Create index (optional, if you need to search txs for address)
---CREATE INDEX ON transactions_outputs (script_public_key, block_time DESC);
 
 
 CREATE TABLE addresses_transactions
