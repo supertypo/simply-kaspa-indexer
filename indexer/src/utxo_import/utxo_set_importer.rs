@@ -245,9 +245,9 @@ impl UtxoSetImporter {
         let mut unique_acceptances = HashSet::new();
         let tx_acceptances: Vec<TransactionAcceptance> = transaction_outputs
             .iter()
-            .map(|(transaction_id, _, _, _)| transaction_id)
+            .map(|(transaction_id, ..)| transaction_id.clone())
             .filter(|transaction_id| unique_acceptances.insert(transaction_id.clone()))
-            .map(|transaction_id| TransactionAcceptance { transaction_id: Some(transaction_id.clone()), block_hash: None })
+            .map(|transaction_id| TransactionAcceptance { transaction_id: Some(transaction_id), block_hash: None })
             .collect();
         let acceptance_count = self.database.insert_transaction_acceptances(&tx_acceptances).await.unwrap();
         let output_count = self.database.upsert_utxos(&transaction_outputs).await.unwrap();
