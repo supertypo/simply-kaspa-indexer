@@ -44,15 +44,14 @@ pub async fn process_transactions(
 
     let enable_transactions_inputs_resolve = settings.cli_args.is_enabled(CliEnable::TransactionsInputsResolve);
     let disable_transactions = settings.cli_args.is_disabled(CliDisable::TransactionsTable);
-    let disable_transactions_outputs = settings.cli_args.is_disabled(CliDisable::TransactionsOutputsTable);
     let disable_blocks_transactions = settings.cli_args.is_disabled(CliDisable::BlocksTransactionsTable);
     let disable_address_transactions = settings.cli_args.is_disabled(CliDisable::AddressesTransactionsTable);
     let exclude_tx_out_script_public_key_address = settings.cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress);
     let exclude_tx_out_script_public_key = settings.cli_args.is_excluded(CliField::TxOutScriptPublicKey);
 
     let mut transactions = vec![];
+    let mut tx_outputs = HashMap::new();
     let mut block_tx = vec![];
-    let mut tx_outputs = vec![];
     let mut tx_address_transactions = vec![];
     let mut tx_script_transactions = vec![];
     let mut checkpoint_blocks = vec![];
@@ -105,8 +104,14 @@ pub async fn process_transactions(
                     trace!("Known transaction_id {}, keeping block relation only", transaction_id);
                 } else {
                     let transaction = mapper.map_transaction(&rpc_transaction, subnetwork_key);
+                    if enable_transactions_inputs_resolve {
+                        if let Some(outputs) = &transaction.outputs {
+                            for (i, o) in outputs.iter().enumerate() {
+                                tx_outputs.insert((transaction.transaction_id.clone(), i as i16), o.clone());
+                            }
+                        }
+                    }
                     transactions.push(transaction);
-                    tx_outputs.extend(mapper.map_transaction_outputs(&rpc_transaction));
                     if !disable_address_transactions {
                         if !exclude_tx_out_script_public_key_address {
                             tx_address_transactions.extend(mapper.map_transaction_outputs_address(&rpc_transaction));
@@ -125,16 +130,21 @@ pub async fn process_transactions(
                 let transactions_len = transactions.len();
                 let transaction_ids: Vec<SqlHash> = transactions.iter().map(|t| t.transaction_id.clone()).collect();
 
-                let tx_handle = if !disable_transactions {
-                    task::spawn(insert_txs(batch_scale, transactions, database.clone()))
-                } else {
-                    task::spawn(async { 0 })
-                };
                 let blocks_txs_handle = if !disable_blocks_transactions {
                     task::spawn(insert_block_txs(batch_scale, block_tx, database.clone()))
                 } else {
                     task::spawn(async { 0 })
                 };
+
+                if enable_transactions_inputs_resolve {
+                    resolve_inputs_from_concurrent_outputs(tx_outputs, &mut transactions)
+                }
+                let tx_handle = if !disable_transactions {
+                    task::spawn(insert_txs(batch_scale, enable_transactions_inputs_resolve, transactions, database.clone()))
+                } else {
+                    task::spawn(async { 0 })
+                };
+
                 let tx_output_addr_handle = if !disable_address_transactions {
                     if !exclude_tx_out_script_public_key_address {
                         task::spawn(insert_output_tx_addr(batch_scale, tx_address_transactions, database.clone()))
@@ -167,14 +177,7 @@ pub async fn process_transactions(
                 // } else {
                 //     task::spawn(async { 0 })
                 // };
-                let tx_outputs_handle = if !disable_transactions_outputs {
-                    task::spawn(insert_tx_outputs(batch_scale, tx_outputs, database.clone()))
-                } else {
-                    task::spawn(async { 0 })
-                };
                 let rows_affected_tx = tx_handle.await.unwrap();
-                // let rows_affected_tx_inputs = tx_inputs_handle.await.unwrap();
-                let rows_affected_tx_outputs = tx_outputs_handle.await.unwrap();
                 let rows_affected_block_tx = blocks_txs_handle.await.unwrap();
                 let mut rows_affected_tx_addresses = tx_output_addr_handle.await.unwrap();
 
@@ -204,18 +207,17 @@ pub async fn process_transactions(
                 let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                 let tps = transactions_len as f64 / commit_time as f64 * 1000f64;
                 info!(
-                    "Committed {} new txs in {}ms ({:.1} tps, {} blk_tx, {} tx_out, {} adr_tx). Last tx: {}",
+                    "Committed {} new txs in {}ms ({:.1} tps, {} blk_tx, {} adr_tx). Last tx: {}",
                     rows_affected_tx,
                     commit_time,
                     tps,
                     rows_affected_block_tx,
-                    rows_affected_tx_outputs,
                     rows_affected_tx_addresses,
                     chrono::DateTime::from_timestamp_millis(last_block_time as i64 / 1000 * 1000).unwrap()
                 );
                 transactions = vec![];
+                tx_outputs = HashMap::new();
                 block_tx = vec![];
-                tx_outputs = vec![];
                 tx_address_transactions = vec![];
                 tx_script_transactions = vec![];
                 checkpoint_blocks = vec![];
@@ -227,28 +229,17 @@ pub async fn process_transactions(
     }
 }
 
-async fn insert_txs(batch_scale: f64, values: Vec<Transaction>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((250f64 * batch_scale) as u16, 8000) as usize; // 2^16 / fields
+async fn insert_txs(batch_scale: f64, resolve_previous_outpoints: bool, values: Vec<Transaction>, database: KaspaDbClient) -> u64 {
+    let batch_size = min((250f64 * batch_scale) as u16, 6000) as usize; // 2^16 / fields
     let key = "transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut rows_affected = 0;
     for batch_values in values.chunks(batch_size) {
-        rows_affected += database.insert_transactions(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
-    }
-    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
-    rows_affected
-}
-
-async fn insert_tx_outputs(batch_scale: f64, values: Vec<TransactionOutput>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((250f64 * batch_scale) as u16, 10000) as usize; // 2^16 / fields
-    let key = "transactions_outputs";
-    let start_time = Instant::now();
-    debug!("Processing {} {}", values.len(), key);
-    let mut rows_affected = 0;
-    for batch_values in values.chunks(batch_size) {
-        rows_affected +=
-            database.insert_transaction_outputs(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
+        rows_affected += database
+            .insert_transactions(resolve_previous_outpoints, batch_values)
+            .await
+            .unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     rows_affected
@@ -277,10 +268,8 @@ async fn insert_input_tx_script(batch_scale: f64, values: Vec<SqlHash>, database
     debug!("Processing {} transactions for {}", values.len(), key);
     let mut rows_affected = 0;
     for batch_values in values.chunks(batch_size) {
-        rows_affected += database
-            .insert_script_transactions_from_inputs(batch_values)
-            .await
-            .unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
+        rows_affected +=
+            database.insert_script_transactions_from_inputs(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     rows_affected
@@ -325,4 +314,21 @@ async fn insert_block_txs(batch_scale: f64, values: Vec<BlockTransaction>, datab
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     rows_affected
+}
+
+fn resolve_inputs_from_concurrent_outputs(
+    tx_outputs: HashMap<(SqlHash, i16), TransactionOutput>,
+    transactions: &mut Vec<Transaction>,
+) {
+    for tx in transactions.iter_mut() {
+        if let Some(inputs) = &mut tx.inputs {
+            for input in inputs.iter_mut() {
+                let key = (input.previous_outpoint_hash.clone().unwrap(), input.previous_outpoint_index.unwrap());
+                if let Some(tx_output) = tx_outputs.get(&key) {
+                    input.previous_outpoint_script = tx_output.script_public_key.clone();
+                    input.previous_outpoint_amount = tx_output.amount;
+                }
+            }
+        }
+    }
 }

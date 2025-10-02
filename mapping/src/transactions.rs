@@ -20,6 +20,10 @@ pub fn map_transaction(
     include_in_previous_outpoint: bool,
     include_in_signature_script: bool,
     include_in_sig_op_count: bool,
+    include_out: bool,
+    include_out_amount: bool,
+    include_out_script_public_key: bool,
+    include_out_script_public_key_address: bool,
 ) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
     SqlTransaction {
@@ -34,6 +38,12 @@ pub fn map_transaction(
             include_in_previous_outpoint,
             include_in_signature_script,
             include_in_sig_op_count,
+        )),
+        outputs: include_out.then_some(map_transaction_outputs(
+            transaction,
+            include_out_amount,
+            include_out_script_public_key,
+            include_out_script_public_key_address,
         )),
     }
 }
@@ -68,23 +78,17 @@ pub fn map_transaction_outputs(
     include_amount: bool,
     include_script_public_key: bool,
     include_script_public_key_address: bool,
-    include_block_time: bool,
 ) -> Vec<SqlTransactionOutput> {
-    let tx_verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
     transaction
         .outputs
         .iter()
-        .enumerate()
-        .map(|(i, output)| {
+        .map(|output| {
             let verbose_data = output.verbose_data.as_ref().expect("Transaction output verbose_data is missing");
             SqlTransactionOutput {
-                transaction_id: tx_verbose_data.transaction_id.into(),
-                index: i.to_i16().expect("Tx output index is too large for i16"),
                 amount: include_amount.then_some(output.value.to_i64().expect("Tx output amount is too large for i64")),
                 script_public_key: include_script_public_key.then_some(output.script_public_key.script().to_vec()),
                 script_public_key_address: include_script_public_key_address
                     .then_some(verbose_data.script_public_key_address.payload_to_string()),
-                block_time: include_block_time.then_some(tx_verbose_data.block_time.to_i64().unwrap()),
             }
         })
         .collect::<Vec<SqlTransactionOutput>>()

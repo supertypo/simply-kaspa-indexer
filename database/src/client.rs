@@ -1,4 +1,4 @@
-use log::{LevelFilter, debug, info, trace, warn};
+use log::{debug, info, trace, warn, LevelFilter};
 use regex::Regex;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Error, Pool, Postgres};
@@ -15,7 +15,6 @@ use crate::models::script_transaction::ScriptTransaction;
 use crate::models::subnetwork::Subnetwork;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
-use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
 use crate::query;
 
@@ -214,12 +213,8 @@ impl KaspaDbClient {
         query::insert::insert_block_parents(block_parents, &self.pool).await
     }
 
-    pub async fn insert_transactions(&self, transactions: &[Transaction]) -> Result<u64, Error> {
-        query::insert::insert_transactions(transactions, &self.pool).await
-    }
-
-    pub async fn insert_transaction_outputs(&self, transaction_outputs: &[TransactionOutput]) -> Result<u64, Error> {
-        query::insert::insert_transaction_outputs(transaction_outputs, &self.pool).await
+    pub async fn insert_transactions(&self, resolve_previous_outpoints: bool, transactions: &[Transaction]) -> Result<u64, Error> {
+        query::insert::insert_transactions(resolve_previous_outpoints, transactions, &self.pool).await
     }
 
     pub async fn insert_address_transactions(&self, address_transactions: &[AddressTransaction]) -> Result<u64, Error> {

@@ -8,7 +8,6 @@ use crate::models::block_transaction::BlockTransaction;
 use crate::models::script_transaction::ScriptTransaction;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
-use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
 
 pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i32, Error> {
@@ -69,29 +68,41 @@ pub async fn insert_block_parents(block_parents: &[BlockParent], pool: &Pool<Pos
     Ok(query.execute(pool).await?.rows_affected())
 }
 
-pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 7;
-    let sql = format!(
-        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs)
-        SELECT v.transaction_id, v.subnetwork_id, v.hash, v.mass, v.payload, v.block_time,
+pub async fn insert_transactions(
+    resolve_previous_outpoints: bool,
+    transactions: &[Transaction],
+    pool: &Pool<Postgres>,
+) -> Result<u64, Error> {
+    const COLS: usize = 8;
+    let sql = if resolve_previous_outpoints {
+        format!(
+            "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
+             SELECT v.transaction_id, v.subnetwork_id, v.hash, v.mass, v.payload, v.block_time,
                ARRAY(
                  SELECT ROW(
-                          i.previous_outpoint_hash,
-                          i.previous_outpoint_index,
-                          i.signature_script,
-                          i.sig_op_count,
-                          COALESCE(i.previous_outpoint_script, o.script_public_key),
-                          COALESCE(i.previous_outpoint_amount, o.amount)
-                       )::transactions_inputs
+                   i.previous_outpoint_hash,
+                   i.previous_outpoint_index,
+                   i.signature_script,
+                   i.sig_op_count,
+                   COALESCE(i.previous_outpoint_script, (o.outputs[i.previous_outpoint_index+1]).script_public_key),
+                   COALESCE(i.previous_outpoint_amount, (o.outputs[i.previous_outpoint_index+1]).amount)
+                 )::transactions_inputs
                  FROM UNNEST(v.inputs) AS i
-                 LEFT JOIN transactions_outputs o
-                   ON o.transaction_id = i.previous_outpoint_hash
-                  AND o.index = i.previous_outpoint_index
-               )
-        FROM (VALUES {}) AS v(transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs)
+                 LEFT JOIN transactions o ON o.transaction_id = i.previous_outpoint_hash
+               ),
+               v.outputs
+        FROM (VALUES {}) AS v(transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
         ON CONFLICT DO NOTHING",
-        generate_placeholders(transactions.len(), COLS)
-    );
+            generate_placeholders(transactions.len(), COLS)
+        )
+    } else {
+        format!(
+            "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
+            VALUES {}
+            ON CONFLICT DO NOTHING",
+            generate_placeholders(transactions.len(), COLS)
+        )
+    };
     let mut query = sqlx::query(&sql);
     for tx in transactions {
         query = query.bind(&tx.transaction_id);
@@ -100,26 +111,8 @@ pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postg
         query = query.bind(tx.mass);
         query = query.bind(&tx.payload);
         query = query.bind(tx.block_time);
-        query = query.bind(tx.inputs.clone().unwrap());
-    }
-    Ok(query.execute(pool).await?.rows_affected())
-}
-
-pub async fn insert_transaction_outputs(transaction_outputs: &[TransactionOutput], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 6;
-    let sql = format!(
-        "INSERT INTO transactions_outputs (transaction_id, index, amount, script_public_key, script_public_key_address, block_time)
-        VALUES {} ON CONFLICT DO NOTHING",
-        generate_placeholders(transaction_outputs.len(), COLS)
-    );
-    let mut query = sqlx::query(&sql);
-    for tout in transaction_outputs {
-        query = query.bind(&tout.transaction_id);
-        query = query.bind(tout.index);
-        query = query.bind(tout.amount);
-        query = query.bind(&tout.script_public_key);
-        query = query.bind(&tout.script_public_key_address);
-        query = query.bind(tout.block_time);
+        query = query.bind(&tx.inputs);
+        query = query.bind(&tx.outputs);
     }
     Ok(query.execute(pool).await?.rows_affected())
 }
@@ -156,33 +149,27 @@ pub async fn insert_script_transactions(script_transactions: &[ScriptTransaction
     Ok(query.execute(pool).await?.rows_affected())
 }
 
-pub async fn insert_address_transactions_from_inputs(
-    transaction_ids: &[Hash],
-    pool: &Pool<Postgres>,
-) -> Result<u64, Error> {
+pub async fn insert_address_transactions_from_inputs(transaction_ids: &[Hash], pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "
         INSERT INTO addresses_transactions (address, transaction_id, block_time)
-        SELECT o.script_public_key_address,
+        SELECT (o.outputs[i.previous_outpoint_index+1]).script_public_key_address,
                t.transaction_id,
                t.block_time
         FROM transactions t, LATERAL UNNEST(t.inputs) AS i
-        JOIN transactions_outputs o ON o.transaction_id = i.previous_outpoint_hash AND o.index = i.previous_outpoint_index
+        JOIN transactions o ON o.transaction_id = i.previous_outpoint_hash
         WHERE t.transaction_id = ANY($1)
         ON CONFLICT DO NOTHING";
     Ok(sqlx::query(sql).bind(transaction_ids).execute(pool).await?.rows_affected())
 }
 
-pub async fn insert_script_transactions_from_inputs(
-    transaction_ids: &[Hash],
-    pool: &Pool<Postgres>,
-) -> Result<u64, Error> {
+pub async fn insert_script_transactions_from_inputs(transaction_ids: &[Hash], pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "
         INSERT INTO scripts_transactions (script_public_key, transaction_id, block_time)
-        SELECT o.script_public_key,
+        SELECT (o.outputs[i.previous_outpoint_index+1]).script_public_key,
                t.transaction_id,
                t.block_time
         FROM transactions t, LATERAL UNNEST(t.inputs) AS i
-        JOIN transactions_outputs o ON o.transaction_id = i.previous_outpoint_hash AND o.index = i.previous_outpoint_index
+        JOIN transactions o ON o.transaction_id = i.previous_outpoint_hash
         WHERE t.transaction_id = ANY($1)
         ON CONFLICT DO NOTHING";
     Ok(sqlx::query(sql).bind(transaction_ids).execute(pool).await?.rows_affected())

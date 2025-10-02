@@ -55,6 +55,14 @@ CREATE TYPE transactions_inputs AS
 );
 
 
+CREATE TYPE transactions_outputs AS
+(
+    amount                    BIGINT,
+    script_public_key         BYTEA,
+    script_public_key_address TEXT
+);
+
+
 CREATE TABLE transactions
 (
     transaction_id BYTEA PRIMARY KEY,
@@ -63,7 +71,8 @@ CREATE TABLE transactions
     mass           INTEGER,
     payload        BYTEA,
     block_time     BIGINT,
-    inputs         transactions_inputs[]
+    inputs         transactions_inputs[],
+    outputs         transactions_outputs[]
 );
 CREATE INDEX ON transactions (block_time DESC);
 
@@ -83,18 +92,6 @@ CREATE TABLE blocks_transactions
     PRIMARY KEY (block_hash, transaction_id)
 );
 CREATE INDEX ON blocks_transactions (transaction_id);
-
-
-CREATE TABLE transactions_outputs
-(
-    transaction_id            BYTEA,
-    index                     SMALLINT,
-    amount                    BIGINT,
-    script_public_key         BYTEA,
-    script_public_key_address VARCHAR,
-    block_time                BIGINT,
-    PRIMARY KEY (transaction_id, index)
-);
 
 
 CREATE TABLE addresses_transactions

@@ -85,6 +85,7 @@ pub enum CliField {
     TxOutScriptPublicKey,
     /// Excluding this, scripts_transactions to be populated instead of adresses_transactions
     TxOutScriptPublicKeyAddress,
+    /// No longer in use
     TxOutBlockTime,
 }
 

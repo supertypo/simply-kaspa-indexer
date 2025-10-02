@@ -1,7 +1,7 @@
 use sqlx::Type;
 use crate::models::types::hash::Hash;
 
-#[derive(Type, Clone)]
+#[derive(Type)]
 #[sqlx(type_name = "transactions_inputs")]
 pub struct TransactionInput {
     pub previous_outpoint_hash: Option<Hash>,

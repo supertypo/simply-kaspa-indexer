@@ -221,34 +221,35 @@ impl UtxoSetImporter {
     }
 
     async fn persist_utxos(&self, outpoint_and_utxo_entry_pair: Vec<OutpointAndUtxoEntryPair>) -> (u64, u64) {
-        let transaction_outputs: Vec<TransactionOutput> = outpoint_and_utxo_entry_pair
-            .into_iter()
-            .map(|u| {
-                let outpoint = u.outpoint.unwrap();
-                let utxo_entry = u.utxo_entry.unwrap();
-                let script_public_key: ScriptPublicKey = utxo_entry.script_public_key.unwrap().try_into().unwrap();
-                TransactionOutput {
-                    transaction_id: KaspaHash::from_slice(outpoint.transaction_id.unwrap().bytes.as_slice()).into(),
-                    index: outpoint.index.to_i16().unwrap(),
-                    amount: self.include_amount.then_some(utxo_entry.amount as i64),
-                    script_public_key: self.include_script_public_key.then_some(script_public_key.script().to_vec()),
-                    script_public_key_address: self
-                        .include_script_public_key_address
-                        .then(|| extract_script_pub_key_address(&script_public_key, self.prefix).map(|a| a.payload_to_string()).ok())
-                        .flatten(),
-                    block_time: self.include_block_time.then_some(0),
-                }
-            })
-            .collect();
-        let mut unique_acceptances = HashSet::new();
-        let tx_acceptances: Vec<TransactionAcceptance> = transaction_outputs
-            .iter()
-            .filter(|o| unique_acceptances.insert(&o.transaction_id))
-            .map(|o| TransactionAcceptance { transaction_id: Some(o.transaction_id.clone()), block_hash: None })
-            .collect();
-        let acceptance_count = self.database.insert_transaction_acceptances(&tx_acceptances).await.unwrap();
-        let output_count = self.database.insert_transaction_outputs(&transaction_outputs).await.unwrap();
-        (acceptance_count, output_count)
+        // let transaction_outputs: Vec<TransactionOutput> = outpoint_and_utxo_entry_pair
+        //     .into_iter()
+        //     .map(|u| {
+        //         let outpoint = u.outpoint.unwrap();
+        //         let utxo_entry = u.utxo_entry.unwrap();
+        //         let script_public_key: ScriptPublicKey = utxo_entry.script_public_key.unwrap().try_into().unwrap();
+        //         TransactionOutput {
+        //             transaction_id: KaspaHash::from_slice(outpoint.transaction_id.unwrap().bytes.as_slice()).into(),
+        //             index: outpoint.index.to_i16().unwrap(),
+        //             amount: self.include_amount.then_some(utxo_entry.amount as i64),
+        //             script_public_key: self.include_script_public_key.then_some(script_public_key.script().to_vec()),
+        //             script_public_key_address: self
+        //                 .include_script_public_key_address
+        //                 .then(|| extract_script_pub_key_address(&script_public_key, self.prefix).map(|a| a.payload_to_string()).ok())
+        //                 .flatten(),
+        //             block_time: self.include_block_time.then_some(0),
+        //         }
+        //     })
+        //     .collect();
+        // let mut unique_acceptances = HashSet::new();
+        // let tx_acceptances: Vec<TransactionAcceptance> = transaction_outputs
+        //     .iter()
+        //     .filter(|o| unique_acceptances.insert(&o.transaction_id))
+        //     .map(|o| TransactionAcceptance { transaction_id: Some(o.transaction_id.clone()), block_hash: None })
+        //     .collect();
+        // let acceptance_count = self.database.insert_transaction_acceptances(&tx_acceptances).await.unwrap();
+        // let output_count = self.database.insert_transaction_outputs(&transaction_outputs).await.unwrap();
+        // (acceptance_count, output_count)
+        panic!("TODO")
     }
 
     fn print_progress(&self, utxo_chunk_count: u32, acceptance_committed_count: u64, outputs_committed_count: u64) {
