@@ -8,6 +8,7 @@ use crate::models::script_transaction::ScriptTransaction;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::types::hash::Hash;
+use crate::models::utxo::Utxo;
 use crate::query::common::generate_placeholders;
 
 pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i32, Error> {
@@ -16,6 +17,33 @@ pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) ->
         .fetch_one(pool)
         .await?
         .try_get(0)
+}
+
+pub async fn insert_utxos(utxos: &[Utxo], pool: &Pool<Postgres>) -> Result<u64, Error> {
+    const COLS: usize = 5;
+    let sql = format!(
+        "INSERT INTO utxos (transaction_id, index, amount, script_public_key, script_public_key_address)
+        VALUES {} ON CONFLICT DO NOTHING",
+        generate_placeholders(utxos.len(), COLS)
+    );
+    let mut query = sqlx::query(&sql);
+    for utxo in utxos {
+        query = query.bind(&utxo.transaction_id);
+        query = query.bind(utxo.index);
+        query = query.bind(utxo.amount);
+        query = query.bind(&utxo.script_public_key);
+        query = query.bind(&utxo.script_public_key_address);
+    }
+    Ok(query.execute(pool).await?.rows_affected())
+}
+
+pub async fn insert_utxos_to_transactions(pool: &Pool<Postgres>) -> Result<u64, Error> {
+    let sql = "
+        INSERT INTO transactions (transaction_id, outputs)
+        SELECT transaction_id,
+            array_agg(ROW(index, amount, script_public_key, script_public_key_address)::transactions_outputs ORDER BY index)
+        FROM utxos GROUP BY transaction_id";
+    Ok(sqlx::query(sql).execute(pool).await?.rows_affected())
 }
 
 pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u64, Error> {

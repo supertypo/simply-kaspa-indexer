@@ -44,8 +44,19 @@ CREATE TABLE subnetworks
 );
 
 
+CREATE TABLE utxos
+(
+    transaction_id            BYTEA,
+    index                     SMALLINT,
+    amount                    BIGINT,
+    script_public_key         BYTEA,
+    script_public_key_address TEXT
+);
+
+
 CREATE TYPE transactions_inputs AS
 (
+    index                    SMALLINT,
     previous_outpoint_hash   BYTEA,
     previous_outpoint_index  SMALLINT,
     signature_script         BYTEA,
@@ -57,6 +68,7 @@ CREATE TYPE transactions_inputs AS
 
 CREATE TYPE transactions_outputs AS
 (
+    index                     SMALLINT,
     amount                    BIGINT,
     script_public_key         BYTEA,
     script_public_key_address TEXT
@@ -72,7 +84,7 @@ CREATE TABLE transactions
     payload        BYTEA,
     block_time     BIGINT,
     inputs         transactions_inputs[],
-    outputs         transactions_outputs[]
+    outputs        transactions_outputs[]
 );
 CREATE INDEX ON transactions (block_time DESC);
 

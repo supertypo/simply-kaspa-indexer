@@ -15,8 +15,8 @@ use crate::models::script_transaction::ScriptTransaction;
 use crate::models::subnetwork::Subnetwork;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
-use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
+use crate::models::utxo::Utxo;
 use crate::query;
 
 #[derive(Clone)]
@@ -206,6 +206,14 @@ impl KaspaDbClient {
         query::insert::insert_subnetwork(subnetwork_id, &self.pool).await
     }
 
+    pub async fn insert_utxos(&self, utxos: &[Utxo]) -> Result<u64, Error> {
+        query::insert::insert_utxos(utxos, &self.pool).await
+    }
+
+    pub async fn insert_utxos_to_transactions(&self) -> Result<u64, Error> {
+        query::insert::insert_utxos_to_transactions(&self.pool).await
+    }
+
     pub async fn insert_blocks(&self, blocks: &[Block]) -> Result<u64, Error> {
         query::insert::insert_blocks(blocks, &self.pool).await
     }
@@ -216,10 +224,6 @@ impl KaspaDbClient {
 
     pub async fn insert_transactions(&self, resolve_previous_outpoints: bool, transactions: &[Transaction]) -> Result<u64, Error> {
         query::insert::insert_transactions(resolve_previous_outpoints, transactions, &self.pool).await
-    }
-
-    pub async fn upsert_utxos(&self, transaction_outputs: &[(Hash, Option<i64>, i16, TransactionOutput)]) -> Result<u64, Error> {
-        query::upsert::upsert_utxos(transaction_outputs, &self.pool).await
     }
 
     pub async fn insert_address_transactions(&self, address_transactions: &[AddressTransaction]) -> Result<u64, Error> {

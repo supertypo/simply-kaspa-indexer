@@ -5,6 +5,7 @@ DROP TABLE IF EXISTS transactions_acceptances;
 DROP TABLE IF EXISTS transactions;
 DROP TYPE IF EXISTS transactions_inputs;
 DROP TYPE IF EXISTS transactions_outputs;
+DROP TABLE IF EXISTS utxos;
 DROP TABLE IF EXISTS subnetworks;
 DROP TABLE IF EXISTS block_parent;
 DROP TABLE IF EXISTS blocks;

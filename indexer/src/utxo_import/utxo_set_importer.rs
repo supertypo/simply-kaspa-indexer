@@ -21,8 +21,7 @@ use rand::rng;
 use simply_kaspa_cli::cli_args::{CliArgs, CliField};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance;
-use simply_kaspa_database::models::transaction_output::TransactionOutput;
-use simply_kaspa_database::models::types::hash::Hash as SqlHash;
+use simply_kaspa_database::models::utxo::Utxo;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::collections::HashSet;
 use std::str::FromStr;
@@ -48,7 +47,6 @@ pub struct UtxoSetImporter {
     include_amount: bool,
     include_script_public_key: bool,
     include_script_public_key_address: bool,
-    include_block_time: bool,
 }
 
 impl UtxoSetImporter {
@@ -64,7 +62,6 @@ impl UtxoSetImporter {
         let include_amount = !cli_args.is_excluded(CliField::TxOutAmount);
         let include_script_public_key = !cli_args.is_excluded(CliField::TxOutScriptPublicKey);
         let include_script_public_key_address = !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress);
-        let include_block_time = !cli_args.is_excluded(CliField::TxOutBlockTime);
         UtxoSetImporter {
             cli_args,
             signal_handler,
@@ -76,7 +73,6 @@ impl UtxoSetImporter {
             include_amount,
             include_script_public_key,
             include_script_public_key_address,
-            include_block_time,
         }
     }
 
@@ -189,6 +185,9 @@ impl UtxoSetImporter {
                         }
                         Some(Payload::DonePruningPointUtxoSetChunks(_)) => {
                             self.print_progress(utxo_chunk_count, acceptance_committed_count, outputs_committed_count);
+                            info!("Utxos import successfully, merging utxos to transactions");
+                            let transaction_count = self.database.insert_utxos_to_transactions().await.unwrap();
+                            info!("Utxos merged to {transaction_count} transactions");
                             info!("Pruning point UTXO set import completed successfully!");
                             let mut metrics = self.metrics.write().await;
                             metrics.components.utxo_importer.utxos_imported = Some(utxos_count);
@@ -228,30 +227,28 @@ impl UtxoSetImporter {
                 let outpoint = u.outpoint.unwrap();
                 let utxo_entry = u.utxo_entry.unwrap();
                 let script_public_key: ScriptPublicKey = utxo_entry.script_public_key.unwrap().try_into().unwrap();
-                let transaction_id: SqlHash = KaspaHash::from_slice(outpoint.transaction_id.unwrap().bytes.as_slice()).into();
-                let index = outpoint.index.to_i16().unwrap();
-                let block_time = self.include_block_time.then_some(0);
-                let output = TransactionOutput {
+                Utxo {
+                    transaction_id: KaspaHash::from_slice(outpoint.transaction_id.unwrap().bytes.as_slice()).into(),
+                    index: outpoint.index.to_i16().unwrap(),
                     amount: self.include_amount.then_some(utxo_entry.amount as i64),
                     script_public_key: self.include_script_public_key.then_some(script_public_key.script().to_vec()),
                     script_public_key_address: self
                         .include_script_public_key_address
                         .then(|| extract_script_pub_key_address(&script_public_key, self.prefix).map(|a| a.payload_to_string()).ok())
                         .flatten(),
-                };
-                (transaction_id, block_time, index, output)
+                }
             })
             .collect();
         let mut unique_acceptances = HashSet::new();
         let tx_acceptances: Vec<TransactionAcceptance> = transaction_outputs
             .iter()
-            .map(|(transaction_id, ..)| transaction_id.clone())
+            .map(|utxo| utxo.transaction_id.clone())
             .filter(|transaction_id| unique_acceptances.insert(transaction_id.clone()))
             .map(|transaction_id| TransactionAcceptance { transaction_id: Some(transaction_id), block_hash: None })
             .collect();
         let acceptance_count = self.database.insert_transaction_acceptances(&tx_acceptances).await.unwrap();
-        let _ = self.database.upsert_utxos(&transaction_outputs).await.unwrap();
-        (acceptance_count, transaction_outputs.len() as u64)
+        let output_count = self.database.insert_utxos(&transaction_outputs).await.unwrap();
+        (acceptance_count, output_count)
     }
 
     fn print_progress(&self, utxo_chunk_count: u32, acceptance_committed_count: u64, outputs_committed_count: u64) {
