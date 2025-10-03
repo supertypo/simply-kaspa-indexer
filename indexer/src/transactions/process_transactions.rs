@@ -155,27 +155,6 @@ pub async fn process_transactions(
                 } else {
                     task::spawn(async { 0 })
                 };
-                // let tx_inputs_handle = if !disable_transactions_inputs {
-                //     if enable_transactions_inputs_resolve {
-                //         let tx_outputs_map: HashMap<_, _> =
-                //             tx_outputs.iter().map(|tx| ((tx.transaction_id.clone(), tx.index), tx)).collect();
-                //         let mut previous_from_outputs_count = 0;
-                //         for tx_input in tx_inputs.iter_mut() {
-                //             let key = (tx_input.previous_outpoint_hash.clone().unwrap(), tx_input.previous_outpoint_index.unwrap());
-                //             if let Some(tx_output) = tx_outputs_map.get(&key) {
-                //                 tx_input.previous_outpoint_script = tx_output.script_public_key.clone();
-                //                 tx_input.previous_outpoint_amount = tx_output.amount;
-                //                 previous_from_outputs_count += 1;
-                //             }
-                //         }
-                //         if previous_from_outputs_count > 0 {
-                //             trace!("Pre-resolved {previous_from_outputs_count} tx_inputs from tx_outputs");
-                //         }
-                //     }
-                //     task::spawn(insert_tx_inputs(batch_scale, enable_transactions_inputs_resolve, tx_inputs, database.clone()))
-                // } else {
-                //     task::spawn(async { 0 })
-                // };
                 let rows_affected_tx = tx_handle.await.unwrap();
                 let rows_affected_block_tx = blocks_txs_handle.await.unwrap();
                 let mut rows_affected_tx_addresses = tx_output_addr_handle.await.unwrap();

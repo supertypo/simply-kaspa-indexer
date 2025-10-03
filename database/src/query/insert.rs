@@ -188,11 +188,14 @@ pub async fn insert_script_transactions(script_transactions: &[ScriptTransaction
 pub async fn insert_address_transactions_from_inputs(transaction_ids: &[Hash], pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "
         INSERT INTO addresses_transactions (address, transaction_id, block_time)
-        SELECT (o.outputs[i.previous_outpoint_index+1]).script_public_key_address,
-               t.transaction_id,
-               t.block_time
-        FROM transactions t, LATERAL UNNEST(t.inputs) AS i
-        JOIN transactions o ON o.transaction_id = i.previous_outpoint_hash
+        SELECT
+            o.script_public_key_address,
+            t.transaction_id,
+            t.block_time
+        FROM transactions t
+        CROSS JOIN LATERAL UNNEST(t.inputs) AS i
+        JOIN transactions output_t  ON output_t.transaction_id = i.previous_outpoint_hash
+        JOIN LATERAL UNNEST(output_t.outputs) AS o ON o.index = i.previous_outpoint_index
         WHERE t.transaction_id = ANY($1)
         ON CONFLICT DO NOTHING";
     Ok(sqlx::query(sql).bind(transaction_ids).execute(pool).await?.rows_affected())
@@ -201,11 +204,14 @@ pub async fn insert_address_transactions_from_inputs(transaction_ids: &[Hash], p
 pub async fn insert_script_transactions_from_inputs(transaction_ids: &[Hash], pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "
         INSERT INTO scripts_transactions (script_public_key, transaction_id, block_time)
-        SELECT (o.outputs[i.previous_outpoint_index+1]).script_public_key,
-               t.transaction_id,
-               t.block_time
-        FROM transactions t, LATERAL UNNEST(t.inputs) AS i
-        JOIN transactions o ON o.transaction_id = i.previous_outpoint_hash
+        SELECT
+            o.script_public_key,
+            t.transaction_id,
+            t.block_time
+        FROM transactions t
+        CROSS JOIN LATERAL UNNEST(t.inputs) AS i
+        JOIN transactions output_t  ON output_t.transaction_id = i.previous_outpoint_hash
+        JOIN LATERAL UNNEST(output_t.outputs) AS o ON o.index = i.previous_outpoint_index
         WHERE t.transaction_id = ANY($1)
         ON CONFLICT DO NOTHING";
     Ok(sqlx::query(sql).bind(transaction_ids).execute(pool).await?.rows_affected())

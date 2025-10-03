@@ -140,9 +140,9 @@ impl UtxoSetImporter {
         mut receiver: Receiver<KaspadMessage>,
     ) -> Result<(), ProtocolError> {
         let mut acceptance_committed_count = 0;
-        let mut outputs_committed_count = 0;
+        let mut utxos_committed_count = 0;
         let mut utxo_chunk_count = 0;
-        let mut utxos_count: u64 = 0;
+        let mut total_utxos_count: u64 = 0;
         while !self.signal_handler.is_shutdown() {
             match timeout(Duration::from_secs(IBD_TIMEOUT_SECONDS), receiver.recv()).await {
                 Ok(op) => match op {
@@ -168,12 +168,12 @@ impl UtxoSetImporter {
                         }
                         Some(Payload::PruningPointUtxoSetChunk(msg)) => {
                             utxo_chunk_count += 1;
-                            utxos_count += msg.outpoint_and_utxo_entry_pairs.len() as u64;
-                            let (acceptance_count, output_count) = self.persist_utxos(msg.outpoint_and_utxo_entry_pairs).await;
+                            total_utxos_count += msg.outpoint_and_utxo_entry_pairs.len() as u64;
+                            let (acceptance_count, utxos_count) = self.persist_utxos(msg.outpoint_and_utxo_entry_pairs).await;
                             acceptance_committed_count += acceptance_count;
-                            outputs_committed_count += output_count;
+                            utxos_committed_count += utxos_count;
                             if utxo_chunk_count % IBD_BATCH_SIZE == 0 {
-                                self.print_progress(utxo_chunk_count, acceptance_committed_count, outputs_committed_count);
+                                self.print_progress(utxo_chunk_count, acceptance_committed_count, utxos_committed_count);
                                 adaptor
                                     .send(
                                         peer_key,
@@ -184,18 +184,18 @@ impl UtxoSetImporter {
                                     )
                                     .await?;
                                 let mut metrics = self.metrics.write().await;
-                                metrics.components.utxo_importer.utxos_imported = Some(utxos_count);
+                                metrics.components.utxo_importer.utxos_imported = Some(total_utxos_count);
                                 metrics.components.utxo_importer.acceptances_committed = Some(acceptance_committed_count);
-                                metrics.components.utxo_importer.outputs_committed = Some(outputs_committed_count);
+                                metrics.components.utxo_importer.utxos_committed = Some(utxos_committed_count);
                             }
                         }
                         Some(Payload::DonePruningPointUtxoSetChunks(_)) => {
-                            self.print_progress(utxo_chunk_count, acceptance_committed_count, outputs_committed_count);
+                            self.print_progress(utxo_chunk_count, acceptance_committed_count, utxos_committed_count);
                             info!("Pruning point UTXO set import completed successfully!");
                             let mut metrics = self.metrics.write().await;
-                            metrics.components.utxo_importer.utxos_imported = Some(utxos_count);
+                            metrics.components.utxo_importer.utxos_imported = Some(total_utxos_count);
                             metrics.components.utxo_importer.acceptances_committed = Some(acceptance_committed_count);
-                            metrics.components.utxo_importer.outputs_committed = Some(outputs_committed_count);
+                            metrics.components.utxo_importer.utxos_committed = Some(utxos_committed_count);
                             return Ok(());
                         }
                         Some(Payload::UnexpectedPruningPoint(_)) => {
@@ -250,14 +250,14 @@ impl UtxoSetImporter {
             .map(|transaction_id| TransactionAcceptance { transaction_id: Some(transaction_id), block_hash: None })
             .collect();
         let acceptance_count = self.database.insert_transaction_acceptances(&tx_acceptances).await.unwrap();
-        let output_count = self.database.insert_utxos(&transaction_outputs).await.unwrap();
-        (acceptance_count, output_count)
+        let utxos_count = self.database.insert_utxos(&transaction_outputs).await.unwrap();
+        (acceptance_count, utxos_count)
     }
 
-    fn print_progress(&self, utxo_chunk_count: u32, acceptance_committed_count: u64, outputs_committed_count: u64) {
+    fn print_progress(&self, utxo_chunk_count: u32, acceptance_committed_count: u64, utxos_committed_count: u64) {
         info!(
-            "Imported {} UTXO chunks. Committed {} accepted transactions, {} outputs",
-            utxo_chunk_count, acceptance_committed_count, outputs_committed_count,
+            "Imported {} UTXO chunks. Committed {} accepted transactions, {} UTXOs",
+            utxo_chunk_count, acceptance_committed_count, utxos_committed_count,
         );
     }
 }
