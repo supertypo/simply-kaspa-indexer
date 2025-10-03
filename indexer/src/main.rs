@@ -6,7 +6,7 @@ use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
 use log::{error, info, trace, warn};
-use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliEnable};
+use simply_kaspa_cli::cli_args::{CliArgs, CliDisable};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
@@ -94,7 +94,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         info!("Exclude fields is set, the following fields will be excluded: {:?}", exclude_fields);
     }
 
-    let mut utxo_set_import = cli_args.is_enabled(CliEnable::ForceUtxoImport);
+    let mut utxo_set_import = false;
     let checkpoint: KaspaHash;
     if let Some(ignore_checkpoint) = cli_args.ignore_checkpoint.clone() {
         warn!("Checkpoint ignored due to user request (-i). This might lead to inconsistencies.");

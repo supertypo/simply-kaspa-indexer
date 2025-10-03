@@ -41,25 +41,19 @@ pub async fn insert_utxos_to_transactions(pool: &Pool<Postgres>) -> Result<(u64,
     let mut tx = pool.begin().await?;
 
     let sql = "
-        CREATE TEMP TABLE grouped ON COMMIT DROP AS
-        SELECT
-            transaction_id,
+        INSERT INTO transactions (transaction_id, block_time, outputs)
+        SELECT transaction_id, 0,
             array_agg(
                 ROW(index, amount, script_public_key, script_public_key_address)::transactions_outputs
                 ORDER BY index
             ) AS outputs
         FROM utxos
         GROUP BY transaction_id";
-    sqlx::query(sql).execute(&mut *tx).await?;
-
-    let sql = "
-        INSERT INTO transactions (transaction_id, block_time, outputs)
-        SELECT transaction_id, 0, outputs FROM grouped";
     let rows_affected_transactions = sqlx::query(sql).execute(&mut *tx).await?.rows_affected();
 
     let sql = "
         INSERT INTO transactions_acceptances (transaction_id)
-        SELECT transaction_id FROM grouped";
+        SELECT transaction_id FROM transactions";
     let rows_affected_transactions_acceptances = sqlx::query(sql).execute(&mut *tx).await?.rows_affected();
 
     tx.commit().await?;

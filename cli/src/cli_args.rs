@@ -14,8 +14,6 @@ pub enum CliEnable {
     DynamicVcpTipDistance,
     /// Enables resolving transactions_inputs previous_outpoint
     TransactionsInputsResolve,
-    /// Forces (pruning point) utxo set import on startup (otherwise only on empty db)
-    ForceUtxoImport,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]
@@ -78,15 +76,11 @@ pub enum CliField {
     TxInPreviousOutpoint,
     TxInSignatureScript,
     TxInSigOpCount,
-    /// No longer in use
-    TxInBlockTime,
     TxOutAmount,
     /// Excluding both this and script_public_key_address will disable adress-/scripts_transactions
     TxOutScriptPublicKey,
     /// Excluding this, scripts_transactions to be populated instead of adresses_transactions
     TxOutScriptPublicKeyAddress,
-    /// No longer in use
-    TxOutBlockTime,
 }
 
 #[derive(Parser, Clone, Debug, ToSchema, Serialize, Deserialize)]
