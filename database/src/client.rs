@@ -214,7 +214,7 @@ impl KaspaDbClient {
         query::insert::insert_utxos(utxos, &self.pool).await
     }
 
-    pub async fn insert_utxos_to_transactions(&self) -> Result<u64, Error> {
+    pub async fn insert_utxos_to_transactions(&self) -> Result<(u64, u64), Error> {
         query::insert::insert_utxos_to_transactions(&self.pool).await
     }
 
