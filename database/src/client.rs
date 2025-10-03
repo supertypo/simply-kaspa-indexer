@@ -178,6 +178,10 @@ impl KaspaDbClient {
         query::misc::execute_ddl(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/down.sql")), &self.pool).await
     }
 
+    pub async fn truncate_utxos(&self) -> Result<(), Error> {
+        query::misc::truncate_table("utxos", &self.pool).await
+    }
+
     pub async fn select_database_details(&self) -> Result<DatabaseDetails, Error> {
         query::select::select_database_details(&self.pool).await
     }

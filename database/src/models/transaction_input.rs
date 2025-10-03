@@ -4,6 +4,7 @@ use crate::models::types::hash::Hash;
 #[derive(Type)]
 #[sqlx(type_name = "transactions_inputs")]
 pub struct TransactionInput {
+    pub index: i16,
     pub previous_outpoint_hash: Option<Hash>,
     pub previous_outpoint_index: Option<i16>,
     pub signature_script: Option<Vec<u8>>,

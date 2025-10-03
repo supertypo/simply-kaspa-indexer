@@ -108,29 +108,37 @@ pub async fn insert_transactions(
              SELECT v.transaction_id, v.subnetwork_id, v.hash, v.mass, v.payload, v.block_time,
                ARRAY(
                  SELECT ROW(
+                   i.index,
                    i.previous_outpoint_hash,
                    i.previous_outpoint_index,
                    i.signature_script,
                    i.sig_op_count,
-                   COALESCE(i.previous_outpoint_script, (o.outputs[i.previous_outpoint_index+1]).script_public_key),
-                   COALESCE(i.previous_outpoint_amount, (o.outputs[i.previous_outpoint_index+1]).amount)
+                   COALESCE(i.previous_outpoint_script, o.script_public_key),
+                   COALESCE(i.previous_outpoint_amount, o.amount)
                  )::transactions_inputs
                  FROM UNNEST(v.inputs) AS i
-                 LEFT JOIN transactions o ON o.transaction_id = i.previous_outpoint_hash
+                 LEFT JOIN transactions output_t ON output_t.transaction_id = i.previous_outpoint_hash
+                 LEFT JOIN LATERAL (
+                   SELECT amount, script_public_key
+                   FROM UNNEST(output_t.outputs)
+                   WHERE index = i.previous_outpoint_index
+                   LIMIT 1
+                 ) o ON true
                ),
                v.outputs
-        FROM (VALUES {}) AS v(transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
-        ON CONFLICT DO NOTHING",
+             FROM (VALUES {}) AS v(transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
+             ON CONFLICT DO NOTHING",
             generate_placeholders(transactions.len(), COLS)
         )
     } else {
         format!(
             "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
-            VALUES {}
-            ON CONFLICT DO NOTHING",
+             VALUES {}
+             ON CONFLICT DO NOTHING",
             generate_placeholders(transactions.len(), COLS)
         )
     };
+
     let mut query = sqlx::query(&sql);
     for tx in transactions {
         query = query.bind(&tx.transaction_id);

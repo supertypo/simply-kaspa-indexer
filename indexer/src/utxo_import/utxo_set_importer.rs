@@ -117,6 +117,12 @@ impl UtxoSetImporter {
                     }
                     Err(e) => warn!("Peer connection failed: {e}, retrying..."),
                 }
+                if completed {
+                    info!("Finalizing import, merging utxos to transactions...");
+                    let transaction_count = self.database.insert_utxos_to_transactions().await.unwrap();
+                    info!("Utxos merged to {transaction_count} transactions");
+                    self.database.truncate_utxos().await.unwrap();
+                }
             } else {
                 info!("UTXO set import skipped for network {}", self.network_id);
                 completed = true;
@@ -185,9 +191,6 @@ impl UtxoSetImporter {
                         }
                         Some(Payload::DonePruningPointUtxoSetChunks(_)) => {
                             self.print_progress(utxo_chunk_count, acceptance_committed_count, outputs_committed_count);
-                            info!("Utxos import successfully, merging utxos to transactions");
-                            let transaction_count = self.database.insert_utxos_to_transactions().await.unwrap();
-                            info!("Utxos merged to {transaction_count} transactions");
                             info!("Pruning point UTXO set import completed successfully!");
                             let mut metrics = self.metrics.write().await;
                             metrics.components.utxo_importer.utxos_imported = Some(utxos_count);

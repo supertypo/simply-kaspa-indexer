@@ -62,7 +62,9 @@ pub fn map_transaction_inputs(
     transaction
         .inputs
         .iter()
-        .map(|input| SqlTransactionInput {
+        .enumerate()
+        .map(|(i, input)| SqlTransactionInput {
+            index: i as i16,
             previous_outpoint_hash: include_previous_outpoint.then_some(input.previous_outpoint.transaction_id.into()),
             previous_outpoint_index: include_previous_outpoint.then_some(input.previous_outpoint.index.to_i16().unwrap()),
             signature_script: include_signature_script.then_some(input.signature_script.clone()),
@@ -82,9 +84,11 @@ pub fn map_transaction_outputs(
     transaction
         .outputs
         .iter()
-        .map(|output| {
+        .enumerate()
+        .map(|(i, output)| {
             let verbose_data = output.verbose_data.as_ref().expect("Transaction output verbose_data is missing");
             SqlTransactionOutput {
+                index: i as i16,
                 amount: include_amount.then_some(output.value.to_i64().expect("Tx output amount is too large for i64")),
                 script_public_key: include_script_public_key.then_some(output.script_public_key.script().to_vec()),
                 script_public_key_address: include_script_public_key_address
