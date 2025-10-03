@@ -33,18 +33,22 @@ pub fn map_transaction(
         mass: (include_mass && verbose_data.compute_mass != 0).then_some(verbose_data.compute_mass.to_i32().unwrap()),
         payload: (include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time.to_i64().unwrap()),
-        inputs: include_in.then_some(map_transaction_inputs(
-            transaction,
-            include_in_previous_outpoint,
-            include_in_signature_script,
-            include_in_sig_op_count,
-        )),
-        outputs: include_out.then_some(map_transaction_outputs(
-            transaction,
-            include_out_amount,
-            include_out_script_public_key,
-            include_out_script_public_key_address,
-        )),
+        inputs: include_in
+            .then_some(map_transaction_inputs(
+                transaction,
+                include_in_previous_outpoint,
+                include_in_signature_script,
+                include_in_sig_op_count,
+            ))
+            .flatten(),
+        outputs: include_out
+            .then_some(map_transaction_outputs(
+                transaction,
+                include_out_amount,
+                include_out_script_public_key,
+                include_out_script_public_key_address,
+            ))
+            .flatten(),
     }
 }
 
@@ -58,21 +62,23 @@ pub fn map_transaction_inputs(
     include_previous_outpoint: bool,
     include_signature_script: bool,
     include_sig_op_count: bool,
-) -> Vec<SqlTransactionInput> {
-    transaction
-        .inputs
-        .iter()
-        .enumerate()
-        .map(|(i, input)| SqlTransactionInput {
-            index: i as i16,
-            previous_outpoint_hash: include_previous_outpoint.then_some(input.previous_outpoint.transaction_id.into()),
-            previous_outpoint_index: include_previous_outpoint.then_some(input.previous_outpoint.index.to_i16().unwrap()),
-            signature_script: include_signature_script.then_some(input.signature_script.clone()),
-            sig_op_count: include_sig_op_count.then_some(input.sig_op_count as i16),
-            previous_outpoint_script: None,
-            previous_outpoint_amount: None,
-        })
-        .collect::<Vec<SqlTransactionInput>>()
+) -> Option<Vec<SqlTransactionInput>> {
+    (!transaction.inputs.is_empty()).then(|| {
+        transaction
+            .inputs
+            .iter()
+            .enumerate()
+            .map(|(i, input)| SqlTransactionInput {
+                index: i as i16,
+                previous_outpoint_hash: include_previous_outpoint.then_some(input.previous_outpoint.transaction_id.into()),
+                previous_outpoint_index: include_previous_outpoint.then_some(input.previous_outpoint.index.to_i16().unwrap()),
+                signature_script: include_signature_script.then_some(input.signature_script.clone()),
+                sig_op_count: include_sig_op_count.then_some(input.sig_op_count as i16),
+                previous_outpoint_script: None,
+                previous_outpoint_amount: None,
+            })
+            .collect::<Vec<SqlTransactionInput>>()
+    })
 }
 
 pub fn map_transaction_outputs(
@@ -80,22 +86,24 @@ pub fn map_transaction_outputs(
     include_amount: bool,
     include_script_public_key: bool,
     include_script_public_key_address: bool,
-) -> Vec<SqlTransactionOutput> {
-    transaction
-        .outputs
-        .iter()
-        .enumerate()
-        .map(|(i, output)| {
-            let verbose_data = output.verbose_data.as_ref().expect("Transaction output verbose_data is missing");
-            SqlTransactionOutput {
-                index: i as i16,
-                amount: include_amount.then_some(output.value.to_i64().expect("Tx output amount is too large for i64")),
-                script_public_key: include_script_public_key.then_some(output.script_public_key.script().to_vec()),
-                script_public_key_address: include_script_public_key_address
-                    .then_some(verbose_data.script_public_key_address.payload_to_string()),
-            }
-        })
-        .collect::<Vec<SqlTransactionOutput>>()
+) -> Option<Vec<SqlTransactionOutput>> {
+    (!transaction.outputs.is_empty()).then(|| {
+        transaction
+            .outputs
+            .iter()
+            .enumerate()
+            .map(|(i, output)| {
+                let verbose_data = output.verbose_data.as_ref().expect("Transaction output verbose_data is missing");
+                SqlTransactionOutput {
+                    index: i as i16,
+                    amount: include_amount.then_some(output.value.to_i64().expect("Tx output amount is too large for i64")),
+                    script_public_key: include_script_public_key.then_some(output.script_public_key.script().to_vec()),
+                    script_public_key_address: include_script_public_key_address
+                        .then_some(verbose_data.script_public_key_address.payload_to_string()),
+                }
+            })
+            .collect::<Vec<SqlTransactionOutput>>()
+    })
 }
 
 pub fn map_transaction_outputs_address(transaction: &RpcTransaction) -> Vec<SqlAddressTransaction> {
