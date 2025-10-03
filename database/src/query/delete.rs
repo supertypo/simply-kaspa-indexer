@@ -177,11 +177,17 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
 
     // Delete spent transaction outputs
     let sql = "
+        WITH spent_outputs AS (SELECT * FROM unnest($1, $2) AS (transaction_id, index))
         UPDATE transactions t
         SET outputs = (
             SELECT array_agg(o)
             FROM unnest(t.outputs) o
-            WHERE (t.transaction_id, o.index) NOT IN (SELECT * FROM unnest($1, $2))
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM spent_outputs s
+                WHERE s.transaction_id = t.transaction_id
+                AND s.index = o.index
+            )
         )
         WHERE t.transaction_id = ANY($1)";
     let (t, i): (Vec<_>, Vec<_>) = spent_tx_outputs.iter().cloned().unzip();
