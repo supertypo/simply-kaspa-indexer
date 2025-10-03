@@ -107,6 +107,7 @@ impl UtxoSetImporter {
                 }
                 match adaptor.connect_peer(address).await {
                     Ok(peer_key) => {
+                        self.database.truncate_utxos().await.unwrap();
                         match self.receive_and_handle(adaptor.clone(), peer_key, self.pruning_point_hash, receiver).await {
                             Ok(_) => {
                                 adaptor.terminate_all_peers().await;
@@ -114,14 +115,17 @@ impl UtxoSetImporter {
                                 let (txs, accepted_txs) = self.database.insert_utxos_to_transactions().await.unwrap();
                                 info!("Staging UTXO set successfully merged as {txs} transactions, {accepted_txs} accepted");
                                 self.database.truncate_utxos().await.unwrap();
+                                let mut metrics = self.metrics.write().await;
+                                metrics.components.utxo_importer.transactions_committed = Some(txs);
+                                metrics.components.utxo_importer.transactions_acceptances_committed = Some(accepted_txs);
                                 completed = true
                             }
                             Err(_) => {
                                 adaptor.terminate_all_peers().await;
+                                self.database.truncate_utxos().await.unwrap();
                                 sleep(Duration::from_secs(5)).await;
                             }
                         }
-                        self.database.truncate_utxos().await.unwrap();
                     }
                     Err(e) => warn!("Peer connection failed: {e}, retrying..."),
                 }
@@ -189,7 +193,7 @@ impl UtxoSetImporter {
                         }
                         Some(Payload::DonePruningPointUtxoSetChunks(_)) => {
                             self.print_progress(utxo_chunk_count, utxos_committed_count);
-                            info!("Pruning point UTXO set import completed successfully!");
+                            info!("Pruning point UTXO set staging import completed successfully!");
                             let mut metrics = self.metrics.write().await;
                             metrics.components.utxo_importer.utxos_imported = Some(total_utxos_count);
                             metrics.components.utxo_importer.utxos_committed = Some(utxos_committed_count);
