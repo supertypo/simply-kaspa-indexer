@@ -21,6 +21,8 @@ pub async fn upsert_utxos(
     transaction_outputs: &[(Hash, Option<i64>, i16, TransactionOutput)],
     pool: &Pool<Postgres>,
 ) -> Result<u64, Error> {
+    let mut tx = pool.begin().await?;
+
     let sql = format!(
         "INSERT INTO transactions (transaction_id, block_time, outputs)
         SELECT v.transaction_id, v.block_time, ARRAY[]::transactions_outputs[]
@@ -32,7 +34,7 @@ pub async fn upsert_utxos(
     for (transaction_id, block_time, ..) in transaction_outputs {
         query = query.bind(transaction_id).bind(block_time);
     }
-    query.execute(pool).await?;
+    query.execute(&mut *tx).await?;
 
     let sql = format!(
         "UPDATE transactions t
@@ -49,5 +51,8 @@ pub async fn upsert_utxos(
         query = query.bind(&tout.script_public_key);
         query = query.bind(&tout.script_public_key_address);
     }
-    Ok(query.execute(pool).await?.rows_affected())
+    let rows = query.execute(&mut *tx).await?.rows_affected();
+
+    tx.commit().await?;
+    Ok(rows)
 }
