@@ -167,10 +167,13 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
 
     // Find spent transaction outputs while deleting transaction_inputs
     let sql = "
-        UPDATE transactions SET inputs = NULL
-        FROM LATERAL unnest(transactions.inputs) i
-        WHERE transaction_id = ANY($1)
-        RETURNING i.previous_outpoint_hash, i.previous_outpoint_index";
+        WITH spent_outputs AS (
+            SELECT i.previous_outpoint_hash, i.previous_outpoint_index
+            FROM transactions t, unnest(t.inputs) i
+            WHERE t.transaction_id = ANY($1)
+        ),
+        _ AS (UPDATE transactions SET inputs = NULL, block_time = NULL WHERE transaction_id = ANY($1))
+        SELECT previous_outpoint_hash, previous_outpoint_index FROM spent_outputs;";
     let spent_tx_outputs: Vec<_> =
         sqlx::query_as::<_, (Hash, i16)>(sql).bind(accepted_txids.iter().collect::<Vec<_>>()).fetch_all(tx.as_mut()).await?;
     debug!("prune_transactions: Deleted {} expired transactions_inputs", spent_tx_outputs.len());

@@ -40,8 +40,8 @@ pub async fn insert_utxos(utxos: &[Utxo], pool: &Pool<Postgres>) -> Result<u64, 
 pub async fn insert_utxos_to_transactions(pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = "
         WITH ins AS (
-            INSERT INTO transactions (transaction_id, block_time, outputs)
-            SELECT transaction_id, 0,
+            INSERT INTO transactions (transaction_id, outputs)
+            SELECT transaction_id,
                 array_agg(ROW(index, amount, script_public_key, script_public_key_address)::transactions_outputs)
             FROM utxos GROUP BY transaction_id RETURNING transaction_id
         )
