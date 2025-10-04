@@ -121,17 +121,17 @@ pub async fn insert_transactions(
                    COALESCE(i.previous_outpoint_script, o.script_public_key),
                    COALESCE(i.previous_outpoint_amount, o.amount)
                  )::transactions_inputs
-                 FROM UNNEST(v.inputs) AS i
+                 FROM UNNEST(v.inputs) i
                  LEFT JOIN transactions output_t ON output_t.transaction_id = i.previous_outpoint_hash
-                 LEFT JOIN LATERAL (
+                 CROSS JOIN LATERAL (
                    SELECT amount, script_public_key
                    FROM UNNEST(output_t.outputs)
                    WHERE index = i.previous_outpoint_index
                    LIMIT 1
-                 ) o ON true
+                 ) o
                ),
                v.outputs
-             FROM (VALUES {}) AS v(transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
+             FROM (VALUES {}) v(transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
              ON CONFLICT DO NOTHING",
             generate_placeholders(transactions.len(), COLS)
         )
@@ -198,9 +198,9 @@ pub async fn insert_address_transactions_from_inputs(transaction_ids: &[Hash], p
             t.transaction_id,
             t.block_time
         FROM transactions t
-        CROSS JOIN LATERAL UNNEST(t.inputs) AS i
+        CROSS JOIN LATERAL UNNEST(t.inputs) i
         JOIN transactions output_t  ON output_t.transaction_id = i.previous_outpoint_hash
-        JOIN LATERAL UNNEST(output_t.outputs) AS o ON o.index = i.previous_outpoint_index
+        JOIN LATERAL UNNEST(output_t.outputs) o ON o.index = i.previous_outpoint_index
         WHERE t.transaction_id = ANY($1)
         ON CONFLICT DO NOTHING";
     Ok(sqlx::query(sql).bind(transaction_ids).execute(pool).await?.rows_affected())
@@ -214,9 +214,9 @@ pub async fn insert_script_transactions_from_inputs(transaction_ids: &[Hash], po
             t.transaction_id,
             t.block_time
         FROM transactions t
-        CROSS JOIN LATERAL UNNEST(t.inputs) AS i
+        CROSS JOIN LATERAL UNNEST(t.inputs) i
         JOIN transactions output_t  ON output_t.transaction_id = i.previous_outpoint_hash
-        JOIN LATERAL UNNEST(output_t.outputs) AS o ON o.index = i.previous_outpoint_index
+        JOIN LATERAL UNNEST(output_t.outputs) o ON o.index = i.previous_outpoint_index
         WHERE t.transaction_id = ANY($1)
         ON CONFLICT DO NOTHING";
     Ok(sqlx::query(sql).bind(transaction_ids).execute(pool).await?.rows_affected())

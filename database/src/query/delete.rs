@@ -168,7 +168,7 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
     // Find spent transaction outputs while deleting transaction_inputs
     let sql = "
         UPDATE transactions SET inputs = NULL
-        FROM LATERAL unnest(transactions.inputs) AS i
+        FROM LATERAL unnest(transactions.inputs) i
         WHERE transaction_id = ANY($1)
         RETURNING i.previous_outpoint_hash, i.previous_outpoint_index";
     let spent_tx_outputs: Vec<_> =
@@ -177,7 +177,7 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
 
     // Delete spent transaction outputs
     let sql = "
-        WITH spent_outputs AS (SELECT * FROM unnest($1, $2) AS (transaction_id, index))
+        WITH spent_outputs AS (SELECT * FROM unnest($1, $2) _(transaction_id, index))
         UPDATE transactions t
         SET outputs = (
             SELECT array_agg(o)
