@@ -1,5 +1,5 @@
-use sqlx::Type;
 use crate::models::types::hash::Hash;
+use sqlx::Type;
 
 #[derive(Type)]
 #[sqlx(type_name = "transactions_inputs")]

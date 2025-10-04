@@ -104,12 +104,11 @@ pub async fn process_transactions(
                     trace!("Known transaction_id {}, keeping block relation only", transaction_id);
                 } else {
                     let transaction = mapper.map_transaction(&rpc_transaction, subnetwork_key);
-                    if enable_transactions_inputs_resolve
-                        && let Some(outputs) = &transaction.outputs {
-                            for (i, o) in outputs.iter().enumerate() {
-                                tx_outputs.insert((transaction.transaction_id.clone(), i as i16), o.clone());
-                            }
+                    if enable_transactions_inputs_resolve && let Some(outputs) = &transaction.outputs {
+                        for (i, o) in outputs.iter().enumerate() {
+                            tx_outputs.insert((transaction.transaction_id.clone(), i as i16), o.clone());
                         }
+                    }
                     transactions.push(transaction);
                     if !disable_address_transactions {
                         if !exclude_tx_out_script_public_key_address {
@@ -294,10 +293,7 @@ async fn insert_block_txs(batch_scale: f64, values: Vec<BlockTransaction>, datab
     rows_affected
 }
 
-fn resolve_inputs_from_concurrent_outputs(
-    tx_outputs: HashMap<(SqlHash, i16), TransactionOutput>,
-    transactions: &mut [Transaction],
-) {
+fn resolve_inputs_from_concurrent_outputs(tx_outputs: HashMap<(SqlHash, i16), TransactionOutput>, transactions: &mut [Transaction]) {
     for tx in transactions.iter_mut() {
         if let Some(inputs) = &mut tx.inputs {
             for input in inputs.iter_mut() {

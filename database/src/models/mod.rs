@@ -10,5 +10,5 @@ pub mod transaction_acceptance;
 pub mod transaction_input;
 pub mod transaction_output;
 pub mod types;
-pub mod var;
 pub mod utxo;
+pub mod var;
