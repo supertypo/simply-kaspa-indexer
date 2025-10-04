@@ -84,7 +84,8 @@ CREATE TABLE transactions
     payload        BYTEA,
     block_time     BIGINT,
     inputs         transactions_inputs[],
-    outputs        transactions_outputs[]
+    outputs        transactions_outputs[],
+    outputs_spent  SMALLINT
 );
 CREATE INDEX ON transactions (block_time DESC);
 
