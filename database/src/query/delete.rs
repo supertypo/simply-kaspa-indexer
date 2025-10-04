@@ -162,7 +162,7 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
     // Delete rejected transactions
     let sql = "DELETE FROM transactions WHERE transaction_id = ANY($1)";
     let rows_affected = sqlx::query(sql).bind(&rejected_txids).execute(tx.as_mut()).await?.rows_affected();
-    debug!("prune_transactions: Deleted {rows_affected} rejected transactions");
+    debug!("prune_transactions: Deleted {rows_affected} expired rejected transactions");
     total_rows_affected += rows_affected;
 
     // Find spent transaction outputs while deleting transaction_inputs
@@ -189,7 +189,7 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
         WHERE t.transaction_id = spent.transaction_id";
     let (possibly_spent_txids, c): (Vec<_>, Vec<_>) = spent_tx_outputs.iter().cloned().unzip();
     let rows_affected = sqlx::query(sql).bind(&possibly_spent_txids).bind(&c).execute(tx.as_mut()).await?.rows_affected();
-    debug!("prune_transactions: Marked {rows_affected} transactions with spent outputs");
+    debug!("prune_transactions: Marked {rows_affected} expired transactions with spent outputs");
 
     // Find & delete fully spent transactions
     let sql =
