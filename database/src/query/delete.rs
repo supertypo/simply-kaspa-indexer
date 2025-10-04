@@ -151,6 +151,9 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
     let sql = "SELECT transaction_id FROM transactions WHERE block_time < $1 LIMIT $2";
     let expired_txids = sqlx::query_scalar::<_, Hash>(sql).bind(block_time_lt).bind(batch_size).fetch_all(tx.as_mut()).await?;
     debug!("prune_transactions: Found {} expired transactions", expired_txids.len());
+    if expired_txids.len() == 0 {
+        return Ok(total_rows_affected);
+    }
 
     // Find rejected transactions
     let sql = "SELECT transaction_id FROM transactions_acceptances WHERE transaction_id = ANY($1)";
