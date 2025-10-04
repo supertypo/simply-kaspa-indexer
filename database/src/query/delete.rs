@@ -173,7 +173,7 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
             WHERE t.transaction_id = ANY($1)
         ),
         _ AS (UPDATE transactions SET inputs = NULL, block_time = NULL WHERE transaction_id = ANY($1))
-        SELECT previous_outpoint_hash transaction_id, COUNT(*) spent_count FROM spent_outputs GROUP BY previous_outpoint_hash";
+        SELECT previous_outpoint_hash transaction_id, COUNT(*)::smallint spent_count FROM spent_outputs GROUP BY previous_outpoint_hash";
     let spent_tx_outputs: Vec<_> =
         sqlx::query_as::<_, (Hash, i16)>(sql).bind(accepted_txids.iter().collect::<Vec<_>>()).fetch_all(tx.as_mut()).await?;
     debug!(
