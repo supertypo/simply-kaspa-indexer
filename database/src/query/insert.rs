@@ -123,12 +123,12 @@ pub async fn insert_transactions(
                  )::transactions_inputs
                  FROM UNNEST(v.inputs) i
                  LEFT JOIN transactions output_t ON output_t.transaction_id = i.previous_outpoint_hash
-                 CROSS JOIN LATERAL (
+                 LEFT JOIN LATERAL (
                    SELECT amount, script_public_key
                    FROM UNNEST(output_t.outputs)
                    WHERE index = i.previous_outpoint_index
                    LIMIT 1
-                 ) o
+                 ) o ON TRUE
                ),
                v.outputs
              FROM (VALUES {}) v(transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
