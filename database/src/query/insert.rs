@@ -43,7 +43,9 @@ pub async fn insert_utxos_to_transactions(pool: &Pool<Postgres>) -> Result<u64, 
             INSERT INTO transactions (transaction_id, outputs)
             SELECT transaction_id,
                 array_agg(ROW(index, amount, script_public_key, script_public_key_address)::transactions_outputs)
-            FROM utxos GROUP BY transaction_id RETURNING transaction_id
+            FROM utxos GROUP BY transaction_id
+            ON CONFLICT DO NOTHING
+            RETURNING transaction_id
         )
         INSERT INTO transactions_acceptances (transaction_id)
         SELECT transaction_id FROM ins
