@@ -50,7 +50,7 @@ CREATE TABLE utxos
     index                     SMALLINT,
     amount                    BIGINT,
     script_public_key         BYTEA,
-    script_public_key_address TEXT
+    script_public_key_address VARCHAR
 );
 
 
@@ -71,7 +71,7 @@ CREATE TYPE transactions_outputs AS
     index                     SMALLINT,
     amount                    BIGINT,
     script_public_key         BYTEA,
-    script_public_key_address TEXT
+    script_public_key_address VARCHAR
 );
 
 

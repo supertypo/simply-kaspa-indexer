@@ -4,9 +4,32 @@
 -- Update schema_version
 UPDATE vars SET value = '20' WHERE key = 'schema_version';
 
--- Migrate transactions_inputs and transactions_outputs to transactions
+-- Rename existing tables
 ALTER TABLE transactions RENAME TO transactions_old;
+ALTER TABLE transactions_inputs RENAME TO transactions_inputs_old;
+ALTER TABLE transactions_outputs RENAME TO transactions_outputs_old;
 
+-- Create new types
+CREATE TYPE transactions_inputs AS
+(
+    index                    SMALLINT,
+    previous_outpoint_hash   BYTEA,
+    previous_outpoint_index  SMALLINT,
+    signature_script         BYTEA,
+    sig_op_count             SMALLINT,
+    previous_outpoint_script BYTEA,
+    previous_outpoint_amount BIGINT
+);
+
+CREATE TYPE transactions_outputs AS
+(
+    index                     SMALLINT,
+    amount                    BIGINT,
+    script_public_key         BYTEA,
+    script_public_key_address VARCHAR
+);
+
+-- Migrate transactions_inputs and transactions_outputs to transactions
 CREATE TABLE transactions
 (
   transaction_id BYTEA,
@@ -43,7 +66,7 @@ LEFT JOIN LATERAL (
         )::transactions_inputs
         ORDER BY i.index
     ) AS inputs
-    FROM transactions_inputs i
+    FROM transactions_inputs_old i
     WHERE i.transaction_id = t.transaction_id
 ) i ON TRUE
 LEFT JOIN LATERAL (
@@ -56,13 +79,13 @@ LEFT JOIN LATERAL (
         )::transactions_outputs
         ORDER BY o.index
     ) AS outputs
-    FROM transactions_outputs o
+    FROM transactions_outputs_old o
     WHERE o.transaction_id = t.transaction_id
 ) o ON TRUE;
 
 DROP TABLE transactions_old;
-DROP TABLE transactions_inputs;
-DROP TABLE transactions_outputs;
+DROP TABLE transactions_inputs_old;
+DROP TABLE transactions_outputs_old;
 
 ALTER TABLE transactions ADD PRIMARY KEY (transaction_id);
 CREATE INDEX ON transactions (block_time DESC);
