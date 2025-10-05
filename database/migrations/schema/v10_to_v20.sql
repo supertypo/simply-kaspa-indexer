@@ -4,6 +4,20 @@
 -- Update schema_version
 UPDATE vars SET value = '20' WHERE key = 'schema_version';
 
+-- Add utxo import table, only relevant at initial startup - for now
+CREATE TABLE utxos
+(
+    transaction_id            BYTEA,
+    index                     SMALLINT,
+    amount                    BIGINT,
+    script_public_key         BYTEA,
+    script_public_key_address TEXT
+);
+
+-- Change unbounded VARCHARs to TEXT (SQLx always encodes String as TEXT, this avoids unneccessary coercion)
+ALTER TABLE transactions_outputs ALTER COLUMN script_public_key_address TYPE TEXT;
+ALTER TABLE addresses_transactions ALTER COLUMN address TYPE TEXT;
+
 -- Rename existing tables
 ALTER TABLE transactions RENAME TO transactions_old;
 ALTER TABLE transactions_inputs RENAME TO transactions_inputs_old;
@@ -26,7 +40,7 @@ CREATE TYPE transactions_outputs AS
     index                     SMALLINT,
     amount                    BIGINT,
     script_public_key         BYTEA,
-    script_public_key_address VARCHAR
+    script_public_key_address TEXT     --NB! SQLx always encodes String as TEXT, and Postgres type coercion doesn't work for composite arrays
 );
 
 -- Migrate transactions_inputs and transactions_outputs to transactions
