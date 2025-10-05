@@ -9,20 +9,20 @@ VALUES ('schema_version', '10');
 
 CREATE TABLE blocks
 (
-    hash                    BIT(256) PRIMARY KEY,
-    accepted_id_merkle_root BIT(256),
-    merge_set_blues_hashes  BIT(256)[],
-    merge_set_reds_hashes   BIT(256)[],
-    selected_parent_hash    BIT(256),
+    hash                    BYTEA PRIMARY KEY,
+    accepted_id_merkle_root BYTEA,
+    merge_set_blues_hashes  BYTEA[],
+    merge_set_reds_hashes   BYTEA[],
+    selected_parent_hash    BYTEA,
     bits                    BIGINT,
     blue_score              BIGINT,
     blue_work               BYTEA,
     daa_score               BIGINT,
-    hash_merkle_root        BIT(256),
+    hash_merkle_root        BYTEA,
     nonce                   BYTEA,
-    pruning_point           BIT(256),
+    pruning_point           BYTEA,
     "timestamp"             BIGINT,
-    utxo_commitment         BIT(256),
+    utxo_commitment         BYTEA,
     version                 SMALLINT
 );
 CREATE INDEX ON blocks (blue_score);
@@ -30,8 +30,8 @@ CREATE INDEX ON blocks (blue_score);
 
 CREATE TABLE block_parent
 (
-    block_hash  BIT(256),
-    parent_hash BIT(256),
+    block_hash  BYTEA,
+    parent_hash BYTEA,
     PRIMARY KEY (block_hash, parent_hash)
 );
 CREATE INDEX ON block_parent (parent_hash);
@@ -46,7 +46,7 @@ CREATE TABLE subnetworks
 
 CREATE TABLE utxos
 (
-    transaction_id            BIT(256),
+    transaction_id            BYTEA,
     index                     SMALLINT,
     amount                    BIGINT,
     script_public_key         BYTEA,
@@ -57,7 +57,7 @@ CREATE TABLE utxos
 CREATE TYPE transactions_inputs AS
 (
     index                    SMALLINT,
-    previous_outpoint_hash   BIT(256),
+    previous_outpoint_hash   BYTEA,
     previous_outpoint_index  SMALLINT,
     signature_script         BYTEA,
     sig_op_count             SMALLINT,
@@ -77,9 +77,9 @@ CREATE TYPE transactions_outputs AS
 
 CREATE TABLE transactions
 (
-    transaction_id BIT(256) PRIMARY KEY,
+    transaction_id BYTEA PRIMARY KEY,
     subnetwork_id  INTEGER,
-    hash           BIT(256),
+    hash           BYTEA,
     mass           INTEGER,
     payload        BYTEA,
     block_time     BIGINT,
@@ -92,16 +92,16 @@ CREATE INDEX ON transactions (block_time DESC);
 
 CREATE TABLE transactions_acceptances
 (
-    transaction_id BIT(256) UNIQUE,
-    block_hash     BIT(256)
+    transaction_id BYTEA UNIQUE,
+    block_hash     BYTEA
 );
 CREATE INDEX ON transactions_acceptances (block_hash);
 
 
 CREATE TABLE blocks_transactions
 (
-    block_hash     BIT(256),
-    transaction_id BIT(256),
+    block_hash     BYTEA,
+    transaction_id BYTEA,
     PRIMARY KEY (block_hash, transaction_id)
 );
 CREATE INDEX ON blocks_transactions (transaction_id);
@@ -110,7 +110,7 @@ CREATE INDEX ON blocks_transactions (transaction_id);
 CREATE TABLE addresses_transactions
 (
     address        VARCHAR,
-    transaction_id BIT(256),
+    transaction_id BYTEA,
     block_time     BIGINT,
     PRIMARY KEY (address, transaction_id)
 );
@@ -120,7 +120,7 @@ CREATE INDEX ON addresses_transactions (address, block_time DESC);
 CREATE TABLE scripts_transactions
 (
     script_public_key BYTEA,
-    transaction_id    BIT(256),
+    transaction_id    BYTEA,
     block_time        BIGINT,
     PRIMARY KEY (script_public_key, transaction_id)
 );

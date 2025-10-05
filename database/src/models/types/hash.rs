@@ -35,19 +35,18 @@ impl From<Hash> for KaspaHash {
 
 impl Type<Postgres> for Hash {
     fn type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("BIT")
+        PgTypeInfo::with_name("BYTEA")
     }
 }
 
 impl PgHasArrayType for Hash {
     fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("_BIT")
+        PgTypeInfo::with_name("_BYTEA")
     }
 }
 
 impl Encode<'_, Postgres> for Hash {
     fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        buf.extend_from_slice(&256u32.to_be_bytes());
         buf.extend_from_slice(&self.0.as_bytes());
         Ok(IsNull::No)
     }
@@ -56,7 +55,7 @@ impl Encode<'_, Postgres> for Hash {
 impl<'r> Decode<'r, Postgres> for Hash {
     fn decode(value: PgValueRef<'r>) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let bytes = value.as_bytes()?;
-        let kaspa_hash = KaspaHash::from_slice(&bytes[4..]);
+        let kaspa_hash = KaspaHash::from_slice(bytes);
         Ok(Hash(kaspa_hash))
     }
 }
