@@ -3,7 +3,8 @@ use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
 use crate::web::model::metrics::Metrics;
 use crossbeam_queue::ArrayQueue;
-use futures_util::{stream, StreamExt};
+use futures_util::{StreamExt, stream};
+use indexmap::IndexSet;
 use kaspa_hashes::Hash as KaspaHash;
 use log::{debug, info, trace, warn};
 use moka::sync::Cache;
@@ -57,8 +58,8 @@ pub async fn process_transactions(
     let mut block_tx = vec![];
     let mut tx_inputs = vec![];
     let mut tx_outputs = vec![];
-    let mut tx_address_transactions = vec![];
-    let mut tx_script_transactions = vec![];
+    let mut tx_address_transactions: IndexSet<_> = IndexSet::new();
+    let mut tx_script_transactions: IndexSet<_> = IndexSet::new();
     let mut checkpoint_blocks = vec![];
     let mut last_commit_time = Instant::now();
 
@@ -142,9 +143,17 @@ pub async fn process_transactions(
                 };
                 let tx_output_addr_handle = if !disable_address_transactions {
                     if !exclude_tx_out_script_public_key_address {
-                        task::spawn(insert_output_tx_addr(batch_scale, tx_address_transactions, database.clone()))
+                        task::spawn(insert_output_tx_addr(
+                            batch_scale,
+                            tx_address_transactions.into_iter().collect(),
+                            database.clone(),
+                        ))
                     } else if !exclude_tx_out_script_public_key {
-                        task::spawn(insert_output_tx_script(batch_scale, tx_script_transactions, database.clone()))
+                        task::spawn(insert_output_tx_script(
+                            batch_scale,
+                            tx_script_transactions.into_iter().collect(),
+                            database.clone(),
+                        ))
                     } else {
                         task::spawn(async { 0 })
                     }
@@ -224,8 +233,8 @@ pub async fn process_transactions(
                 block_tx = vec![];
                 tx_inputs = vec![];
                 tx_outputs = vec![];
-                tx_address_transactions = vec![];
-                tx_script_transactions = vec![];
+                tx_address_transactions = IndexSet::new();
+                tx_script_transactions = IndexSet::new();
                 checkpoint_blocks = vec![];
                 last_commit_time = Instant::now();
             }
