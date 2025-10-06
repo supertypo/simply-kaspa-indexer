@@ -1,4 +1,4 @@
-use futures_util::StreamExt;
+use futures_util::{StreamExt, stream};
 use kaspa_rpc_core::RpcAcceptedTransactionIds;
 use log::{debug, trace};
 use simply_kaspa_database::client::KaspaDbClient;
@@ -18,20 +18,15 @@ pub async fn accept_transactions(
         trace!("Accepted transaction ids: \n{:#?}", accepted_transaction_ids);
     }
     let mut accepted_transactions = vec![];
-    let mut batches = vec![];
     for accepted_id in accepted_transaction_ids {
         accepted_transactions.extend(accepted_id.accepted_transaction_ids.iter().map(|t| TransactionAcceptance {
             transaction_id: Some(t.to_owned().into()),
             block_hash: Some(accepted_id.accepting_block_hash.into()),
         }));
-        if accepted_transactions.len() >= batch_size {
-            batches.push(std::mem::take(&mut accepted_transactions));
-        }
     }
-    if !accepted_transactions.is_empty() {
-        batches.push(accepted_transactions);
-    }
-    let rows_added = futures_util::stream::iter(batches.into_iter().map(|batch| {
+    accepted_transactions.sort_by(|a, b| a.transaction_id.cmp(&b.transaction_id));
+    let batches: Vec<_> = accepted_transactions.chunks(batch_size).map(|c| c.to_vec()).collect();
+    let rows_added = stream::iter(batches.into_iter().map(|batch| {
         let db = database.clone();
         async move { db.insert_transaction_acceptances(&batch).await.unwrap_or_else(|e| panic!("Insert acceptances FAILED: {e}")) }
     }))
