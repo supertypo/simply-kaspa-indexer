@@ -137,11 +137,6 @@ pub async fn process_transactions(
                 } else {
                     task::spawn(async { 0 })
                 };
-                let blocks_txs_handle = if !disable_blocks_transactions {
-                    task::spawn(insert_block_txs(batch_scale, batch_concurrency, block_tx, database.clone()))
-                } else {
-                    task::spawn(async { 0 })
-                };
                 let tx_output_addr_handle = if !disable_address_transactions {
                     if !exclude_tx_out_script_public_key_address {
                         task::spawn(insert_output_tx_addr(
@@ -198,9 +193,13 @@ pub async fn process_transactions(
                 let rows_affected_tx = tx_handle.await.unwrap();
                 let rows_affected_tx_inputs = tx_inputs_handle.await.unwrap();
                 let rows_affected_tx_outputs = tx_outputs_handle.await.unwrap();
-                let rows_affected_block_tx = blocks_txs_handle.await.unwrap();
                 let mut rows_affected_tx_addresses = tx_output_addr_handle.await.unwrap();
 
+                let blocks_txs_handle = if !disable_blocks_transactions {
+                    task::spawn(insert_block_txs(batch_scale, batch_concurrency, block_tx, database.clone()))
+                } else {
+                    task::spawn(async { 0 })
+                };
                 // ^Input address resolving can only happen after inputs + outputs are committed
                 if !disable_address_transactions {
                     let use_tx_for_time = settings.cli_args.is_excluded(CliField::TxInBlockTime);
@@ -212,6 +211,8 @@ pub async fn process_transactions(
                         0
                     };
                 }
+                let rows_affected_block_tx = blocks_txs_handle.await.unwrap();
+
                 let last_checkpoint = checkpoint_blocks.last().unwrap().clone();
                 let last_block_time = last_checkpoint.timestamp;
 
