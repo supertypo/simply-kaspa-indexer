@@ -3,6 +3,7 @@ use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
 use crate::web::model::metrics::Metrics;
 use crossbeam_queue::ArrayQueue;
+use futures_util::{stream, StreamExt};
 use kaspa_hashes::Hash as KaspaHash;
 use log::{debug, info, trace, warn};
 use moka::sync::Cache;
@@ -235,15 +236,20 @@ pub async fn process_transactions(
 }
 
 async fn insert_txs(batch_scale: f64, values: Vec<Transaction>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((250f64 * batch_scale) as u16, 8000) as usize; // 2^16 / fields
+    let concurrency = 2usize;
+    let batch_size = min((250f64 * batch_scale) as u16, 8000) as usize;
     let key = "transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
-    let mut rows_affected = 0;
-    for batch_values in values.chunks(batch_size) {
-        rows_affected += database.insert_transactions(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
-    }
-    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
+    let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
+        let db = database.clone();
+        async move { db.insert_transactions(&chunk).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}")) }
+    }))
+    .buffer_unordered(concurrency)
+    .fold(0, |acc, rows| async move { acc + rows })
+    .await;
+    debug!("Committed {} {} in {}ms", rows_affected, key, start_time.elapsed().as_millis());
     rows_affected
 }
 
@@ -253,37 +259,47 @@ async fn insert_tx_inputs(
     values: Vec<TransactionInput>,
     database: KaspaDbClient,
 ) -> u64 {
-    let batch_size = min((250f64 * batch_scale) as u16, 8000) as usize; // 2^16 / fields
+    let concurrency = 2usize;
+    let batch_size = min((250f64 * batch_scale) as u16, 8000) as usize;
     let key = "transaction_inputs";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
-    let mut rows_affected = 0;
-    for batch_values in values.chunks(batch_size) {
-        rows_affected += database
-            .insert_transaction_inputs(resolve_previous_outpoints, batch_values)
-            .await
-            .unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
-    }
-    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
+    let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
+        let db = database.clone();
+        async move {
+            db.insert_transaction_inputs(resolve_previous_outpoints, &chunk)
+                .await
+                .unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"))
+        }
+    }))
+    .buffer_unordered(concurrency)
+    .fold(0, |acc, rows| async move { acc + rows })
+    .await;
+    debug!("Committed {} {} in {}ms", rows_affected, key, start_time.elapsed().as_millis());
     rows_affected
 }
 
 async fn insert_tx_outputs(batch_scale: f64, values: Vec<TransactionOutput>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((250f64 * batch_scale) as u16, 10000) as usize; // 2^16 / fields
+    let concurrency = 2usize;
+    let batch_size = min((250f64 * batch_scale) as u16, 10000) as usize;
     let key = "transactions_outputs";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
-    let mut rows_affected = 0;
-    for batch_values in values.chunks(batch_size) {
-        rows_affected +=
-            database.insert_transaction_outputs(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
-    }
-    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
+    let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
+        let db = database.clone();
+        async move { db.insert_transaction_outputs(&chunk).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}")) }
+    }))
+    .buffer_unordered(concurrency)
+    .fold(0, |acc, rows| async move { acc + rows })
+    .await;
+    debug!("Committed {} {} in {}ms", rows_affected, key, start_time.elapsed().as_millis());
     rows_affected
 }
 
 async fn insert_input_tx_addr(batch_scale: f64, use_tx: bool, values: Vec<SqlHash>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((100f64 * batch_scale) as u16, 8000) as usize;
+    let batch_size = min((250f64 * batch_scale) as u16, 8000) as usize;
     let key = "input addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} transactions for {}", values.len(), key);
@@ -299,7 +315,7 @@ async fn insert_input_tx_addr(batch_scale: f64, use_tx: bool, values: Vec<SqlHas
 }
 
 async fn insert_input_tx_script(batch_scale: f64, use_tx: bool, values: Vec<SqlHash>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((100f64 * batch_scale) as u16, 8000) as usize;
+    let batch_size = min((250f64 * batch_scale) as u16, 8000) as usize;
     let key = "input scripts_transactions";
     let start_time = Instant::now();
     debug!("Processing {} transactions for {}", values.len(), key);
@@ -315,42 +331,55 @@ async fn insert_input_tx_script(batch_scale: f64, use_tx: bool, values: Vec<SqlH
 }
 
 async fn insert_output_tx_addr(batch_scale: f64, values: Vec<AddressTransaction>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((250f64 * batch_scale) as u16, 20000) as usize; // 2^16 / fields
+    let concurrency = 2usize;
+    let batch_size = min((250f64 * batch_scale) as u16, 20000) as usize;
     let key = "output addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
-    let mut rows_affected = 0;
-    for batch_values in values.chunks(batch_size) {
-        rows_affected +=
-            database.insert_address_transactions(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
-    }
-    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
+    let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
+        let db = database.clone();
+        async move { db.insert_address_transactions(&chunk).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}")) }
+    }))
+    .buffer_unordered(concurrency)
+    .fold(0, |acc, rows| async move { acc + rows })
+    .await;
+    debug!("Committed {} {} in {}ms", rows_affected, key, start_time.elapsed().as_millis());
     rows_affected
 }
 
 async fn insert_output_tx_script(batch_scale: f64, values: Vec<ScriptTransaction>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((250f64 * batch_scale) as u16, 20000) as usize; // 2^16 / fields
+    let concurrency = 2usize;
+    let batch_size = min((250f64 * batch_scale) as u16, 20000) as usize;
     let key = "output scripts_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
-    let mut rows_affected = 0;
-    for batch_values in values.chunks(batch_size) {
-        rows_affected +=
-            database.insert_script_transactions(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
-    }
-    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
+    let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
+        let db = database.clone();
+        async move { db.insert_script_transactions(&chunk).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}")) }
+    }))
+    .buffer_unordered(concurrency)
+    .fold(0, |acc, rows| async move { acc + rows })
+    .await;
+    debug!("Committed {} {} in {}ms", rows_affected, key, start_time.elapsed().as_millis());
     rows_affected
 }
 
 async fn insert_block_txs(batch_scale: f64, values: Vec<BlockTransaction>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((500f64 * batch_scale) as u16, 30000) as usize; // 2^16 / fields
+    let concurrency = 2usize;
+    let batch_size = min((500f64 * batch_scale) as u16, 30000) as usize;
     let key = "block/transaction mappings";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
-    let mut rows_affected = 0;
-    for batch_values in values.chunks(batch_size) {
-        rows_affected += database.insert_block_transactions(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
-    }
-    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
+    let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
+        let db = database.clone();
+        async move { db.insert_block_transactions(&chunk).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}")) }
+    }))
+    .buffer_unordered(concurrency)
+    .fold(0, |acc, rows| async move { acc + rows })
+    .await;
+    debug!("Committed {} {} in {}ms", rows_affected, key, start_time.elapsed().as_millis());
     rows_affected
 }

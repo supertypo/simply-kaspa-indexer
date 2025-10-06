@@ -1,5 +1,6 @@
 use crate::models::types::hash::Hash;
 
+#[derive(Clone)]
 pub struct TransactionOutput {
     pub transaction_id: Hash,
     pub index: i16,

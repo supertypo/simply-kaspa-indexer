@@ -29,7 +29,7 @@ impl KaspaDbClient {
     const SCHEMA_VERSION: u8 = 10;
 
     pub async fn new(url: &str) -> Result<KaspaDbClient, Error> {
-        Self::new_with_args(url, 10).await
+        Self::new_with_args(url, 20).await
     }
 
     pub async fn new_with_args(url: &str, pool_size: u32) -> Result<KaspaDbClient, Error> {
