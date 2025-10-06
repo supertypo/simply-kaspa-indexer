@@ -43,6 +43,7 @@ pub async fn process_transactions(
     let tx_id_cache: Cache<KaspaHash, ()> = Cache::builder().time_to_live(Duration::from_secs(ttl)).max_capacity(cache_size).build();
 
     let batch_scale = settings.cli_args.batch_scale;
+    let batch_concurrency = settings.cli_args.batch_concurrency;
     let batch_size = (5000f64 * batch_scale) as usize;
 
     let enable_transactions_inputs_resolve = settings.cli_args.is_enabled(CliEnable::TransactionsInputsResolve);
@@ -132,12 +133,12 @@ pub async fn process_transactions(
                 let transaction_ids: Vec<SqlHash> = transactions.iter().map(|t| t.transaction_id.clone()).collect();
 
                 let tx_handle = if !disable_transactions {
-                    task::spawn(insert_txs(batch_scale, transactions, database.clone()))
+                    task::spawn(insert_txs(batch_scale, batch_concurrency, transactions, database.clone()))
                 } else {
                     task::spawn(async { 0 })
                 };
                 let blocks_txs_handle = if !disable_blocks_transactions {
-                    task::spawn(insert_block_txs(batch_scale, block_tx, database.clone()))
+                    task::spawn(insert_block_txs(batch_scale, batch_concurrency, block_tx, database.clone()))
                 } else {
                     task::spawn(async { 0 })
                 };
@@ -145,12 +146,14 @@ pub async fn process_transactions(
                     if !exclude_tx_out_script_public_key_address {
                         task::spawn(insert_output_tx_addr(
                             batch_scale,
+                            batch_concurrency,
                             tx_address_transactions.into_iter().collect(),
                             database.clone(),
                         ))
                     } else if !exclude_tx_out_script_public_key {
                         task::spawn(insert_output_tx_script(
                             batch_scale,
+                            batch_concurrency,
                             tx_script_transactions.into_iter().collect(),
                             database.clone(),
                         ))
@@ -177,12 +180,18 @@ pub async fn process_transactions(
                             trace!("Pre-resolved {previous_from_outputs_count} tx_inputs from tx_outputs");
                         }
                     }
-                    task::spawn(insert_tx_inputs(batch_scale, enable_transactions_inputs_resolve, tx_inputs, database.clone()))
+                    task::spawn(insert_tx_inputs(
+                        batch_scale,
+                        batch_concurrency,
+                        enable_transactions_inputs_resolve,
+                        tx_inputs,
+                        database.clone(),
+                    ))
                 } else {
                     task::spawn(async { 0 })
                 };
                 let tx_outputs_handle = if !disable_transactions_outputs {
-                    task::spawn(insert_tx_outputs(batch_scale, tx_outputs, database.clone()))
+                    task::spawn(insert_tx_outputs(batch_scale, batch_concurrency, tx_outputs, database.clone()))
                 } else {
                     task::spawn(async { 0 })
                 };
@@ -244,9 +253,9 @@ pub async fn process_transactions(
     }
 }
 
-async fn insert_txs(batch_scale: f64, values: Vec<Transaction>, database: KaspaDbClient) -> u64 {
-    let concurrency = 2usize;
+async fn insert_txs(batch_scale: f64, batch_concurrency: i8, values: Vec<Transaction>, database: KaspaDbClient) -> u64 {
     let batch_size = min((250f64 * batch_scale) as u16, 8000) as usize;
+    let concurrency = batch_concurrency as usize;
     let key = "transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
@@ -266,12 +275,13 @@ async fn insert_txs(batch_scale: f64, values: Vec<Transaction>, database: KaspaD
 
 async fn insert_tx_inputs(
     batch_scale: f64,
+    batch_concurrency: i8,
     resolve_previous_outpoints: bool,
     values: Vec<TransactionInput>,
     database: KaspaDbClient,
 ) -> u64 {
-    let concurrency = 2usize;
     let batch_size = min((250f64 * batch_scale) as u16, 8000) as usize;
+    let concurrency = batch_concurrency as usize;
     let key = "transaction_inputs";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
@@ -293,9 +303,9 @@ async fn insert_tx_inputs(
     rows_affected
 }
 
-async fn insert_tx_outputs(batch_scale: f64, values: Vec<TransactionOutput>, database: KaspaDbClient) -> u64 {
-    let concurrency = 2usize;
+async fn insert_tx_outputs(batch_scale: f64, batch_concurrency: i8, values: Vec<TransactionOutput>, database: KaspaDbClient) -> u64 {
     let batch_size = min((250f64 * batch_scale) as u16, 10000) as usize;
+    let concurrency = batch_concurrency as usize;
     let key = "transactions_outputs";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
@@ -345,9 +355,14 @@ async fn insert_input_tx_script(batch_scale: f64, use_tx: bool, values: Vec<SqlH
     rows_affected
 }
 
-async fn insert_output_tx_addr(batch_scale: f64, values: Vec<AddressTransaction>, database: KaspaDbClient) -> u64 {
-    let concurrency = 2usize;
+async fn insert_output_tx_addr(
+    batch_scale: f64,
+    batch_concurrency: i8,
+    values: Vec<AddressTransaction>,
+    database: KaspaDbClient,
+) -> u64 {
     let batch_size = min((250f64 * batch_scale) as u16, 20000) as usize;
+    let concurrency = batch_concurrency as usize;
     let key = "output addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
@@ -365,9 +380,14 @@ async fn insert_output_tx_addr(batch_scale: f64, values: Vec<AddressTransaction>
     rows_affected
 }
 
-async fn insert_output_tx_script(batch_scale: f64, values: Vec<ScriptTransaction>, database: KaspaDbClient) -> u64 {
-    let concurrency = 2usize;
+async fn insert_output_tx_script(
+    batch_scale: f64,
+    batch_concurrency: i8,
+    values: Vec<ScriptTransaction>,
+    database: KaspaDbClient,
+) -> u64 {
     let batch_size = min((250f64 * batch_scale) as u16, 20000) as usize;
+    let concurrency = batch_concurrency as usize;
     let key = "output scripts_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
@@ -385,9 +405,9 @@ async fn insert_output_tx_script(batch_scale: f64, values: Vec<ScriptTransaction
     rows_affected
 }
 
-async fn insert_block_txs(batch_scale: f64, values: Vec<BlockTransaction>, database: KaspaDbClient) -> u64 {
-    let concurrency = 2usize;
+async fn insert_block_txs(batch_scale: f64, batch_concurrency: i8, values: Vec<BlockTransaction>, database: KaspaDbClient) -> u64 {
     let batch_size = min((500f64 * batch_scale) as u16, 30000) as usize;
+    let concurrency = batch_concurrency as usize;
     let key = "block/transaction mappings";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);

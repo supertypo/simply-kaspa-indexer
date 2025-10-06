@@ -110,6 +110,8 @@ pub struct CliArgs {
     pub log_no_color: bool,
     #[clap(short, long, default_value = "1.0", help = "Batch size factor [0.1-10]. Adjusts internal queues and database batch sizes")]
     pub batch_scale: f64,
+    #[clap(long, default_value = "2", help = "Batch concurrency factor [1-10]. Per table batch concurrency")]
+    pub batch_concurrency: i8,
     #[clap(short = 't', long, default_value = "60", help = "Cache ttl (secs). Adjusts tx/block caches for in-memory de-duplication")]
     pub cache_ttl: u64,
     #[clap(long, default_value = "1000", value_parser = clap::value_parser!(u64).range(100..=10000), help = "Poll interval for blocks (ms)")]

@@ -7,11 +7,12 @@ use std::cmp::min;
 
 pub async fn accept_transactions(
     batch_scale: f64,
+    batch_concurrency: i8,
     accepted_transaction_ids: &[RpcAcceptedTransactionIds],
     database: &KaspaDbClient,
 ) -> u64 {
-    let concurrency = 3usize;
     let batch_size = min((1000f64 * batch_scale) as usize, 7500);
+    let concurrency = 1 + batch_concurrency as usize;
     if log::log_enabled!(log::Level::Debug) {
         let accepted_count = accepted_transaction_ids.iter().map(|t| t.accepted_transaction_ids.len()).sum::<usize>();
         debug!("Received {} accepted transactions", accepted_count);

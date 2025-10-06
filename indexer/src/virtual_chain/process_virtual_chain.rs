@@ -30,6 +30,7 @@ pub async fn process_virtual_chain(
     database: KaspaDbClient,
 ) {
     let batch_scale = settings.cli_args.batch_scale;
+    let batch_concurrency = settings.cli_args.batch_concurrency;
     let disable_transaction_acceptance = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
 
     let poll_interval = Duration::from_millis(settings.cli_args.vcp_interval);
@@ -87,7 +88,8 @@ pub async fn process_virtual_chain(
                             let rows_removed = remove_chain_blocks(batch_scale, removed_chain_block_hashes, &database).await;
                             if !disable_transaction_acceptance {
                                 let accepted_transaction_ids = &res.accepted_transaction_ids[..added_blocks_count - tip_distance];
-                                let rows_added = accept_transactions(batch_scale, accepted_transaction_ids, &database).await;
+                                let rows_added =
+                                    accept_transactions(batch_scale, batch_concurrency, accepted_transaction_ids, &database).await;
                                 info!(
                                     "Committed {} accepted and {} rejected transactions in {}ms. Last accepted: {}",
                                     rows_added,
