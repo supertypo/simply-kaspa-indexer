@@ -250,6 +250,8 @@ async fn insert_txs(batch_scale: f64, values: Vec<Transaction>, database: KaspaD
     let key = "transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
+    let mut values = values;
+    values.sort_by(|a, b| a.transaction_id.cmp(&b.transaction_id));
     let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
     let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
         let db = database.clone();
@@ -273,6 +275,8 @@ async fn insert_tx_inputs(
     let key = "transaction_inputs";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
+    let mut values = values;
+    values.sort_by(|a, b| a.transaction_id.cmp(&b.transaction_id).then(a.index.cmp(&b.index)));
     let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
     let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
         let db = database.clone();
@@ -295,6 +299,8 @@ async fn insert_tx_outputs(batch_scale: f64, values: Vec<TransactionOutput>, dat
     let key = "transactions_outputs";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
+    let mut values = values;
+    values.sort_by(|a, b| a.transaction_id.cmp(&b.transaction_id).then(a.index.cmp(&b.index)));
     let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
     let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
         let db = database.clone();
@@ -345,6 +351,8 @@ async fn insert_output_tx_addr(batch_scale: f64, values: Vec<AddressTransaction>
     let key = "output addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
+    let mut values = values;
+    values.sort_by(|a, b| a.address.cmp(&b.address).then(a.transaction_id.cmp(&b.transaction_id)));
     let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
     let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
         let db = database.clone();
@@ -363,6 +371,8 @@ async fn insert_output_tx_script(batch_scale: f64, values: Vec<ScriptTransaction
     let key = "output scripts_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
+    let mut values = values;
+    values.sort_by(|a, b| a.script_public_key.cmp(&b.script_public_key).then(a.transaction_id.cmp(&b.transaction_id)));
     let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
     let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
         let db = database.clone();
@@ -381,6 +391,8 @@ async fn insert_block_txs(batch_scale: f64, values: Vec<BlockTransaction>, datab
     let key = "block/transaction mappings";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
+    let mut values = values;
+    values.sort_by(|a, b| a.block_hash.cmp(&b.block_hash).then(a.transaction_id.cmp(&b.transaction_id)));
     let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
     let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
         let db = database.clone();

@@ -3,6 +3,7 @@ use sqlx;
 use sqlx::encode::IsNull;
 use sqlx::postgres::{PgArgumentBuffer, PgHasArrayType, PgTypeInfo, PgValueRef};
 use sqlx::{Decode, Encode, Postgres, Type};
+use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
 /// Wrapper type for kaspa_hashes::Hash implementing the SQLX Encode & Decode traits
@@ -30,6 +31,18 @@ impl From<KaspaHash> for Hash {
 impl From<Hash> for KaspaHash {
     fn from(sql_hash: Hash) -> Self {
         sql_hash.0
+    }
+}
+
+impl Ord for Hash {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_bytes().cmp(&other.as_bytes())
+    }
+}
+
+impl PartialOrd for Hash {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
