@@ -10,5 +10,4 @@ pub struct Settings {
     pub net_tps_max: u16,
     #[schema(value_type = String)]
     pub checkpoint: KaspaHash,
-    pub disable_vcp_wait_for_sync: bool,
 }

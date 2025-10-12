@@ -42,8 +42,6 @@ pub enum CliDisable {
     AddressesTransactionsTable,
     /// Disables initial utxo set import
     InitialUtxoImport,
-    /// Start VCP as soon as the filler has passed the previous run. Use with care
-    VcpWaitForSync,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]

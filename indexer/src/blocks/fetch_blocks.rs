@@ -22,7 +22,6 @@ use tokio::time::sleep;
 #[derive(Debug)]
 pub struct BlockData {
     pub block: RpcBlock,
-    pub synced: bool,
 }
 
 #[derive(Debug)]
@@ -176,10 +175,8 @@ impl KaspaBlocksFetcher {
                 block_daa_score: b.header.daa_score,
                 block_blue_score: b.header.blue_score,
             };
-            let mut block_data = BlockData {
-                block: RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data },
-                synced: self.synced,
-            };
+            let mut block_data =
+                BlockData { block: RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data } };
             while !self.signal_handler.is_shutdown() {
                 match self.blocks_queue.push(block_data) {
                     Ok(_) => break,

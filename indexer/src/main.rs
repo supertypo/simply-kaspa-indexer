@@ -135,8 +135,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         Err(_) => None,
     };
 
-    let disable_vcp_wait_for_sync = cli_args.is_disabled(CliDisable::VcpWaitForSync) || utxo_set_import;
-
     let queue_capacity = (cli_args.batch_scale * 1000f64) as usize;
     let blocks_queue = Arc::new(ArrayQueue::new(queue_capacity));
     let txs_queue = Arc::new(ArrayQueue::new(queue_capacity));
@@ -144,7 +142,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
 
     let mapper = KaspaDbMapper::new(cli_args.clone());
 
-    let settings = Settings { cli_args: cli_args.clone(), net_bps, net_tps_max, checkpoint, disable_vcp_wait_for_sync };
+    let settings = Settings { cli_args: cli_args.clone(), net_bps, net_tps_max, checkpoint };
     let start_vcp = Arc::new(AtomicBool::new(false));
 
     let mut metrics = Metrics::new(env!("CARGO_PKG_NAME").to_string(), cli_args.version(), cli_args.commit_id());
