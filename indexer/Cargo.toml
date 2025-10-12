@@ -50,3 +50,4 @@ humantime-serde.workspace = true
 url.workspace = true
 rand.workspace = true
 uuid = { version = "1.12.1", features = ["v4"] }
+indexmap.workspace = true

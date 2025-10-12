@@ -3,6 +3,7 @@ use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
 use crate::models::types::payload::Payload;
 
+#[derive(Clone)]
 pub struct Transaction {
     pub transaction_id: Hash,
     pub subnetwork_id: Option<i32>,

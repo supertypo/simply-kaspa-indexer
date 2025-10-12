@@ -45,13 +45,17 @@ async fn main() {
     if cli_args.batch_scale < 0.1 || cli_args.batch_scale > 10.0 {
         panic!("Invalid batch-scale");
     }
+    if cli_args.batch_concurrency < 1 || cli_args.batch_concurrency > 10 {
+        panic!("Invalid batch-concurrency");
+    }
     info!("{} {}", env!("CARGO_PKG_NAME"), cli_args.version());
 
     let network_id = NetworkId::from_str(&cli_args.network).unwrap();
     let kaspad_manager = KaspadManager { network_id, rpc_url: cli_args.rpc_url.clone() };
     let kaspad_pool: Pool<KaspadManager> = Pool::builder(kaspad_manager).max_size(10).build().unwrap();
 
-    let database = KaspaDbClient::new(&cli_args.database_url).await.expect("Database connection FAILED");
+    let pool_size = cli_args.batch_concurrency as u32 * 10;
+    let database = KaspaDbClient::new(&cli_args.database_url, pool_size).await.expect("Database connection FAILED");
 
     if cli_args.initialize_db {
         info!("Initializing database");

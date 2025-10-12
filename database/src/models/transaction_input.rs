@@ -1,7 +1,7 @@
 use crate::models::types::hash::Hash;
 use sqlx::Type;
 
-#[derive(Type)]
+#[derive(Type, Clone)]
 #[sqlx(type_name = "transactions_inputs")]
 pub struct TransactionInput {
     pub index: i16,
