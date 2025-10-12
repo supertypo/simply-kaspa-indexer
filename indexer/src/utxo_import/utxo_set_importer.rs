@@ -113,7 +113,7 @@ impl UtxoSetImporter {
                                 adaptor.terminate_all_peers().await;
                                 info!("Finalizing import, merging staging UTXO set to transactions...");
                                 let transactions_committed = self.database.insert_utxos_to_transactions().await.unwrap();
-                                info!("Staging UTXO set successfully merged as {transactions_committed} transactions");
+                                info!("Staging UTXO set successfully merged as {transactions_committed} transactions!");
                                 self.database.truncate_utxos().await.unwrap();
                                 let mut metrics = self.metrics.write().await;
                                 metrics.components.utxo_importer.transactions_committed = Some(transactions_committed);
@@ -192,7 +192,7 @@ impl UtxoSetImporter {
                         }
                         Some(Payload::DonePruningPointUtxoSetChunks(_)) => {
                             self.print_progress(utxo_chunk_count, utxos_committed_count);
-                            info!("Pruning point UTXO set staging import completed successfully!");
+                            info!("Pruning point UTXO set staging import completed");
                             let mut metrics = self.metrics.write().await;
                             metrics.components.utxo_importer.utxos_imported = Some(total_utxos_count);
                             metrics.components.utxo_importer.utxos_committed = Some(utxos_committed_count);

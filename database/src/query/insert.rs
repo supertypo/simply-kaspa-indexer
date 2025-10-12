@@ -38,19 +38,28 @@ pub async fn insert_utxos(utxos: &[Utxo], pool: &Pool<Postgres>) -> Result<u64, 
 }
 
 pub async fn insert_utxos_to_transactions(pool: &Pool<Postgres>) -> Result<u64, Error> {
+    let mut tx = pool.begin().await?;
     let sql = "
-        WITH ins AS (
-            INSERT INTO transactions (transaction_id, outputs)
-            SELECT transaction_id,
-                array_agg(ROW(index, amount, script_public_key, script_public_key_address)::transactions_outputs)
-            FROM utxos GROUP BY transaction_id
-            ON CONFLICT DO NOTHING
-            RETURNING transaction_id
-        )
-        INSERT INTO transactions_acceptances (transaction_id)
-        SELECT transaction_id FROM ins
-        ON CONFLICT DO NOTHING";
-    Ok(sqlx::query(sql).execute(pool).await?.rows_affected())
+        CREATE TEMP TABLE transactions_tmp ON COMMIT DROP AS
+        SELECT
+            transaction_id,
+            array_agg(ROW(index, amount, script_public_key, script_public_key_address)::transactions_outputs) AS outputs
+        FROM utxos
+        GROUP BY transaction_id;
+    ";
+    tx.execute(sqlx::query(sql)).await?;
+
+    let sql = "INSERT INTO transactions (transaction_id, outputs) SELECT transaction_id, outputs FROM transactions_tmp";
+    let rows_affected_txs = tx.execute(sqlx::query(sql)).await?.rows_affected();
+
+    let sql = "INSERT INTO transactions_acceptances (transaction_id) SELECT transaction_id FROM transactions_tmp";
+    let rows_affected_tas = tx.execute(sqlx::query(sql)).await?.rows_affected();
+
+    if rows_affected_txs != rows_affected_tas {
+        panic!("Mismatched number of rows while committing utxos to transactions");
+    }
+    tx.commit().await?;
+    Ok(rows_affected_txs)
 }
 
 pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u64, Error> {
