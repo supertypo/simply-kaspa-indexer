@@ -34,10 +34,10 @@ pub enum CliDisable {
     BlocksTransactionsTable,
     /// Disables the transactions table
     TransactionsTable,
-    /// Disables the transactions_inputs table
-    TransactionsInputsTable,
-    /// Disables the transactions_outputs table
-    TransactionsOutputsTable,
+    /// Disables transactions inputs (array column)
+    TransactionsInputs,
+    /// Disables transactions outputs (array column)
+    TransactionsOutputs,
     /// Disables the addresses_transactions (or scripts_transactions) table
     AddressesTransactionsTable,
     /// Disables initial utxo set import
