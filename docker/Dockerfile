@@ -1,7 +1,7 @@
 ##
 # builder image
 ##
-FROM rust:1.83-alpine AS builder
+FROM rust:1.90-alpine AS builder
 
 ARG REPO_DIR=.
 
@@ -27,13 +27,15 @@ COPY "$REPO_DIR"/cli/Cargo.toml ./cli/
 COPY "$REPO_DIR"/kaspad/Cargo.toml ./kaspad/
 COPY "$REPO_DIR"/database/Cargo.toml ./database/
 COPY "$REPO_DIR"/mapping/Cargo.toml ./mapping/
+COPY "$REPO_DIR"/signal/Cargo.toml ./signal/
 COPY "$REPO_DIR"/indexer/Cargo.toml ./indexer/
-RUN mkdir cli/src kaspad/src database/src mapping/src indexer/src && \
+RUN mkdir cli/src kaspad/src database/src mapping/src signal/src indexer/src && \
     echo "fn main() {}" > cli/build.rs && \
     echo "pub fn placeholder() {}" > cli/src/lib.rs && \
     echo "pub fn placeholder() {}" > kaspad/src/lib.rs && \
     echo "pub fn placeholder() {}" > database/src/lib.rs && \
     echo "pub fn placeholder() {}" > mapping/src/lib.rs && \
+    echo "pub fn placeholder() {}" > signal/src/lib.rs && \
     echo "pub fn placeholder() {}" > indexer/src/lib.rs && \
     echo "fn main() {}" > indexer/src/main.rs && \
     cargo build --release

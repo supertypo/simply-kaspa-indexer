@@ -157,7 +157,6 @@ impl MetricsComponent {
 #[serde(rename_all = "camelCase")]
 pub struct MetricsComponentUtxoSetImporter {
     pub enabled: bool,
-    pub attempts: Option<u32>,
     pub completed: Option<bool>,
     pub utxos_imported: Option<u64>,
     pub acceptances_committed: Option<u64>,
@@ -172,14 +171,7 @@ impl Default for MetricsComponentUtxoSetImporter {
 
 impl MetricsComponentUtxoSetImporter {
     pub fn new() -> Self {
-        Self {
-            enabled: false,
-            attempts: None,
-            completed: None,
-            utxos_imported: None,
-            acceptances_committed: None,
-            outputs_committed: None,
-        }
+        Self { enabled: false, completed: None, utxos_imported: None, acceptances_committed: None, outputs_committed: None }
     }
 }
 

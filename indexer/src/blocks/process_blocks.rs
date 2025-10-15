@@ -1,6 +1,6 @@
 use std::cmp::min;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::blocks::fetch_blocks::BlockData;
@@ -16,12 +16,13 @@ use simply_kaspa_database::models::block::Block;
 use simply_kaspa_database::models::block_parent::BlockParent;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
 pub async fn process_blocks(
     settings: Settings,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     start_vcp: Arc<AtomicBool>,
     rpc_blocks_queue: Arc<ArrayQueue<BlockData>>,
@@ -44,7 +45,7 @@ pub async fn process_blocks(
     let mut last_commit_time = Instant::now();
     let mut noop_delete_count = 0;
 
-    while run.load(Ordering::Relaxed) {
+    while !signal_handler.is_shutdown() {
         if let Some(block_data) = rpc_blocks_queue.pop() {
             let synced = block_data.synced;
 

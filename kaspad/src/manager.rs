@@ -1,6 +1,6 @@
 use deadpool::managed::{Manager, Metrics, RecycleError, RecycleResult};
-use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::RpcNetworkType;
+use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::client::ConnectOptions;
 use kaspa_wrpc_client::error::Error;
 use kaspa_wrpc_client::prelude::*;

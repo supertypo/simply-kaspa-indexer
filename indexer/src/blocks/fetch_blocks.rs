@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -15,7 +14,8 @@ use log::{debug, trace, warn};
 use log::{error, info};
 use moka::sync::Cache;
 use simply_kaspa_cli::cli_args::CliDisable;
-use simply_kaspa_kaspad::pool::manager::KaspadManager;
+use simply_kaspa_kaspad::manager::KaspadManager;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
@@ -36,7 +36,8 @@ pub struct TransactionData {
 
 pub struct KaspaBlocksFetcher {
     disable_transaction_processing: bool,
-    run: Arc<AtomicBool>,
+    poll_interval: Duration,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
     blocks_queue: Arc<ArrayQueue<BlockData>>,
@@ -54,7 +55,7 @@ impl KaspaBlocksFetcher {
 
     pub fn new(
         settings: Settings,
-        run: Arc<AtomicBool>,
+        signal_handler: SignalHandler,
         metrics: Arc<RwLock<Metrics>>,
         kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
         blocks_queue: Arc<ArrayQueue<BlockData>>,
@@ -66,7 +67,8 @@ impl KaspaBlocksFetcher {
             Cache::builder().time_to_live(Duration::from_secs(ttl)).max_capacity(cache_size).build();
         KaspaBlocksFetcher {
             disable_transaction_processing: settings.cli_args.is_disabled(CliDisable::TransactionProcessing),
-            run,
+            poll_interval: Duration::from_millis(settings.cli_args.block_interval),
+            signal_handler,
             metrics,
             kaspad_pool,
             blocks_queue,
@@ -81,16 +83,11 @@ impl KaspaBlocksFetcher {
     }
 
     pub async fn start(&mut self) {
-        self.run.store(true, Ordering::Relaxed);
-        self.fetch_blocks().await;
-    }
-
-    async fn fetch_blocks(&mut self) {
         let start_time = Instant::now();
 
-        while self.run.load(Ordering::Relaxed) {
+        while !self.signal_handler.is_shutdown() {
             let last_fetch_time = Instant::now();
-            debug!("Getting blocks with low_hash {}", self.low_hash.to_string());
+            debug!("Getting blocks with low_hash {}", self.low_hash);
             match self.kaspad_pool.get().await {
                 Ok(kaspad) => match kaspad.get_blocks(Some(self.low_hash), true, !self.disable_transaction_processing).await {
                     Ok(response) => {
@@ -132,11 +129,11 @@ impl KaspaBlocksFetcher {
                             txs_len as f64 / blocks_len as f64
                         );
                         if blocks_len < 50 {
-                            sleep(Duration::from_secs(2)).await;
+                            sleep(self.poll_interval).await;
                         }
                     }
                     Err(e) => {
-                        error!("Failed getting blocks with low_hash {}: {}", self.low_hash.to_string(), e);
+                        error!("Failed getting blocks with low_hash {}: {}", self.low_hash, e);
                         sleep(Duration::from_secs(5)).await;
                     }
                 },
@@ -169,7 +166,7 @@ impl KaspaBlocksFetcher {
                 self.synced = true;
             }
             if self.block_cache.contains_key(&block_hash) {
-                trace!("Ignoring known block hash {}", block_hash.to_string());
+                trace!("Ignoring known block hash {}", block_hash);
                 continue;
             }
             let mut transaction_data = TransactionData {
@@ -183,7 +180,7 @@ impl KaspaBlocksFetcher {
                 block: RpcBlock { header: b.header, transactions: vec![], verbose_data: b.verbose_data },
                 synced: self.synced,
             };
-            while self.run.load(Ordering::Relaxed) {
+            while !self.signal_handler.is_shutdown() {
                 match self.blocks_queue.push(block_data) {
                     Ok(_) => break,
                     Err(v) => {
@@ -192,7 +189,7 @@ impl KaspaBlocksFetcher {
                     }
                 }
             }
-            while self.run.load(Ordering::Relaxed) {
+            while !self.signal_handler.is_shutdown() {
                 match self.txs_queue.push(transaction_data) {
                     Ok(_) => break,
                     Err(v) => {

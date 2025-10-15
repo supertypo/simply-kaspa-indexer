@@ -10,22 +10,22 @@ use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
-use simply_kaspa_indexer::checkpoint::{process_checkpoints, CheckpointBlock, CheckpointOrigin};
+use simply_kaspa_indexer::checkpoint::{CheckpointBlock, CheckpointOrigin, process_checkpoints};
 use simply_kaspa_indexer::prune::pruner;
 use simply_kaspa_indexer::settings::Settings;
-use simply_kaspa_indexer::signal::signal_handler::notify_on_signals;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
 use simply_kaspa_indexer::utxo_import::utxo_set_importer::UtxoSetImporter;
 use simply_kaspa_indexer::vars::load_block_checkpoint;
 use simply_kaspa_indexer::virtual_chain::process_virtual_chain::process_virtual_chain;
 use simply_kaspa_indexer::web::model::metrics::Metrics;
 use simply_kaspa_indexer::web::web_server::WebServer;
-use simply_kaspa_kaspad::pool::manager::KaspadManager;
+use simply_kaspa_kaspad::manager::KaspadManager;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::env;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::task;
@@ -39,14 +39,14 @@ async fn main() {
     println!("----- https://github.com/supertypo/simply-kaspa-indexer/ -----");
     println!("--------------------------------------------------------------");
     let cli_args = CliArgs::parse();
-
-    env::set_var("RUST_LOG", &cli_args.log_level);
-    env::set_var("RUST_LOG_STYLE", if cli_args.log_no_color { "never" } else { "always" });
-    env_logger::builder().target(env_logger::Target::Stdout).format_target(false).format_timestamp_millis().init();
+    configure_logging(&cli_args);
 
     trace!("{:?}", cli_args);
     if cli_args.batch_scale < 0.1 || cli_args.batch_scale > 10.0 {
         panic!("Invalid batch-scale");
+    }
+    if cli_args.batch_concurrency < 1 || cli_args.batch_concurrency > 10 {
+        panic!("Invalid batch-concurrency");
     }
     info!("{} {}", env!("CARGO_PKG_NAME"), cli_args.version());
 
@@ -54,7 +54,8 @@ async fn main() {
     let kaspad_manager = KaspadManager { network_id, rpc_url: cli_args.rpc_url.clone() };
     let kaspad_pool: Pool<KaspadManager> = Pool::builder(kaspad_manager).max_size(10).build().unwrap();
 
-    let database = KaspaDbClient::new(&cli_args.database_url).await.expect("Database connection FAILED");
+    let pool_size = cli_args.batch_concurrency as u32 * 10;
+    let database = KaspaDbClient::new(&cli_args.database_url, pool_size).await.expect("Database connection FAILED");
 
     if cli_args.initialize_db {
         info!("Initializing database");
@@ -66,24 +67,20 @@ async fn main() {
 }
 
 async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>, database: KaspaDbClient) {
-    let run = Arc::new(AtomicBool::new(true));
-    task::spawn(notify_on_signals(run.clone()));
+    let signal_handler = SignalHandler::new().spawn();
 
-    let mut block_dag_info = None;
-    while block_dag_info.is_none() {
-        if let Ok(kaspad) = kaspad_pool.get().await {
-            if let Ok(bdi) = kaspad.get_block_dag_info().await {
-                block_dag_info = Some(bdi);
-            }
-        }
-        if block_dag_info.is_none() {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-        }
-        if !run.load(Ordering::Relaxed) {
+    let block_dag_info = loop {
+        if signal_handler.is_shutdown() {
             return;
         }
-    }
-    let block_dag_info = block_dag_info.unwrap();
+        if let Ok(kaspad) = kaspad_pool.get().await
+            && let Ok(bdi) = kaspad.get_block_dag_info().await
+        {
+            break bdi;
+        }
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    };
+
     let net_bps = match block_dag_info.network {
         NetworkId { network_type: NetworkType::Mainnet, suffix: None } => 10,
         _ => 10,
@@ -165,22 +162,24 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     metrics.components.virtual_chain_processor.only_blocks = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
     let metrics = Arc::new(RwLock::new(metrics));
 
-    let webserver = Arc::new(WebServer::new(settings.clone(), run.clone(), metrics.clone(), kaspad_pool.clone(), database.clone()));
+    let webserver =
+        Arc::new(WebServer::new(settings.clone(), signal_handler.clone(), metrics.clone(), kaspad_pool.clone(), database.clone()));
     let webserver_task = task::spawn(async move { webserver.run().await.unwrap() });
 
     if utxo_set_import {
-        let importer =
-            UtxoSetImporter::new(cli_args.clone(), run.clone(), metrics.clone(), block_dag_info.pruning_point_hash, database.clone());
-        if !importer.start().await {
-            warn!("UTXO set import aborted");
-            webserver_task.await.unwrap();
-            return;
-        }
+        let importer = UtxoSetImporter::new(
+            cli_args.clone(),
+            signal_handler.clone(),
+            metrics.clone(),
+            block_dag_info.pruning_point_hash,
+            database.clone(),
+        );
+        importer.start().await;
     }
 
     let mut block_fetcher = KaspaBlocksFetcher::new(
         settings.clone(),
-        run.clone(),
+        signal_handler.clone(),
         metrics.clone(),
         kaspad_pool.clone(),
         blocks_queue.clone(),
@@ -192,7 +191,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         task::spawn(async move { block_fetcher.start().await }),
         task::spawn(process_blocks(
             settings.clone(),
-            run.clone(),
+            signal_handler.clone(),
             metrics.clone(),
             start_vcp.clone(),
             blocks_queue.clone(),
@@ -200,12 +199,18 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             database.clone(),
             mapper.clone(),
         )),
-        task::spawn(process_checkpoints(settings.clone(), run.clone(), metrics.clone(), checkpoint_queue.clone(), database.clone())),
+        task::spawn(process_checkpoints(
+            settings.clone(),
+            signal_handler.clone(),
+            metrics.clone(),
+            checkpoint_queue.clone(),
+            database.clone(),
+        )),
     ];
     if !settings.cli_args.is_disabled(CliDisable::TransactionProcessing) {
         tasks.push(task::spawn(process_transactions(
             settings.clone(),
-            run.clone(),
+            signal_handler.clone(),
             metrics.clone(),
             txs_queue.clone(),
             checkpoint_queue.clone(),
@@ -216,7 +221,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     if !settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing) {
         tasks.push(task::spawn(process_virtual_chain(
             settings.clone(),
-            run.clone(),
+            signal_handler.clone(),
             metrics.clone(),
             start_vcp.clone(),
             checkpoint_queue.clone(),
@@ -226,10 +231,20 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     }
 
     tasks.push(task::spawn(async move {
-        if let Err(e) = pruner(cli_args.clone(), run.clone(), metrics.clone(), database.clone()).await {
+        if let Err(e) = pruner(cli_args.clone(), signal_handler.clone(), metrics.clone(), database.clone()).await {
             error!("Database pruner failed: {e}");
         }
     }));
 
     try_join_all(tasks).await.unwrap();
+}
+
+fn configure_logging(cli_args: &CliArgs) {
+    env_logger::Builder::new()
+        .target(env_logger::Target::Stdout)
+        .format_target(false)
+        .format_timestamp_millis()
+        .parse_filters(&cli_args.log_level)
+        .write_style(if cli_args.log_no_color { env_logger::WriteStyle::Never } else { env_logger::WriteStyle::Always })
+        .init();
 }

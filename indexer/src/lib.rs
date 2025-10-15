@@ -3,7 +3,6 @@ pub mod checkpoint;
 pub mod macros;
 pub mod prune;
 pub mod settings;
-pub mod signal;
 pub mod transactions;
 pub mod utxo_import;
 pub mod vars;

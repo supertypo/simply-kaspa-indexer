@@ -110,12 +110,16 @@ pub struct CliArgs {
     pub log_no_color: bool,
     #[clap(short, long, default_value = "1.0", help = "Batch size factor [0.1-10]. Adjusts internal queues and database batch sizes")]
     pub batch_scale: f64,
+    #[clap(long, default_value = "2", help = "Batch concurrency factor [1-10]. Per table batch concurrency")]
+    pub batch_concurrency: i8,
     #[clap(short = 't', long, default_value = "60", help = "Cache ttl (secs). Adjusts tx/block caches for in-memory de-duplication")]
     pub cache_ttl: u64,
-    #[clap(long, default_value = "600", value_parser = clap::value_parser!(u16).range(1..), help = "Window size for automatic vcp tip distance adjustment (in seconds)")]
-    pub vcp_window: u16,
-    #[clap(long, default_value = "2", value_parser = clap::value_parser!(u8).range(1..), help = "Poll interval for vcp (in seconds)")]
-    pub vcp_interval: u8,
+    #[clap(long, default_value = "1000", value_parser = clap::value_parser!(u64).range(100..=10000), help = "Poll interval for blocks (ms)")]
+    pub block_interval: u64,
+    #[clap(long, default_value = "1000", value_parser = clap::value_parser!(u64).range(100..=10000), help = "Poll interval for vcp (ms)")]
+    pub vcp_interval: u64,
+    #[clap(long, default_value = "600", value_parser = clap::value_parser!(u64).range(10..=86400), help = "Window size for automatic vcp tip distance adjustment (in seconds)")]
+    pub vcp_window: u64,
     #[clap(short, long, help = "Ignore checkpoint and start from a specified block, 'p' for pruning point or 'v' for virtual")]
     pub ignore_checkpoint: Option<String>,
     #[clap(short, long, help = "Auto-upgrades older db schemas. Use with care")]
@@ -139,19 +143,15 @@ pub struct CliArgs {
 
 impl CliArgs {
     pub fn is_enabled(&self, feature: CliEnable) -> bool {
-        self.enable.as_ref().map_or(false, |enable| enable.contains(&feature))
+        self.enable.as_ref().is_some_and(|enable| enable.contains(&feature))
     }
 
     pub fn is_disabled(&self, feature: CliDisable) -> bool {
-        self.disable.as_ref().map_or(false, |disable| disable.contains(&feature))
+        self.disable.as_ref().is_some_and(|disable| disable.contains(&feature))
     }
 
     pub fn is_excluded(&self, field: CliField) -> bool {
-        if let Some(exclude_fields) = self.exclude_fields.clone() {
-            exclude_fields.contains(&field)
-        } else {
-            false
-        }
+        if let Some(exclude_fields) = self.exclude_fields.clone() { exclude_fields.contains(&field) } else { false }
     }
 
     pub fn version(&self) -> String {
@@ -168,6 +168,8 @@ impl CliArgs {
 pub struct PruningConfig {
     #[clap(long, default_missing_value = "0 4 * * *", num_args = 0..=1, help = "Enables db pruning. Optional cron expression. Default: '0 4 * * *' = daily 04:00 (UTC)")]
     pub prune_db: Option<String>,
+    #[clap(long, default_value = "100000", help = "Batch size for db pruning")]
+    pub prune_batch_size: i32,
     #[clap(long, value_parser = HumantimeDurationParser, help = "Global data retention for db pruning. Ex: 60d, 24h, etc")]
     #[serde(with = "humantime_serde")]
     pub retention: Option<Duration>,

@@ -11,17 +11,18 @@ use kaspa_rpc_core::api::rpc::RpcApi;
 use log::{debug, error, info, trace, warn};
 use simply_kaspa_cli::cli_args::{CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
-use simply_kaspa_kaspad::pool::manager::KaspadManager;
+use simply_kaspa_kaspad::manager::KaspadManager;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
 pub async fn process_virtual_chain(
     settings: Settings,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     start_vcp: Arc<AtomicBool>,
     checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
@@ -29,9 +30,10 @@ pub async fn process_virtual_chain(
     database: KaspaDbClient,
 ) {
     let batch_scale = settings.cli_args.batch_scale;
+    let batch_concurrency = settings.cli_args.batch_concurrency;
     let disable_transaction_acceptance = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
 
-    let poll_interval = Duration::from_secs(settings.cli_args.vcp_interval as u64);
+    let poll_interval = Duration::from_millis(settings.cli_args.vcp_interval);
     let err_delay = Duration::from_secs(5);
 
     let mut start_hash = settings.checkpoint;
@@ -42,15 +44,15 @@ pub async fn process_virtual_chain(
     let mut tip_distance = if dynamic_tip_distance { 10 } else { 0 };
     let mut tip_distance_timestamp = 0;
     let mut tip_distance_history = VecDeque::new();
-    let tip_distance_window = settings.cli_args.vcp_window.saturating_div(settings.cli_args.vcp_interval as u16).max(1) as usize;
+    let tip_distance_window = (settings.cli_args.vcp_window * 1_000 / settings.cli_args.vcp_interval).max(1) as usize;
 
-    while run.load(Ordering::Relaxed) {
+    while !signal_handler.is_shutdown() {
         if !start_vcp.load(Ordering::Relaxed) {
             debug!("Virtual chain processor waiting for start notification");
             sleep(err_delay).await;
             continue;
         }
-        debug!("Getting virtual chain from start_hash {}", start_hash.to_string());
+        debug!("Getting virtual chain from start_hash {}", start_hash);
         match kaspad_pool.get().await {
             Ok(kaspad) => {
                 match kaspad.get_virtual_chain_from_block(start_hash, !disable_transaction_acceptance).await {
@@ -78,7 +80,7 @@ pub async fn process_virtual_chain(
                                 }
                                 trace!("Virtual chain processor is waiting for block_processor to catch up...");
                                 sleep(poll_interval).await;
-                                if !run.load(Ordering::Relaxed) {
+                                if signal_handler.is_shutdown() {
                                     return;
                                 }
                             }
@@ -86,7 +88,8 @@ pub async fn process_virtual_chain(
                             let rows_removed = remove_chain_blocks(batch_scale, removed_chain_block_hashes, &database).await;
                             if !disable_transaction_acceptance {
                                 let accepted_transaction_ids = &res.accepted_transaction_ids[..added_blocks_count - tip_distance];
-                                let rows_added = accept_transactions(batch_scale, accepted_transaction_ids, &database).await;
+                                let rows_added =
+                                    accept_transactions(batch_scale, batch_concurrency, accepted_transaction_ids, &database).await;
                                 info!(
                                     "Committed {} accepted and {} rejected transactions in {}ms. Last accepted: {}",
                                     rows_added,
@@ -156,7 +159,7 @@ pub async fn process_virtual_chain(
                         }
                     }
                     Err(e) => {
-                        error!("Failed getting virtual chain from start_hash {}: {}", start_hash.to_string(), e);
+                        error!("Failed getting virtual chain from start_hash {}: {}", start_hash, e);
                         sleep(err_delay).await;
                     }
                 }

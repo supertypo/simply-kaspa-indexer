@@ -3,6 +3,7 @@ use crate::web::model::metrics::Metrics;
 use bigdecimal::ToPrimitive;
 use kaspa_addresses::Prefix;
 use kaspa_consensus_core::config::params::{MAINNET_PARAMS, TESTNET_PARAMS};
+use kaspa_consensus_core::errors::consensus::ConsensusError::UnexpectedPruningPoint;
 use kaspa_consensus_core::tx::ScriptPublicKey;
 use kaspa_hashes::Hash as KaspaHash;
 use kaspa_p2p_lib::common::ProtocolError;
@@ -11,24 +12,24 @@ use kaspa_p2p_lib::pb::{
     AddressesMessage, KaspadMessage, OutpointAndUtxoEntryPair, PongMessage, RequestNextPruningPointUtxoSetChunkMessage,
     RequestPruningPointUtxoSetMessage,
 };
-use kaspa_p2p_lib::{make_message, Adaptor, Hub, PeerKey};
+use kaspa_p2p_lib::{Adaptor, Hub, PeerKey, make_message};
 use kaspa_txscript::extract_script_pub_key_address;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
-use log::{debug, error, info, trace, warn};
+use log::{debug, info, trace, warn};
 use rand::prelude::IndexedRandom;
 use rand::rng;
 use simply_kaspa_cli::cli_args::{CliArgs, CliField};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance;
 use simply_kaspa_database::models::transaction_output::TransactionOutput;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::collections::HashSet;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{mpsc, RwLock};
-use tokio::time::timeout;
+use tokio::sync::{RwLock, mpsc};
+use tokio::time::{sleep, timeout};
 use url::Url;
 
 pub const IBD_BATCH_SIZE: u32 = 99;
@@ -37,7 +38,7 @@ pub const IBD_RETRIES: u32 = 10;
 
 pub struct UtxoSetImporter {
     cli_args: CliArgs,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     pruning_point_hash: KaspaHash,
     database: KaspaDbClient,
@@ -52,7 +53,7 @@ pub struct UtxoSetImporter {
 impl UtxoSetImporter {
     pub fn new(
         cli_args: CliArgs,
-        run: Arc<AtomicBool>,
+        signal_handler: SignalHandler,
         metrics: Arc<RwLock<Metrics>>,
         pruning_point_hash: KaspaHash,
         database: KaspaDbClient,
@@ -65,7 +66,7 @@ impl UtxoSetImporter {
         let include_block_time = !cli_args.is_excluded(CliField::TxOutBlockTime);
         UtxoSetImporter {
             cli_args,
-            run,
+            signal_handler,
             metrics,
             pruning_point_hash,
             database,
@@ -78,10 +79,9 @@ impl UtxoSetImporter {
         }
     }
 
-    pub async fn start(&self) -> bool {
-        let mut attempts = 0;
+    pub async fn start(&self) {
         let mut completed = false;
-        while self.run.load(Ordering::Relaxed) && !completed {
+        while !self.signal_handler.is_shutdown() && !completed {
             let address = if let Some(p2p_url) = &self.cli_args.p2p_url {
                 Some(p2p_url.clone())
             } else {
@@ -105,33 +105,28 @@ impl UtxoSetImporter {
                 let (sender, receiver) = mpsc::channel(10000);
                 let initializer = Arc::new(P2pInitializer::new(self.cli_args.clone(), sender));
                 let adaptor = Adaptor::client_only(Hub::new(), initializer, Default::default());
-                attempts += 1;
                 {
                     let mut metrics = self.metrics.write().await;
                     metrics.components.utxo_importer.enabled = true;
-                    metrics.components.utxo_importer.attempts = Some(attempts);
                     metrics.components.utxo_importer.completed = Some(false);
-                }
-                if attempts > IBD_RETRIES {
-                    error!("UTXO import failed after {} attempts", attempts);
-                    break;
                 }
                 match adaptor.connect_peer(address).await {
                     Ok(peer_key) => {
-                        completed =
-                            self.receive_and_handle(adaptor.clone(), peer_key, self.pruning_point_hash, receiver).await.is_ok();
+                        match self.receive_and_handle(adaptor.clone(), peer_key, self.pruning_point_hash, receiver).await {
+                            Ok(_) => completed = true,
+                            Err(_) => sleep(Duration::from_secs(5)).await,
+                        }
                         adaptor.terminate_all_peers().await;
                     }
                     Err(e) => warn!("Peer connection failed: {e}, retrying..."),
                 }
             } else {
-                info!("UTXO set import skipped for network {}", self.network_id.to_string());
+                info!("UTXO set import skipped for network {}", self.network_id);
                 completed = true;
             }
         }
         let mut metrics = self.metrics.write().await;
         metrics.components.utxo_importer.completed = Some(completed);
-        completed
     }
 
     async fn receive_and_handle(
@@ -145,7 +140,7 @@ impl UtxoSetImporter {
         let mut outputs_committed_count = 0;
         let mut utxo_chunk_count = 0;
         let mut utxos_count: u64 = 0;
-        while self.run.load(Ordering::Relaxed) {
+        while !self.signal_handler.is_shutdown() {
             match timeout(Duration::from_secs(IBD_TIMEOUT_SECONDS), receiver.recv()).await {
                 Ok(op) => match op {
                     Some(msg) => match msg.payload {
@@ -200,7 +195,10 @@ impl UtxoSetImporter {
                             metrics.components.utxo_importer.outputs_committed = Some(outputs_committed_count);
                             return Ok(());
                         }
-                        Some(Payload::UnexpectedPruningPoint(_)) => panic!("Invalid pruning point"),
+                        Some(Payload::UnexpectedPruningPoint(_)) => {
+                            warn!("Got unexpected pruning point");
+                            return Err(ProtocolError::ConsensusError(UnexpectedPruningPoint));
+                        }
                         Some(Payload::Ping(msg)) => {
                             debug!("Got ping (nonce={}), responding with pong", msg.nonce);
                             adaptor.send(peer_key, make_message!(Payload::Pong, PongMessage { nonce: msg.nonce })).await?;

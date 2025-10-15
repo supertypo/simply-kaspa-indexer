@@ -11,6 +11,7 @@ default = []
 
 [dependencies]
 simply-kaspa-cli.workspace = true
+simply-kaspa-signal.workspace = true
 simply-kaspa-kaspad.workspace = true
 simply-kaspa-database.workspace = true
 simply-kaspa-mapping.workspace = true
@@ -25,7 +26,6 @@ tokio.workspace = true
 tokio-cron-scheduler.workspace = true
 tonic.workspace = true
 deadpool.workspace = true
-sqlx.workspace = true
 futures-util.workspace = true
 crossbeam-queue.workspace = true
 moka.workspace = true
@@ -50,3 +50,4 @@ humantime-serde.workspace = true
 url.workspace = true
 rand.workspace = true
 uuid = { version = "1.12.1", features = ["v4"] }
+indexmap.workspace = true

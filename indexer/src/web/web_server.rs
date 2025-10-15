@@ -2,27 +2,25 @@ use crate::settings::Settings;
 use crate::web::endpoint;
 use crate::web::endpoint::{health, metrics};
 use crate::web::model::metrics::Metrics;
-use axum::body::{to_bytes, Body};
-use axum::http::{header, HeaderValue, Request};
+use axum::body::{Body, to_bytes};
+use axum::http::{HeaderValue, Request, header};
 use axum::middleware::Next;
 use axum::response::Response;
-use axum::{middleware, routing::get, Extension, Router};
+use axum::{Extension, Router, middleware, routing::get};
 use deadpool::managed::{Object, Pool};
-use log::{info, trace, Level};
+use log::{Level, info, trace};
 use simply_kaspa_database::client::KaspaDbClient;
-use simply_kaspa_kaspad::pool::manager::KaspadManager;
+use simply_kaspa_kaspad::manager::KaspadManager;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::io::Error;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 use std::vec;
 use sysinfo::System;
 use tokio::sync::RwLock;
-use tokio::time::sleep;
 use tower_http::cors::{Any, CorsLayer};
-use utoipa::openapi;
 use utoipa::OpenApi;
+use utoipa::openapi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::{Config, SwaggerUi};
 
@@ -46,7 +44,7 @@ struct ApiDoc;
 
 pub struct WebServer {
     settings: Settings,
-    run: Arc<AtomicBool>,
+    signal: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
     database_client: KaspaDbClient,
@@ -56,12 +54,12 @@ pub struct WebServer {
 impl WebServer {
     pub fn new(
         settings: Settings,
-        run: Arc<AtomicBool>,
+        signal: SignalHandler,
         metrics: Arc<RwLock<Metrics>>,
         kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
         database_client: KaspaDbClient,
     ) -> Self {
-        WebServer { settings, run, metrics, kaspad_pool, database_client, system: Arc::new(RwLock::new(System::new())) }
+        WebServer { settings, signal, metrics, kaspad_pool, database_client, system: Arc::new(RwLock::new(System::new())) }
     }
 
     pub async fn run(self: Arc<Self>) -> Result<(), Error> {
@@ -92,9 +90,7 @@ impl WebServer {
         let listener = tokio::net::TcpListener::bind(listen).await.expect("Failed to open listener");
         axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
             .with_graceful_shutdown(async move {
-                while self.run.load(Ordering::Relaxed) {
-                    sleep(Duration::from_secs(1)).await;
-                }
+                let _ = self.signal.subscribe().recv().await;
                 info!("Web server shutdown")
             })
             .await
@@ -143,7 +139,7 @@ async fn log_responses(req: Request<Body>, next: Next) -> Response {
 
 pub fn set_server_path(base_path: &str) -> openapi::OpenApi {
     let mut openapi = ApiDoc::openapi();
-    if base_path.trim_end_matches("/") != "" {
+    if !base_path.trim_end_matches("/").is_empty() {
         openapi.servers = Some(vec![openapi::ServerBuilder::new().url(base_path).build()]);
     }
     openapi

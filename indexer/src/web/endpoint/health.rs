@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use deadpool::managed::Pool;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use simply_kaspa_database::client::KaspaDbClient;
-use simply_kaspa_kaspad::pool::manager::KaspadManager;
+use simply_kaspa_kaspad::manager::KaspadManager;
 use std::sync::Arc;
 use std::time::Duration;
 use sysinfo::System;

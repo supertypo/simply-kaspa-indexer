@@ -5,19 +5,19 @@ use log::{error, info, warn};
 use serde_json::to_string_pretty;
 use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliField, PruningConfig};
 use simply_kaspa_database::client::KaspaDbClient;
+use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::collections::HashMap;
 use std::error::Error;
 use std::future::Future;
 use std::ops::Sub;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 pub async fn pruner(
     cli_args: CliArgs,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     database: KaspaDbClient,
 ) -> Result<(), Box<dyn Error>> {
@@ -39,15 +39,15 @@ pub async fn pruner(
             metrics_rw.components.db_pruner.retention = Some(retention);
         }
 
-        let run_clone = run.clone();
+        let sh_clone = signal_handler.clone();
         let job = Job::new_async(format!("0 {}", cron), move |_, _| {
-            Box::pin(prune(cli_args.clone(), pruning_config.clone(), run_clone.clone(), metrics.clone(), database.clone()))
+            Box::pin(prune(cli_args.clone(), pruning_config.clone(), sh_clone.clone(), metrics.clone(), database.clone()))
         })
         .unwrap();
         let scheduler = JobScheduler::new().await?;
         scheduler.add(job).await?;
         scheduler.start().await?;
-        while run.load(Ordering::Relaxed) {
+        while !signal_handler.is_shutdown() {
             sleep(Duration::from_secs(2)).await;
         }
     } else {
@@ -59,7 +59,7 @@ pub async fn pruner(
 pub async fn prune(
     cli_args: CliArgs,
     pruning_config: PruningConfig,
-    run: Arc<AtomicBool>,
+    signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     database: KaspaDbClient,
 ) {
@@ -77,11 +77,11 @@ pub async fn prune(
         let db = database.clone();
         let retention = retention.min(pruning_config.retention_blocks.unwrap_or(Duration::MAX));
         let step_pruning_point = common_start_time.sub(retention);
-        return_on_shutdown!(run);
+        return_on_shutdown!(signal_handler.is_shutdown());
         step_errors += prune_step(
             "block_parent",
             metrics.clone(),
-            |step_pruning_point| async move { db.prune_block_parent(step_pruning_point).await },
+            |step_pruning_point| async move { db.prune_block_parent(step_pruning_point, cli_args.pruning.prune_batch_size).await },
             step_pruning_point,
         )
         .await as i32;
@@ -89,14 +89,16 @@ pub async fn prune(
 
     if let Some(retention) = pruning_config.retention_blocks_transactions {
         let db = database.clone();
-        return_on_shutdown!(run);
+        return_on_shutdown!(signal_handler.is_shutdown());
         if !cli_args.is_disabled(CliDisable::BlocksTable) && !cli_args.is_excluded(CliField::BlockTimestamp) {
             let retention = retention.min(pruning_config.retention_blocks.unwrap_or(Duration::MAX));
             let step_pruning_point = common_start_time.sub(retention);
             step_errors += prune_step(
                 "blocks_transactions (b)",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_blocks_transactions_using_blocks(step_pruning_point).await },
+                |step_pruning_point| async move {
+                    db.prune_blocks_transactions_using_blocks(step_pruning_point, cli_args.pruning.prune_batch_size).await
+                },
                 step_pruning_point,
             )
             .await as i32;
@@ -106,7 +108,9 @@ pub async fn prune(
             step_errors += prune_step(
                 "blocks_transactions (t)",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_blocks_transactions_using_transactions(step_pruning_point).await },
+                |step_pruning_point| async move {
+                    db.prune_blocks_transactions_using_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await
+                },
                 step_pruning_point,
             )
             .await as i32;
@@ -115,12 +119,12 @@ pub async fn prune(
 
     if let Some(retention) = pruning_config.retention_blocks {
         let step_pruning_point = common_start_time.sub(retention);
-        return_on_shutdown!(run);
+        return_on_shutdown!(signal_handler.is_shutdown());
         let db = database.clone();
         step_errors += prune_step(
             "blocks",
             metrics.clone(),
-            |step_pruning_point| async move { db.prune_blocks(step_pruning_point).await },
+            |step_pruning_point| async move { db.prune_blocks(step_pruning_point, cli_args.pruning.prune_batch_size).await },
             step_pruning_point,
         )
         .await as i32;
@@ -129,12 +133,14 @@ pub async fn prune(
             && !cli_args.is_disabled(CliDisable::BlocksTable)
             && !cli_args.is_excluded(CliField::BlockTimestamp)
         {
-            return_on_shutdown!(run);
+            return_on_shutdown!(signal_handler.is_shutdown());
             let db = database.clone();
             step_errors += prune_step(
                 "transactions_acceptances (b)",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_transactions_acceptances_using_blocks(step_pruning_point).await },
+                |step_pruning_point| async move {
+                    db.prune_transactions_acceptances_using_blocks(step_pruning_point, cli_args.pruning.prune_batch_size).await
+                },
                 step_pruning_point,
             )
             .await as i32;
@@ -143,7 +149,7 @@ pub async fn prune(
 
     if let Some(retention) = pruning_config.retention_transactions {
         let step_pruning_point = common_start_time.sub(retention);
-        return_on_shutdown!(run);
+        return_on_shutdown!(signal_handler.is_shutdown());
         let db = database.clone();
 
         let pruning_point_is_passed = {
@@ -155,7 +161,7 @@ pub async fn prune(
             step_errors += prune_step(
                 "transactions",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_transactions(step_pruning_point).await },
+                |step_pruning_point| async move { db.prune_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await },
                 step_pruning_point,
             )
             .await as i32;
@@ -166,13 +172,15 @@ pub async fn prune(
 
     if let Some(retention) = pruning_config.retention_addresses_transactions {
         let step_pruning_point = common_start_time.sub(retention);
-        return_on_shutdown!(run);
+        return_on_shutdown!(signal_handler.is_shutdown());
         let db = database.clone();
         if !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress) {
             step_errors += prune_step(
                 "addresses_transactions",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_addresses_transactions(step_pruning_point).await },
+                |step_pruning_point| async move {
+                    db.prune_addresses_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await
+                },
                 step_pruning_point,
             )
             .await as i32;
@@ -180,7 +188,9 @@ pub async fn prune(
             step_errors += prune_step(
                 "scripts_transactions",
                 metrics.clone(),
-                |step_pruning_point| async move { db.prune_scripts_transactions(step_pruning_point).await },
+                |step_pruning_point| async move {
+                    db.prune_scripts_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await
+                },
                 step_pruning_point,
             )
             .await as i32;
