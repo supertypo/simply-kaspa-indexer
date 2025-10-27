@@ -180,7 +180,6 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
             SET hash       = NULL,
                 mass       = NULL,
                 payload    = NULL,
-                block_time = NULL,
                 inputs     = NULL
             WHERE transaction_id = ANY ($1))
         SELECT previous_outpoint_hash transaction_id, COUNT(*)::smallint spent_count FROM spent_outputs GROUP BY previous_outpoint_hash";
