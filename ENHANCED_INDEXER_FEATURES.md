@@ -8,7 +8,9 @@ This document summarizes the key enhancements and features implemented in this f
 
 **Why it was needed**: Storing the full body of every Kaspa transaction is resource-intensive. Many applications only require specific subsets of transactions (e.g., Igra L2 rollup transactions, protocol-specific data).
 
-**How it works**: The indexer supports YAML-based filter configurations that define rules for which transactions should have their full bodies stored. Transactions not matching any rule are stored as ID-only stubs (minimal metadata).
+**How it works**: The indexer supports YAML-based filter configurations that define rules for which transactions should have their full bodies stored. Transactions not matching any rule are stored as ID-only stubs (minimal metadata). Matched transactions are tagged with protocol identifiers stored in a normalized `tag_providers` table for efficient querying.
+
+**See also**: [PROTOCOLS.md](PROTOCOLS.md) - Comprehensive registry of all known Kaspa L1 protocols with their identification patterns.
 
 ### CLI Arguments
 
@@ -36,13 +38,15 @@ rules:
     priority: 100            # Higher priority rules are checked first
     enabled: true            # Can disable rule without removing it
     tag: protocol-name       # Tag to apply to matching transactions
+    module: module-name      # Optional: Protocol module/mode (e.g., "chat", "file")
+    repository: https://...  # Optional: Protocol repository URL for reference
     store_payload: true      # Whether to store full body for matches
     conditions:
       txid:                  # Transaction ID matching (optional)
         prefix: "97b1"       # Hex prefix to match
       payload:               # Payload matching (optional)
         - prefix: "kasplex"  # UTF-8 prefix (or "hex:XXXX" for hex)
-        - prefix: "hex:94f8" # Multiple payload conditions = OR logic
+        - prefix: "hex:94"   # Multiple payload conditions = OR logic
 ```
 
 ### Configuration Examples
@@ -62,6 +66,8 @@ rules:
     priority: 100
     enabled: true
     tag: kasplex
+    module: kasplex
+    repository: https://kasplex.org/
     store_payload: true
     conditions:
       payload:
@@ -72,7 +78,7 @@ rules:
 
 #### Example 2: Igra Protocol Only (`examples/filters_igra_only.yaml`)
 
-Store only Igra rollup transactions (specific TXID prefix AND specific payload prefixes):
+Store only Igra rollup transactions (specific TXID prefix AND specific payload prefix):
 
 ```yaml
 version: "1.0"
@@ -85,16 +91,17 @@ rules:
     priority: 100
     enabled: true
     tag: igra
+    module: igra
+    repository: https://igralabs.com/
     store_payload: true
     conditions:
       txid:
-        prefix: "97b1"         # TXID must start with 97b1 (AND)
+        prefix: "97b1"       # TXID must start with 97b1 (AND)
       payload:
-        - prefix: "hex:94f8"   # Payload starts with 94f8 (OR)
-        - prefix: "hex:9402"   # Payload starts with 9402 (OR)
+        - prefix: "hex:94"   # Payload starts with 94 (RLP encoding marker)
 ```
 
-**Result**: Only transactions where TXID starts with "97b1" **AND** payload starts with "94f8" or "9402" are fully stored.
+**Result**: Only transactions where TXID starts with "97b1" **AND** payload starts with "94" are fully stored.
 
 #### Example 3: Combined Selective (`examples/filters_combined_selective.yaml`)
 
@@ -112,18 +119,21 @@ rules:
     priority: 110
     enabled: true
     tag: igra
+    module: igra
+    repository: https://igralabs.com/
     store_payload: true
     conditions:
       txid:
         prefix: "97b1"
       payload:
-        - prefix: "hex:94f8"
-        - prefix: "hex:9402"
+        - prefix: "hex:94"
 
   - name: kasplex-protocol
     priority: 100
     enabled: true
     tag: kasplex
+    module: kasplex
+    repository: https://kasplex.org/
     store_payload: true
     conditions:
       payload:
@@ -134,7 +144,7 @@ rules:
 
 #### Example 4: Tagging All Transactions (`examples/filters_tagging_all.yaml`)
 
-Tag and store all transaction payloads:
+Tag and store all transaction payloads with protocol classification:
 
 ```yaml
 version: "1.0"
@@ -143,30 +153,46 @@ settings:
   default_store_payload: true  # Store everything by default
 
 rules:
-  # Tag specific protocols for classification
+  # Tag specific protocols for classification (8 protocols supported)
   - name: igra-rollup
     priority: 110
     enabled: true
     tag: igra
+    module: igra
+    repository: https://igralabs.com/
     store_payload: true
     conditions:
       txid:
         prefix: "97b1"
       payload:
-        - prefix: "hex:94f8"
-        - prefix: "hex:9402"
+        - prefix: "hex:94"
 
   - name: kasplex-protocol
     priority: 100
     enabled: true
     tag: kasplex
+    module: kasplex
+    repository: https://kasplex.org/
     store_payload: true
     conditions:
       payload:
         - prefix: "kasplex"
+
+  - name: k-social-network
+    priority: 90
+    enabled: true
+    tag: k_social
+    module: k
+    repository: https://github.com/thesheepcat/K
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "k:1"
+
+  # ... (6 more protocols - see examples/filters_tagging_all.yaml)
 ```
 
-**Result**: All transactions are stored with payloads, but Kasplex and Igra transactions get specific tags for easier querying.
+**Result**: All transactions are stored with payloads. Recognized protocols get specific tags for easier querying. Unmatched transactions have NULL tag.
 
 ### Filtering Logic
 
@@ -185,38 +211,90 @@ rules:
 
 ### Database Changes
 
-**Modified `transactions` table**:
+**New `tag_providers` table** (schema v11):
 ```sql
-ALTER TABLE transactions ADD COLUMN tag VARCHAR(50);
+CREATE TABLE tag_providers (
+    id              SERIAL PRIMARY KEY,
+    tag             VARCHAR(50) UNIQUE NOT NULL,
+    module          VARCHAR(50),
+    prefix          VARCHAR(100) NOT NULL,
+    repository_url  TEXT,
+    description     TEXT,
+    created_at      TIMESTAMP DEFAULT NOW()
+);
 ```
 
-**Column Description**:
-*   `tag`: Protocol or rule name assigned by matching filter rules (e.g., "kasplex", "igra", null for unmatched transactions)
+**Modified `transactions` table**:
+```sql
+ALTER TABLE transactions ADD COLUMN tag_id INTEGER REFERENCES tag_providers(id) ON DELETE SET NULL;
+```
+
+**Column Descriptions**:
+- `tag_providers.tag`: Protocol identifier (e.g., "kasplex", "igra", "kaspatalk")
+- `tag_providers.module`: Protocol mode/variant (e.g., "chat", "talk", "file", "directory")
+- `tag_providers.prefix`: Combined prefix pattern for identification
+- `tag_providers.repository_url`: Reference URL to protocol repository
+- `transactions.tag_id`: Foreign key to tag_providers table (NULL for unmatched transactions)
+
+**Bootstrap Behavior**:
+The indexer automatically populates the `tag_providers` table from your filter configuration on startup, upserting tag definitions and creating a TagCache for fast lookups during transaction processing.
 
 
 ### Performance Characteristics
 
 **Filter Evaluation Overhead**:
-- Negligible (~microseconds per transaction)
+- Linear scan mode: < 10μs per transaction for 1-3 rules (negligible)
+- Trie matching mode: O(m) lookup where m = prefix length (enable with `--enable trie_matching`)
 - Evaluated during transaction mapping phase
 - No impact on block processing throughput
+
+**When to Use Trie Matching**:
+```bash
+# Enable trie-based prefix matching for 10+ rules
+--enable trie_matching
+```
+- Recommended for configurations with 10+ filter rules
+- Kaspa protocols sharing "k" prefix benefit from trie path sharing
+- Trie overhead: ~100-500 nodes for 8 protocols
+- Memory footprint: negligible (< 1MB for hundreds of rules)
+
+**TagCache Performance**:
+- Thread-safe in-memory cache (`std::sync::RwLock<HashMap>`)
+- O(1) tag name → tag_id lookups during transaction processing
+- Populated at indexer startup from database
+- Eliminates per-transaction tag_providers table queries
 
 **Storage Benefits**:
 - 30-99% reduction in payload storage depending on filter selectivity
 - Maintains full transaction ID indexing for all transactions
 - Enables protocol-specific indexers without full chain storage
+- Tag normalization reduces storage overhead vs VARCHAR(50) per transaction
 
 ### Best Practices
 
 1. **Use descriptive rule names**: Helps with debugging and maintenance
-2. **Set appropriate priorities**: Higher priority for more specific rules
-3. **Test filter configs**: Use short sync durations to verify rules match as expected
-4. **Monitor tag distribution**: Query `SELECT tag, COUNT(*) FROM transactions GROUP BY tag` regularly
-5. **Consider default_store_payload carefully**:
+2. **Set appropriate priorities**: Higher priority for more specific rules (see PROTOCOLS.md for guidelines)
+3. **Include module and repository fields**: Provides context and documentation for each protocol
+   ```yaml
+   tag: kaspatalk
+   module: chat           # Differentiates protocol modes
+   repository: https://... # Reference for protocol specification
+   ```
+4. **Test filter configs**: Use short sync durations to verify rules match as expected
+5. **Monitor tag distribution**: Query the tag_providers table to see all registered protocols:
+   ```sql
+   SELECT tp.tag, tp.module, COUNT(t.transaction_id) as tx_count
+   FROM tag_providers tp
+   LEFT JOIN transactions t ON t.tag_id = tp.id
+   GROUP BY tp.id, tp.tag, tp.module
+   ORDER BY tx_count DESC;
+   ```
+6. **Consider default_store_payload carefully**:
    - `false` = opt-in (only matched transactions stored)
    - `true` = opt-out (everything stored, rules just add tags)
-6. **Use YAML anchors for complex configs**: Reuse common condition patterns
-7. **Version your filter configs**: Include `version: "1.0"` for future compatibility
+7. **Use existing configs as reference**: See `examples/filters_tagging_all.yaml` for all 8 known Kaspa protocols
+8. **Enable trie matching for 10+ rules**: `--enable trie_matching` for better performance with many rules
+9. **Version your filter configs**: Include `version: "1.0"` for future compatibility
 
 ---
 
@@ -349,5 +427,5 @@ Igra is an EVM-compatible L2 rollup built on Kaspa using a **based rollup archit
 ---
 
 **Last Updated**: 2025-01-06
-**Schema Version**: v12 (with optional SeqCom table)
+**Schema Version**: v11 (with tag_providers and optional SeqCom table)
 **Filter System Version**: 1.0 (YAML-based)

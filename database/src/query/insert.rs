@@ -74,7 +74,7 @@ pub async fn insert_block_parents(block_parents: &[BlockParent], pool: &Pool<Pos
 pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postgres>) -> Result<u64, Error> {
     const COLS: usize = 7;
     let sql = format!(
-        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, tag)
+        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, tag_id)
         VALUES {} ON CONFLICT DO NOTHING",
         generate_placeholders(transactions.len(), COLS)
     );
@@ -86,7 +86,7 @@ pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postg
         query = query.bind(tx.mass);
         query = query.bind(&tx.payload);
         query = query.bind(tx.block_time);
-        query = query.bind(&tx.tag);
+        query = query.bind(tx.tag_id);
     }
     Ok(query.execute(pool).await?.rows_affected())
 }
@@ -282,4 +282,42 @@ pub async fn insert_sequencing_commitments(commitments: &[SequencingCommitment],
         query = query.bind(&commitment.parent_seqcom_hash);
     }
     Ok(query.execute(pool).await?.rows_affected())
+}
+
+/// Insert a single tag provider, returning its ID
+pub async fn insert_tag_provider(
+    tag: &str,
+    module: Option<&str>,
+    prefix: &str,
+    repository_url: Option<&str>,
+    description: Option<&str>,
+    pool: &Pool<Postgres>,
+) -> Result<i32, Error> {
+    sqlx::query(
+        "INSERT INTO tag_providers (tag, module, prefix, repository_url, description)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (tag, module) DO UPDATE SET
+             prefix = EXCLUDED.prefix,
+             repository_url = EXCLUDED.repository_url,
+             description = EXCLUDED.description
+         RETURNING id"
+    )
+    .bind(tag)
+    .bind(module)
+    .bind(prefix)
+    .bind(repository_url)
+    .bind(description)
+    .fetch_one(pool)
+    .await?
+    .try_get(0)
+}
+
+/// Get tag_provider ID by tag name
+pub async fn get_tag_id_by_name(tag: &str, pool: &Pool<Postgres>) -> Result<Option<i32>, Error> {
+    sqlx::query("SELECT id FROM tag_providers WHERE tag = $1")
+        .bind(tag)
+        .fetch_optional(pool)
+        .await?
+        .map(|row| row.try_get(0))
+        .transpose()
 }

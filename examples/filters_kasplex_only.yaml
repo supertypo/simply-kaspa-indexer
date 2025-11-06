@@ -18,6 +18,8 @@ rules:
     priority: 100
     enabled: true
     tag: kasplex
+    module: kasplex
+    repository: https://kasplex.org/
     store_payload: true
     conditions:
       payload:

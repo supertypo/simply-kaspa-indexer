@@ -7,7 +7,9 @@ use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
 use log::{error, info, trace, warn};
 use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliEnable};
+use simply_kaspa_cli::filter_config::FilterConfig;
 use simply_kaspa_database::client::KaspaDbClient;
+use simply_kaspa_database::tag_cache::TagCache;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
 use simply_kaspa_indexer::checkpoint::{CheckpointBlock, CheckpointOrigin, process_checkpoints};
@@ -143,7 +145,64 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     let txs_queue = Arc::new(ArrayQueue::new(queue_capacity));
     let checkpoint_queue = Arc::new(ArrayQueue::new(30000));
 
-    let mapper = KaspaDbMapper::new(cli_args.clone());
+    // Bootstrap tag providers and build TagCache if filter config is provided
+    let tag_cache = if let Some(ref config_path) = cli_args.filter_config {
+        match FilterConfig::from_file(config_path) {
+            Ok(mut config) => {
+                info!("Bootstrapping tag providers from filter config");
+
+                // Build tries if --enable trie_matching
+                if cli_args.is_enabled(CliEnable::TrieMatching) {
+                    info!("Building prefix tries for fast matching (10+ rules)");
+                    config.build_tries();
+                    info!("Tries built: {} TXID nodes, {} payload nodes",
+                          config.txid_trie.as_ref().map(|t| t.node_count()).unwrap_or(0),
+                          config.payload_trie.as_ref().map(|t| t.node_count()).unwrap_or(0));
+                }
+
+                // Bootstrap tag providers to database and build cache
+                let tag_cache = TagCache::new();
+                for rule in &config.sorted_enabled_rules {
+                    // Extract prefix from rule conditions for tag_provider record
+                    let prefix = if let Some(ref txid_cond) = rule.conditions.txid {
+                        txid_cond.prefix.clone()
+                    } else if let Some(ref payload_conds) = rule.conditions.payload {
+                        payload_conds.first().map(|c| c.prefix.clone()).unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
+
+                    let module = rule.module.as_deref().unwrap_or("default");
+                    match tag_cache.upsert_tag(
+                        &rule.tag,
+                        module,
+                        &prefix,
+                        rule.repository.as_deref(),
+                        Some(&rule.name), // Use rule name as description
+                        database.pool()
+                    ).await {
+                        Ok(tag_id) => {
+                            info!("Tag provider '{}:{}' → tag_id {}", rule.tag, module, tag_id);
+                        }
+                        Err(e) => {
+                            error!("Failed to upsert tag provider '{}:{}': {}", rule.tag, module, e);
+                        }
+                    }
+                }
+
+                info!("TagCache initialized with {} tag providers", tag_cache.len());
+                Some(tag_cache)
+            }
+            Err(e) => {
+                error!("Failed to load filter config: {}", e);
+                panic!("Invalid filter configuration");
+            }
+        }
+    } else {
+        None
+    };
+
+    let mapper = KaspaDbMapper::new(cli_args.clone(), tag_cache);
 
     let settings = Settings { cli_args: cli_args.clone(), net_bps, net_tps_max, checkpoint, disable_vcp_wait_for_sync };
     let start_vcp = Arc::new(AtomicBool::new(false));

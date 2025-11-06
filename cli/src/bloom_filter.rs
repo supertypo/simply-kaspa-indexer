@@ -8,6 +8,7 @@ use std::hash::{Hash, Hasher};
 ///
 /// False positives are possible (may say "might match" when it doesn't),
 /// but false negatives are impossible (will never say "doesn't match" when it does).
+#[derive(Debug, Clone)]
 pub struct BloomFilter {
     bits: Vec<bool>,
     num_hashes: usize,
@@ -22,6 +23,7 @@ impl BloomFilter {
     ///
     /// # Example
     /// ```
+    /// use simply_kaspa_cli::bloom_filter::BloomFilter;
     /// let bloom = BloomFilter::new(10000, 0.01); // 10K items, 1% FP rate
     /// ```
     pub fn new(expected_items: usize, false_positive_rate: f64) -> Self {

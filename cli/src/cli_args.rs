@@ -19,6 +19,8 @@ pub enum CliEnable {
     ForceUtxoImport,
     /// Enables KIP-15 Sequencing Commitment computation and storage
     SeqCom,
+    /// Enables Trie-based prefix matching for transaction filtering (faster with 10+ rules)
+    TrieMatching,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]

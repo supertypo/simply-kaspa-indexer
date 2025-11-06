@@ -3,11 +3,22 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
+use crate::prefix_trie::PrefixTrie;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FilterConfig {
     pub version: String,
     pub settings: FilterSettings,
     pub rules: Vec<FilterRule>,
+    /// Pre-sorted rules (enabled only, highest priority first) - computed at load time
+    #[serde(skip)]
+    pub sorted_enabled_rules: Vec<FilterRule>,
+    /// Trie for fast TXID prefix matching (opt-in via --enable trie_matching)
+    #[serde(skip)]
+    pub txid_trie: Option<PrefixTrie>,
+    /// Trie for fast payload prefix matching (opt-in via --enable trie_matching)
+    #[serde(skip)]
+    pub payload_trie: Option<PrefixTrie>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +34,10 @@ pub struct FilterRule {
     pub tag: String,
     pub store_payload: bool,
     pub conditions: RuleConditions,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub module: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repository: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +53,9 @@ pub struct PrefixCondition {
     pub prefix: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub length: Option<usize>,
+    /// Pre-decoded prefix bytes - computed at load time
+    #[serde(skip)]
+    pub decoded_prefix: Vec<u8>,
 }
 
 impl FilterConfig {
@@ -47,11 +65,82 @@ impl FilterConfig {
         let contents = fs::read_to_string(path_ref)
             .map_err(|e| format!("Failed to read config file '{}': {}", path_ref.display(), e))?;
 
-        let config: FilterConfig = serde_yaml::from_str(&contents)
+        let mut config: FilterConfig = serde_yaml::from_str(&contents)
             .map_err(|e| format!("Failed to parse YAML: {}", e))?;
 
         config.validate()?;
+
+        // Pre-process: decode all prefixes
+        config.preprocess_prefixes()?;
+
+        // Pre-process: sort and cache enabled rules
+        config.preprocess_sorted_rules();
+
         Ok(config)
+    }
+
+    /// Decode all prefix strings into bytes at load time
+    fn preprocess_prefixes(&mut self) -> Result<(), String> {
+        for rule in &mut self.rules {
+            // Decode TXID prefix if present
+            if let Some(ref mut txid_cond) = rule.conditions.txid {
+                txid_cond.decoded_prefix = Self::decode_prefix_string(&txid_cond.prefix)?;
+            }
+
+            // Decode payload prefixes if present
+            if let Some(ref mut payload_conds) = rule.conditions.payload {
+                for cond in payload_conds {
+                    cond.decoded_prefix = Self::decode_prefix_string(&cond.prefix)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Decode a prefix string (hex: or UTF-8) into bytes
+    fn decode_prefix_string(prefix: &str) -> Result<Vec<u8>, String> {
+        if let Some(hex_part) = prefix.strip_prefix("hex:") {
+            hex::decode(hex_part)
+                .map_err(|e| format!("Failed to decode hex prefix '{}': {}", prefix, e))
+        } else {
+            Ok(prefix.as_bytes().to_vec())
+        }
+    }
+
+    /// Pre-sort and cache enabled rules by priority
+    fn preprocess_sorted_rules(&mut self) {
+        let mut sorted: Vec<FilterRule> = self.rules.iter()
+            .filter(|r| r.enabled)
+            .cloned()
+            .collect();
+        sorted.sort_by(|a, b| b.priority.cmp(&a.priority)); // Descending
+        self.sorted_enabled_rules = sorted;
+    }
+
+    /// Build tries for fast prefix matching (opt-in via --enable trie_matching)
+    /// Must be called after preprocess_prefixes() and preprocess_sorted_rules()
+    pub fn build_tries(&mut self) {
+        let mut txid_trie = PrefixTrie::new();
+        let mut payload_trie = PrefixTrie::new();
+
+        // Iterate through sorted_enabled_rules and build tries
+        for (rule_idx, rule) in self.sorted_enabled_rules.iter().enumerate() {
+            // Add TXID prefixes to trie
+            if let Some(ref txid_cond) = rule.conditions.txid {
+                txid_trie.insert(&txid_cond.decoded_prefix, rule_idx);
+            }
+
+            // Add payload prefixes to trie
+            if let Some(ref payload_conds) = rule.conditions.payload {
+                for cond in payload_conds {
+                    payload_trie.insert(&cond.decoded_prefix, rule_idx);
+                }
+            }
+        }
+
+        // Only store tries if they're non-empty
+        self.txid_trie = if !txid_trie.is_empty() { Some(txid_trie) } else { None };
+        self.payload_trie = if !payload_trie.is_empty() { Some(payload_trie) } else { None };
     }
 
     /// Validate the configuration structure and rules
@@ -71,15 +160,7 @@ impl FilterConfig {
             self.validate_rule(rule)?;
         }
 
-        // Check for duplicate tags
-        let mut seen_tags = HashSet::new();
-        for rule in &self.rules {
-            if !seen_tags.insert(&rule.tag) {
-                return Err(format!("Duplicate tag '{}' found in rules", rule.tag));
-            }
-        }
-
-        // Check for duplicate rule names
+        // Check for duplicate rule names (tags can be duplicated for protocol modes)
         let mut seen_names = HashSet::new();
         for rule in &self.rules {
             if !seen_names.insert(&rule.name) {
@@ -188,9 +269,15 @@ mod tests {
                     payload: Some(vec![PrefixCondition {
                         prefix: "test".to_string(),
                         length: None,
+                        decoded_prefix: Vec::new(),
                     }]),
                 },
+                module: None,
+                repository: None,
             }],
+            sorted_enabled_rules: Vec::new(),
+            txid_trie: None,
+            payload_trie: None,
         };
 
         assert!(config.validate().is_err());
@@ -211,7 +298,12 @@ mod tests {
                     txid: None,
                     payload: None,
                 },
+                module: None,
+                repository: None,
             }],
+            sorted_enabled_rules: Vec::new(),
+            txid_trie: None,
+            payload_trie: None,
         };
 
         assert!(config.validate().is_err());
@@ -234,8 +326,11 @@ mod tests {
                         payload: Some(vec![PrefixCondition {
                             prefix: "test".to_string(),
                             length: None,
+                            decoded_prefix: Vec::new(),
                         }]),
                     },
+                    module: None,
+                    repository: None,
                 },
                 FilterRule {
                     name: "test2".to_string(),
@@ -248,10 +343,16 @@ mod tests {
                         payload: Some(vec![PrefixCondition {
                             prefix: "test2".to_string(),
                             length: None,
+                            decoded_prefix: Vec::new(),
                         }]),
                     },
+                    module: None,
+                    repository: None,
                 },
             ],
+            sorted_enabled_rules: Vec::new(),
+            txid_trie: None,
+            payload_trie: None,
         };
 
         assert!(config.validate().is_err());
@@ -274,8 +375,11 @@ mod tests {
                         payload: Some(vec![PrefixCondition {
                             prefix: "low".to_string(),
                             length: None,
+                            decoded_prefix: Vec::new(),
                         }]),
                     },
+                    module: None,
+                    repository: None,
                 },
                 FilterRule {
                     name: "high".to_string(),
@@ -288,10 +392,16 @@ mod tests {
                         payload: Some(vec![PrefixCondition {
                             prefix: "high".to_string(),
                             length: None,
+                            decoded_prefix: Vec::new(),
                         }]),
                     },
+                    module: None,
+                    repository: None,
                 },
             ],
+            sorted_enabled_rules: Vec::new(),
+            txid_trie: None,
+            payload_trie: None,
         };
 
         let sorted = config.get_sorted_rules();

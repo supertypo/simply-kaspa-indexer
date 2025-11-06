@@ -43,6 +43,20 @@ CREATE TABLE subnetworks
 );
 
 
+CREATE TABLE tag_providers
+(
+    id              SERIAL PRIMARY KEY,
+    tag             VARCHAR(50) NOT NULL,
+    module          VARCHAR(50) NOT NULL,
+    prefix          VARCHAR(100) NOT NULL,
+    repository_url  TEXT,
+    description     TEXT,
+    created_at      TIMESTAMP DEFAULT NOW(),
+    UNIQUE (tag, module)
+);
+CREATE INDEX ON tag_providers (tag, module);
+
+
 CREATE TABLE transactions
 (
     transaction_id BYTEA PRIMARY KEY,
@@ -51,10 +65,11 @@ CREATE TABLE transactions
     mass           INTEGER,
     payload        BYTEA,
     block_time     BIGINT,
-    tag            VARCHAR(50)
+    tag_id         INTEGER REFERENCES tag_providers(id) ON DELETE SET NULL
 );
 
 CREATE INDEX ON transactions (block_time DESC);
+CREATE INDEX ON transactions (tag_id);
 
 
 CREATE TABLE transactions_acceptances
@@ -123,3 +138,11 @@ CREATE TABLE scripts_transactions
     PRIMARY KEY (script_public_key, transaction_id)
 );
 CREATE INDEX ON scripts_transactions (script_public_key, block_time DESC);
+
+
+CREATE TABLE sequencing_commitments
+(
+    block_hash         BYTEA PRIMARY KEY,
+    seqcom_hash        BYTEA NOT NULL,
+    parent_seqcom_hash BYTEA
+);

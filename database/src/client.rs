@@ -48,6 +48,11 @@ impl KaspaDbClient {
         Ok(())
     }
 
+    /// Get a reference to the underlying database pool
+    pub fn pool(&self) -> &Pool<Postgres> {
+        &self.pool
+    }
+
     pub async fn create_schema(&self, upgrade_db: bool, seqcom_enabled: bool) -> Result<(), Error> {
         match &self.select_var("schema_version").await {
             Ok(v) => {

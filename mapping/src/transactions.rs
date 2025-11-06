@@ -1,8 +1,9 @@
-use log::{debug, trace, warn};
+use log::{debug, trace};
 use bigdecimal::ToPrimitive;
 use hex;
 use kaspa_rpc_core::RpcTransaction;
 use simply_kaspa_cli::filter_config::{FilterConfig, FilterRule, PrefixCondition};
+use simply_kaspa_database::tag_cache::TagCache;
 
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
 use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
@@ -11,28 +12,9 @@ use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
 use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
 use simply_kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
 
-/// Decode a prefix string into bytes. Defaults to ASCII/UTF-8 interpretation
-/// unless the prefix starts with "hex:", in which case it's hex-decoded.
-///
-/// Examples:
-/// - "kasplex" → [0x6b, 0x61, 0x73, 0x70, 0x6c, 0x65, 0x78] (ASCII bytes)
-/// - "hex:94f8" → [0x94, 0xf8] (hex decoded)
-fn decode_prefix(prefix: &str) -> Vec<u8> {
-    if let Some(hex_prefix) = prefix.strip_prefix("hex:") {
-        // Explicit hex format
-        hex::decode(hex_prefix).unwrap_or_else(|_| {
-            warn!("Invalid hex prefix '{}', treating as ASCII", prefix);
-            prefix.as_bytes().to_vec()
-        })
-    } else {
-        // Default: treat as ASCII/UTF-8
-        prefix.as_bytes().to_vec()
-    }
-}
-
-/// Check if data matches a prefix condition
+/// Check if data matches a prefix condition (uses pre-decoded prefix)
 fn matches_prefix(data: &[u8], condition: &PrefixCondition) -> bool {
-    let decoded_prefix = decode_prefix(&condition.prefix);
+    let decoded_prefix = &condition.decoded_prefix;
     let check_length = condition.length.unwrap_or(decoded_prefix.len()).min(decoded_prefix.len());
 
     trace!("Checking prefix: '{}', data len: {}, prefix len: {}, check len: {}",
@@ -41,15 +23,17 @@ fn matches_prefix(data: &[u8], condition: &PrefixCondition) -> bool {
     data.len() >= check_length && data[..check_length].starts_with(&decoded_prefix[..check_length])
 }
 
-/// Evaluate if a transaction matches a rule
+/// Evaluate if a transaction matches a rule (uses pre-decoded prefixes)
 fn evaluate_rule(txid_hex: &str, payload: &[u8], rule: &FilterRule) -> bool {
     // Check TXID condition if present
     if let Some(ref txid_condition) = rule.conditions.txid {
-        let decoded_prefix = decode_prefix(&txid_condition.prefix);
+        // Use pre-decoded prefix (computed at config load time)
+        let decoded_prefix = &txid_condition.decoded_prefix;
         let prefix_str = if txid_condition.prefix.starts_with("hex:") {
-            hex::encode(&decoded_prefix)
+            hex::encode(decoded_prefix)
         } else {
-            txid_condition.prefix.clone()
+            // UTF-8 prefix was stored as bytes, convert back to string
+            String::from_utf8_lossy(decoded_prefix).to_string()
         };
 
         let check_length = txid_condition.length.unwrap_or(prefix_str.len()).min(prefix_str.len());
@@ -90,35 +74,43 @@ pub fn map_transaction(
     include_payload: bool,
     include_block_time: bool,
     filter_config: Option<&FilterConfig>,
+    tag_cache: Option<&TagCache>,
 ) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
 
     let txid_hex = verbose_data.transaction_id.to_string();
     let payload_bytes = &transaction.payload;
 
-    let mut tag: Option<String> = None;
+    let mut matched_tag: Option<(String, String)> = None; // (tag, module)
     let mut store_payload = false;
 
     // Apply filtering rules if config is provided
     if let Some(config) = filter_config {
-        let sorted_rules = config.get_sorted_rules();
-
-        for rule in sorted_rules {
+        // Use pre-sorted rules (computed at config load time)
+        for rule in &config.sorted_enabled_rules {
             if evaluate_rule(&txid_hex, payload_bytes, rule) {
-                tag = Some(rule.tag.clone());
+                let module = rule.module.as_deref().unwrap_or("default");
+                matched_tag = Some((rule.tag.clone(), module.to_string()));
                 store_payload = rule.store_payload;
                 break; // First match wins (highest priority)
             }
         }
 
         // If no rule matched, use default
-        if tag.is_none() {
+        if matched_tag.is_none() {
             store_payload = config.settings.default_store_payload;
         }
     } else {
         // No config = store all payloads (backward compatible)
         store_payload = true;
     }
+
+    // Convert matched tag+module to tag_id via TagCache
+    let tag_id = if let Some((tag, module)) = matched_tag {
+        tag_cache.and_then(|cache| cache.get_tag_id(&tag, &module))
+    } else {
+        None
+    };
 
     SqlTransaction {
         transaction_id: verbose_data.transaction_id.into(),
@@ -127,7 +119,7 @@ pub fn map_transaction(
         mass: (include_mass && verbose_data.compute_mass != 0).then_some(verbose_data.compute_mass.to_i32().unwrap()),
         payload: (store_payload && include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time.to_i64().unwrap()),
-        tag,
+        tag_id,
     }
 }
 

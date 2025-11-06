@@ -9,7 +9,7 @@ pub struct Transaction {
     pub mass: Option<i32>,
     pub payload: Option<Payload>,
     pub block_time: Option<i64>,
-    pub tag: Option<String>,
+    pub tag_id: Option<i32>,
 }
 
 impl Eq for Transaction {}

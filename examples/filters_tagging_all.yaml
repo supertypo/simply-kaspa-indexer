@@ -1,11 +1,17 @@
-# Tagging Mode - Filter Configuration
+# Tagging Mode - Filter Configuration (All Protocols)
 #
 # This configuration stores ALL transaction payloads (default behavior).
 # Specific protocols are TAGGED for easy identification and querying.
 #
 # Tagged protocols:
+#   - Igra: TXID starts with "97b1" AND payload starts with "94" -> tag: "igra"
 #   - Kasplex: payload starts with "kasplex" -> tag: "kasplex"
-#   - Igra: TXID starts with "97b1" AND payload starts with "94f8" or "9402" -> tag: "igra"
+#   - K Social: payload starts with "k:1" -> tag: "k_social"
+#   - Kaspatalk Chat: payload starts with "kch" -> tag: "kaspatalk_chat"
+#   - Kaspatalk Talk: payload starts with "ktk" -> tag: "kaspatalk_talk"
+#   - Kasia: payload starts with "ciph_msg" -> tag: "kasia"
+#   - Kaspa File: payload starts with "kaspa-file" -> tag: "kaspa_file"
+#   - Kaspa Directory: payload starts with "kaspa-directory" -> tag: "kaspa_directory"
 #   - Other transactions: stored with NULL tag
 #
 # Use case: Full archival with protocol classification
@@ -25,19 +31,88 @@ rules:
     priority: 110
     enabled: true
     tag: igra
+    module: igra
+    repository: https://igralabs.com/
     store_payload: true  # Redundant with default_store_payload=true, but explicit
     conditions:
       txid:
         prefix: "97b1"
       payload:
-        - prefix: "hex:94f8"
-        - prefix: "hex:9402"
+        - prefix: "hex:94"
 
   - name: kasplex-protocol
     priority: 100
     enabled: true
     tag: kasplex
+    module: kasplex
+    repository: https://kasplex.org/
     store_payload: true  # Redundant with default_store_payload=true, but explicit
     conditions:
       payload:
         - prefix: "kasplex"
+
+  - name: k-social-network
+    priority: 90
+    enabled: true
+    tag: k_social
+    module: k
+    repository: https://github.com/thesheepcat/K
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "k:1"
+
+  - name: kaspatalk-chat
+    priority: 85
+    enabled: true
+    tag: kaspatalk
+    module: chat
+    repository: https://github.com/thesheepcat/kaspatalk-backend
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "kch:"
+
+  - name: kaspatalk-talk
+    priority: 84
+    enabled: true
+    tag: kaspatalk
+    module: talk
+    repository: https://github.com/thesheepcat/kaspatalk-backend
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "ktk:"
+
+  - name: kasia-encrypted
+    priority: 80
+    enabled: true
+    tag: kasia
+    module: kasia
+    repository: https://github.com/K-Kluster/Kasia
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "ciph_msg"
+
+  - name: kaspa-file
+    priority: 75
+    enabled: true
+    tag: kaspa_file
+    module: file
+    repository: https://github.com/RossKU/kaspa-file-storage-v2
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "kaspa-file"
+
+  - name: kaspa-directory
+    priority: 74
+    enabled: true
+    tag: kaspa_file
+    module: directory
+    repository: https://github.com/RossKU/kaspa-file-storage-v2
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "kaspa-directory"
