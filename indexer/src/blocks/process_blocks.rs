@@ -10,7 +10,7 @@ use crate::web::model::metrics::Metrics;
 use chrono::DateTime;
 use crossbeam_queue::ArrayQueue;
 use log::{debug, info, warn};
-use simply_kaspa_cli::cli_args::CliDisable;
+use simply_kaspa_cli::cli_args::{CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_database::models::block::Block;
 use simply_kaspa_database::models::block_parent::BlockParent;
@@ -19,6 +19,10 @@ use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
+use std::collections::HashMap;
+use kaspa_hashes::Hash;
+use crate::seqcom::merkle_hash;
+use simply_kaspa_database::models::sequencing_commitment::SequencingCommitment;
 
 pub async fn process_blocks(
     settings: Settings,
@@ -33,6 +37,7 @@ pub async fn process_blocks(
     const NOOP_DELETES_BEFORE_VCP: i32 = 10;
     let batch_scale = settings.cli_args.batch_scale;
     let batch_size = (800f64 * batch_scale) as usize;
+    let seqcom_enabled = settings.cli_args.is_enabled(CliEnable::SeqCom);
     let disable_virtual_chain_processing = settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing);
     let disable_vcp_wait_for_sync = settings.disable_vcp_wait_for_sync;
     let disable_blocks = settings.cli_args.is_disabled(CliDisable::BlocksTable);
@@ -41,6 +46,8 @@ pub async fn process_blocks(
     let mut vcp_started = false;
     let mut blocks = vec![];
     let mut blocks_parents = vec![];
+    let mut sequencing_commitments = if seqcom_enabled { vec![] } else { vec![] };
+    let mut batch_seqcom_cache: HashMap<Hash, SequencingCommitment> = if seqcom_enabled { HashMap::new() } else { HashMap::new() };
     let mut checkpoint_blocks = vec![];
     let mut last_commit_time = Instant::now();
     let mut noop_delete_count = 0;
@@ -55,6 +62,34 @@ pub async fn process_blocks(
             if !disable_block_relations {
                 blocks_parents.extend(mapper.map_block_parents(&block_data.block));
             }
+
+            if seqcom_enabled {
+                let parent_seqcom = if let Some(parent_hash) = block_data.block.header.parents_by_level.get(0).and_then(|x| x.get(0)) {
+                    let parent_hash_obj_db: simply_kaspa_database::models::types::hash::Hash = (*parent_hash).into();
+                    let parent_hash_obj_cache: kaspa_hashes::Hash = parent_hash_obj_db.clone().into();
+                    if let Some(cached_seqcom) = batch_seqcom_cache.get(&parent_hash_obj_cache) {
+                        Some(cached_seqcom.seqcom_hash.clone())
+                    } else {
+                        database.get_sequencing_commitment(&parent_hash_obj_db).await.unwrap().map(|x| x.seqcom_hash)
+                    }
+                } else {
+                    None
+                };
+
+                // KIP-15: SeqCom(block) = H(parent_seqcom || AIDMR)
+                // AIDMR = Accepted ID Merkle Root from block header
+                let aidmr = block_data.block.header.accepted_id_merkle_root;
+                let new_seqcom = merkle_hash(parent_seqcom.clone().unwrap_or_default().into(), aidmr);
+
+                let current_seqcom = SequencingCommitment {
+                    block_hash: block_data.block.header.hash.into(),
+                    seqcom_hash: new_seqcom.into(),
+                    parent_seqcom_hash: parent_seqcom,
+                };
+                batch_seqcom_cache.insert(current_seqcom.block_hash.clone().into(), current_seqcom.clone());
+                sequencing_commitments.push(current_seqcom);
+            }
+
             checkpoint_blocks.push(CheckpointBlock {
                 origin: CheckpointOrigin::Blocks,
                 hash: block_data.block.header.hash.into(),
@@ -71,7 +106,12 @@ pub async fn process_blocks(
                 let last_checkpoint_block = checkpoint_blocks.last().unwrap().clone();
                 let blocks_inserted = if !disable_blocks { insert_blocks(batch_scale, blocks, database.clone()).await } else { 0 };
                 let block_parents_inserted = if !disable_block_relations {
-                    insert_block_parents(batch_scale, blocks_parents, database.clone()).await
+                    insert_block_parents(batch_scale, &blocks_parents, database.clone()).await
+                } else {
+                    0
+                };
+                let sequencing_commitments_inserted = if seqcom_enabled {
+                    insert_sequencing_commitments(batch_scale, &sequencing_commitments, database.clone()).await
                 } else {
                     0
                 };
@@ -93,10 +133,17 @@ pub async fn process_blocks(
                     }
                     let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                     let bps = checkpoint_blocks.len() as f64 / commit_time as f64 * 1000f64;
-                    info!(
-                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp) [clr {} ta]. Last block: {}",
-                        blocks_inserted, commit_time, bps, block_parents_inserted, tas_deleted, last_block_datetime
-                    );
+                    if seqcom_enabled {
+                        info!(
+                            "Committed {} new blocks in {}ms ({:.1} bps, {} bp, {} sc) [clr {} ta]. Last block: {}",
+                            blocks_inserted, commit_time, bps, block_parents_inserted, sequencing_commitments_inserted, tas_deleted, last_block_datetime
+                        );
+                    } else {
+                        info!(
+                            "Committed {} new blocks in {}ms ({:.1} bps, {} bp) [clr {} ta]. Last block: {}",
+                            blocks_inserted, commit_time, bps, block_parents_inserted, tas_deleted, last_block_datetime
+                        );
+                    }
                     if noop_delete_count >= NOOP_DELETES_BEFORE_VCP {
                         info!("Notifying virtual chain processor");
                         start_vcp.store(true, Ordering::Relaxed);
@@ -105,10 +152,17 @@ pub async fn process_blocks(
                 } else if !disable_blocks || !disable_block_relations {
                     let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                     let bps = checkpoint_blocks.len() as f64 / commit_time as f64 * 1000f64;
-                    info!(
-                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp). Last block: {}",
-                        blocks_inserted, commit_time, bps, block_parents_inserted, last_block_datetime
-                    );
+                    if seqcom_enabled {
+                        info!(
+                            "Committed {} new blocks in {}ms ({:.1} bps, {} bp, {} sc). Last block: {}",
+                            blocks_inserted, commit_time, bps, block_parents_inserted, sequencing_commitments_inserted, last_block_datetime
+                        );
+                    } else {
+                        info!(
+                            "Committed {} new blocks in {}ms ({:.1} bps, {} bp). Last block: {}",
+                            blocks_inserted, commit_time, bps, block_parents_inserted, last_block_datetime
+                        );
+                    }
                 }
 
                 let mut metrics = metrics.write().await;
@@ -124,6 +178,8 @@ pub async fn process_blocks(
                 blocks = vec![];
                 checkpoint_blocks = vec![];
                 blocks_parents = vec![];
+                sequencing_commitments = vec![];
+                batch_seqcom_cache.clear();
                 last_commit_time = Instant::now();
             }
         } else {
@@ -145,7 +201,7 @@ async fn insert_blocks(batch_scale: f64, values: Vec<Block>, database: KaspaDbCl
     rows_affected
 }
 
-async fn insert_block_parents(batch_scale: f64, values: Vec<BlockParent>, database: KaspaDbClient) -> u64 {
+async fn insert_block_parents(batch_scale: f64, values: &[BlockParent], database: KaspaDbClient) -> u64 {
     let batch_size = min((400f64 * batch_scale) as usize, 10000); // 2^16 / fields
     let key = "block_parents";
     let start_time = Instant::now();
@@ -153,6 +209,19 @@ async fn insert_block_parents(batch_scale: f64, values: Vec<BlockParent>, databa
     let mut rows_affected = 0;
     for batch_values in values.chunks(batch_size) {
         rows_affected += database.insert_block_parents(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
+    }
+    debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
+    rows_affected
+}
+
+async fn insert_sequencing_commitments(batch_scale: f64, values: &[SequencingCommitment], database: KaspaDbClient) -> u64 {
+    let batch_size = min((400f64 * batch_scale) as usize, 10000); // 2^16 / fields
+    let key = "sequencing_commitments";
+    let start_time = Instant::now();
+    debug!("Processing {} {}", values.len(), key);
+    let mut rows_affected = 0;
+    for batch_values in values.chunks(batch_size) {
+        rows_affected += database.insert_sequencing_commitments(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     rows_affected

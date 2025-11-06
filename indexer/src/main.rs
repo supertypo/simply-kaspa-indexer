@@ -61,7 +61,8 @@ async fn main() {
         info!("Initializing database");
         database.drop_schema().await.expect("Unable to drop schema");
     }
-    database.create_schema(cli_args.upgrade_db).await.expect("Unable to create schema");
+    let seqcom_enabled = cli_args.is_enabled(CliEnable::SeqCom);
+    database.create_schema(cli_args.upgrade_db, seqcom_enabled).await.expect("Unable to create schema");
 
     start_processing(cli_args, kaspad_pool, database).await;
 }

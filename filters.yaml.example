@@ -1,0 +1,126 @@
+# Transaction Filter Configuration
+#
+# This file defines rules for filtering and tagging transactions based on
+# TXID and/or payload prefix matching. Rules are evaluated in priority order
+# (highest first), and the first matching rule wins.
+#
+# For more information, see docs/FILTERING_GUIDE.md
+
+version: "1.0"
+
+settings:
+  # Default behavior when no rule matches
+  # - true: Store payload for all unmatched transactions
+  # - false: Store only transaction ID for unmatched transactions
+  default_store_payload: false
+
+rules:
+  # IGRA Rollup - High Priority (Specific TXID + Payload)
+  - name: igra-rollup
+    priority: 100
+    enabled: true
+    tag: igra
+    store_payload: true
+    conditions:
+      txid:
+        prefix: "97b1"
+      payload:
+        - prefix: "hex:94f8"
+
+  # Kasplex Protocol - Flag Only (No Payload Storage)
+  # This rule tags transactions but doesn't store payloads
+  - name: kasplex-protocol
+    priority: 90
+    enabled: true
+    tag: kasplex
+    store_payload: false
+    conditions:
+      payload:
+        - prefix: "kasplex"
+
+  # KRC20 Tokens - Multiple Payload Prefixes (OR logic)
+  - name: krc20-tokens
+    priority: 80
+    enabled: true
+    tag: krc20
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "krc20:mint"
+        - prefix: "krc20:transfer"
+        - prefix: "krc20:burn"
+
+  # Special IGRA Subset - More Specific Rule (Overrides General)
+  # This demonstrates priority: more specific rules should have higher priority
+  - name: igra-special
+    priority: 110
+    enabled: true
+    tag: igra-special
+    store_payload: true
+    conditions:
+      txid:
+        prefix: "97b1a"
+        length: 5  # Optional: specify exact prefix length to check
+      payload:
+        - prefix: "hex:94f8"
+          length: 4  # Optional: specify exact prefix length to check
+
+  # Example: ASCII Payload Prefix
+  - name: my-protocol
+    priority: 70
+    enabled: false  # Disabled by default
+    tag: myprotocol
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "myprotocol:"  # ASCII string prefix
+
+  # Example: Hex-Encoded Payload Prefix
+  # Use "hex:" prefix for binary/hex-encoded prefixes
+  - name: hex-example
+    priority: 60
+    enabled: false
+    tag: hexample
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "hex:abcd1234"
+
+  # Example: TXID-Only Matching (Any Payload)
+  - name: txid-only
+    priority: 50
+    enabled: false
+    tag: txonly
+    store_payload: true
+    conditions:
+      txid:
+        prefix: "abc123"
+
+  # Example: Payload-Only Matching (Any TXID)
+  - name: payload-only
+    priority: 40
+    enabled: false
+    tag: payonly
+    store_payload: false
+    conditions:
+      payload:
+        - prefix: "test"
+
+# Notes:
+#
+# 1. Priority: Higher numbers = higher priority. Rules evaluated in descending order.
+# 2. First Match Wins: Once a rule matches, evaluation stops.
+# 3. Tag: Single semantic label (max 50 characters) stored in database.
+# 4. Store Payload: Controls whether payload bytes are stored (true) or omitted (false).
+# 5. Prefix Formats:
+#    - ASCII: "kasplex" (default)
+#    - Hex: "hex:94f8" (use for binary data)
+# 6. Length: Optional parameter to specify exact prefix length to check.
+#    If omitted, the full decoded prefix length is used.
+# 7. Multiple Payload Conditions: OR logic - any match satisfies the rule.
+# 8. TXID + Payload Conditions: AND logic - both must match.
+#
+# Performance Notes:
+# - Simple prefix matching only (no regex) for 10 BPS throughput
+# - Disabled rules are skipped during evaluation
+# - Most common matches should have higher priority for best performance

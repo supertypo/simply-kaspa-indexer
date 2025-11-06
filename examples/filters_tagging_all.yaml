@@ -1,0 +1,43 @@
+# Tagging Mode - Filter Configuration
+#
+# This configuration stores ALL transaction payloads (default behavior).
+# Specific protocols are TAGGED for easy identification and querying.
+#
+# Tagged protocols:
+#   - Kasplex: payload starts with "kasplex" -> tag: "kasplex"
+#   - Igra: TXID starts with "97b1" AND payload starts with "94f8" or "9402" -> tag: "igra"
+#   - Other transactions: stored with NULL tag
+#
+# Use case: Full archival with protocol classification
+# Example command:
+#   cargo run --release -- --filter-config examples/filters_tagging_all.yaml --database-url postgres://...
+
+version: "1.0"
+
+settings:
+  # Default behavior: STORE all payloads for all transactions
+  default_store_payload: true
+
+rules:
+  # Igra has higher priority (110) to ensure it's checked first
+  # This matters when a transaction could match multiple rules
+  - name: igra-rollup
+    priority: 110
+    enabled: true
+    tag: igra
+    store_payload: true  # Redundant with default_store_payload=true, but explicit
+    conditions:
+      txid:
+        prefix: "97b1"
+      payload:
+        - prefix: "hex:94f8"
+        - prefix: "hex:9402"
+
+  - name: kasplex-protocol
+    priority: 100
+    enabled: true
+    tag: kasplex
+    store_payload: true  # Redundant with default_store_payload=true, but explicit
+    conditions:
+      payload:
+        - prefix: "kasplex"

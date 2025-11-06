@@ -13,7 +13,19 @@ name = "simply_kaspa_mapping"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-simply-kaspa-cli.workspace = true
-simply-kaspa-database.workspace = true
-kaspa-rpc-core.workspace = true
-bigdecimal.workspace = true
+
+log = "0.4"
+
+kaspa-rpc-core = { workspace = true }
+
+simply-kaspa-cli = { path = "../cli" }
+
+simply-kaspa-database = { path = "../database" }
+
+bigdecimal = "0.4"
+
+hex = "0.4"
+
+rayon.workspace = true
+
+

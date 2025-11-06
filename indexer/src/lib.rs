@@ -8,3 +8,4 @@ pub mod utxo_import;
 pub mod vars;
 pub mod virtual_chain;
 pub mod web;
+pub mod seqcom;

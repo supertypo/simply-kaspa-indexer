@@ -51,3 +51,5 @@ url.workspace = true
 rand.workspace = true
 uuid = { version = "1.12.1", features = ["v4"] }
 indexmap.workspace = true
+kaspa-merkle = { git = "https://github.com/kaspanet/rusty-kaspa", branch = "master" }
+blake2b_simd = "1.0.0"

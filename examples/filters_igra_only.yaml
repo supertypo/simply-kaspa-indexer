@@ -1,0 +1,31 @@
+# Igra Rollup Only - Filter Configuration
+#
+# This configuration stores ONLY Igra rollup transactions.
+# All other transactions are stored as ID-only stubs (no payload).
+#
+# Igra transactions are identified by:
+#   - TXID starts with "97b1" (4 hex chars)
+#   - Payload starts with "94f8" OR "9402" (4 hex chars each)
+#
+# Use case: Igra rollup indexing
+# Example command:
+#   cargo run --release -- --filter-config examples/filters_igra_only.yaml --database-url postgres://...
+
+version: "1.0"
+
+settings:
+  # Default behavior: do NOT store payloads for unmatched transactions
+  default_store_payload: false
+
+rules:
+  - name: igra-rollup
+    priority: 100
+    enabled: true
+    tag: igra
+    store_payload: true
+    conditions:
+      txid:
+        prefix: "97b1"
+      payload:
+        - prefix: "hex:94f8"
+        - prefix: "hex:9402"

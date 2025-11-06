@@ -3,7 +3,7 @@ CREATE TABLE vars
     key   VARCHAR(255) PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT INTO vars (key, value) VALUES ('schema_version', '10');
+INSERT INTO vars (key, value) VALUES ('schema_version', '11');
 
 
 CREATE TABLE blocks
@@ -50,8 +50,10 @@ CREATE TABLE transactions
     hash           BYTEA,
     mass           INTEGER,
     payload        BYTEA,
-    block_time     BIGINT
+    block_time     BIGINT,
+    tag            VARCHAR(50)
 );
+
 CREATE INDEX ON transactions (block_time DESC);
 
 

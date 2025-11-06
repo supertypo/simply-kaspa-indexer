@@ -11,6 +11,7 @@ use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::transaction_input::TransactionInput;
 use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
+use crate::models::sequencing_commitment::SequencingCommitment;
 
 pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i32, Error> {
     sqlx::query("INSERT INTO subnetworks (subnetwork_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id")
@@ -71,9 +72,9 @@ pub async fn insert_block_parents(block_parents: &[BlockParent], pool: &Pool<Pos
 }
 
 pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 6;
+    const COLS: usize = 7;
     let sql = format!(
-        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time)
+        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, tag)
         VALUES {} ON CONFLICT DO NOTHING",
         generate_placeholders(transactions.len(), COLS)
     );
@@ -85,6 +86,7 @@ pub async fn insert_transactions(transactions: &[Transaction], pool: &Pool<Postg
         query = query.bind(tx.mass);
         query = query.bind(&tx.payload);
         query = query.bind(tx.block_time);
+        query = query.bind(&tx.tag);
     }
     Ok(query.execute(pool).await?.rows_affected())
 }
@@ -264,4 +266,20 @@ pub async fn insert_transaction_acceptances(tx_acceptances: &[TransactionAccepta
 
 fn generate_placeholders(rows: usize, columns: usize) -> String {
     (0..rows).map(|i| format!("({})", (1..=columns).map(|c| format!("${}", c + i * columns)).join(", "))).join(", ")
+}
+
+pub async fn insert_sequencing_commitments(commitments: &[SequencingCommitment], pool: &Pool<Postgres>) -> Result<u64, Error> {
+    const COLS: usize = 3;
+    let sql = format!(
+        "INSERT INTO sequencing_commitments (block_hash, seqcom_hash, parent_seqcom_hash)
+        VALUES {} ON CONFLICT DO NOTHING",
+        generate_placeholders(commitments.len(), COLS)
+    );
+    let mut query = sqlx::query(&sql);
+    for commitment in commitments {
+        query = query.bind(&commitment.block_hash);
+        query = query.bind(&commitment.seqcom_hash);
+        query = query.bind(&commitment.parent_seqcom_hash);
+    }
+    Ok(query.execute(pool).await?.rows_affected())
 }

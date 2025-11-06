@@ -19,6 +19,7 @@ use crate::models::transaction_input::TransactionInput;
 use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
 use crate::query;
+use crate::models::sequencing_commitment::SequencingCommitment;
 
 #[derive(Clone)]
 pub struct KaspaDbClient {
@@ -26,7 +27,8 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 10;
+    const SCHEMA_VERSION: u8 = 11;
+    const SEQCOM_TABLE_DDL: &'static str = "CREATE TABLE IF NOT EXISTS sequencing_commitments (block_hash BYTEA PRIMARY KEY, seqcom_hash BYTEA NOT NULL, parent_seqcom_hash BYTEA);";
 
     pub async fn new(url: &str, pool_size: u32) -> Result<KaspaDbClient, Error> {
         let url_cleaned = Regex::new(r"(postgres://postgres:)[^@]+(@)").expect("Failed to parse url").replace(url, "$1$2");
@@ -46,7 +48,7 @@ impl KaspaDbClient {
         Ok(())
     }
 
-    pub async fn create_schema(&self, upgrade_db: bool) -> Result<(), Error> {
+    pub async fn create_schema(&self, upgrade_db: bool, seqcom_enabled: bool) -> Result<(), Error> {
         match &self.select_var("schema_version").await {
             Ok(v) => {
                 let mut version = v.parse::<u8>().expect("Expected valid schema version");
@@ -150,6 +152,23 @@ impl KaspaDbClient {
                             panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
                         }
                     }
+                    if version == 10 {
+                        let ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/11_enhanced_indexer.up.sql"));
+                        if upgrade_db {
+                            warn!("\n{ddl}\nUpgrading schema from v{version} to v{}. ^", version + 1);
+                            query::misc::execute_ddl(ddl, &self.pool).await?;
+                            // Conditionally create sequencing_commitments table if seqcom is enabled
+                            if seqcom_enabled {
+                                query::misc::execute_ddl(Self::SEQCOM_TABLE_DDL, &self.pool).await?;
+                            }
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            // Update schema version to 11
+                            self.upsert_var("schema_version", &"11".to_string()).await?;
+                            version += 1;
+                        } else {
+                            panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
+                        }
+                    }
                     trace!("Schema version is v{version}")
                 }
                 version = self.select_var("schema_version").await?.parse::<u8>().unwrap();
@@ -165,6 +184,11 @@ impl KaspaDbClient {
                 warn!("Applying schema v{}", Self::SCHEMA_VERSION);
                 query::misc::execute_ddl(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/up.sql")), &self.pool)
                     .await?;
+                // Conditionally create sequencing_commitments table if seqcom is enabled
+                if seqcom_enabled {
+                    query::misc::execute_ddl(Self::SEQCOM_TABLE_DDL, &self.pool).await?;
+                    info!("SeqCom table created (--enable seqcom)");
+                }
                 info!("\x1b[32mSchema applied successfully\x1b[0m");
             }
         };
@@ -197,6 +221,14 @@ impl KaspaDbClient {
 
     pub async fn select_is_chain_block(&self, block_hash: &Hash) -> Result<bool, Error> {
         query::select::select_is_chain_block(block_hash, &self.pool).await
+    }
+
+    pub async fn get_block(&self, block_hash: &Hash) -> Result<Option<Block>, sqlx::Error> {
+        query::select::select_block(block_hash, &self.pool).await
+    }
+
+    pub async fn get_sequencing_commitment(&self, block_hash: &Hash) -> Result<Option<SequencingCommitment>, sqlx::Error> {
+        query::select::select_sequencing_commitment(block_hash, &self.pool).await
     }
 
     pub async fn insert_subnetwork(&self, subnetwork_id: &String) -> Result<i32, Error> {
@@ -249,6 +281,10 @@ impl KaspaDbClient {
 
     pub async fn insert_transaction_acceptances(&self, transaction_acceptances: &[TransactionAcceptance]) -> Result<u64, Error> {
         query::insert::insert_transaction_acceptances(transaction_acceptances, &self.pool).await
+    }
+
+    pub async fn insert_sequencing_commitments(&self, commitments: &[SequencingCommitment]) -> Result<u64, Error> {
+        query::insert::insert_sequencing_commitments(commitments, &self.pool).await
     }
 
     pub async fn upsert_var(&self, key: &str, value: &String) -> Result<u64, Error> {

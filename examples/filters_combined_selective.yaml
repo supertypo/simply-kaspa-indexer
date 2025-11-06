@@ -1,0 +1,42 @@
+# Combined Selective - Filter Configuration
+#
+# This configuration stores BOTH Kasplex and Igra transactions.
+# All other transactions are stored as ID-only stubs (no payload).
+#
+# Filtered protocols:
+#   - Kasplex: payload starts with "kasplex"
+#   - Igra: TXID starts with "97b1" AND payload starts with "94f8" or "9402"
+#
+# Use case: Multi-protocol indexing with selective storage
+# Example command:
+#   cargo run --release -- --filter-config examples/filters_combined_selective.yaml --database-url postgres://...
+
+version: "1.0"
+
+settings:
+  # Default behavior: do NOT store payloads for unmatched transactions
+  default_store_payload: false
+
+rules:
+  # Igra has higher priority (110) to ensure it's checked first
+  # This matters when a transaction could match multiple rules
+  - name: igra-rollup
+    priority: 110
+    enabled: true
+    tag: igra
+    store_payload: true
+    conditions:
+      txid:
+        prefix: "97b1"
+      payload:
+        - prefix: "hex:94f8"
+        - prefix: "hex:9402"
+
+  - name: kasplex-protocol
+    priority: 100
+    enabled: true
+    tag: kasplex
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "kasplex"
