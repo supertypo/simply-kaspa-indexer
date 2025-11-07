@@ -52,6 +52,10 @@ Please make contact with us on the [Kaspa Discord](https://kaspa.org) if you nee
 Pruning can be activated by supplying --prune-db, optionally a cron expression can be supplied, e.g. --prune-db=\"30 6 * * *\" (06:30Z every day).  
 Additionally retention time must be supplied. E.g. --retention=14d, or by the more fine masked --retention-<...> arguments.
 
+### kip-15 support & transaction filtering: 
+
+For a detailed overview of the implemented features please refer to the [Enhanced Indexer Features](ENHANCED_INDEXER_FEATURES.md) document.
+
 # License
 MIT, which means this software can be freely modified to any specific need and redistributed (under certain terms).  
 Please be so kind as to contribute back features you think could be beneficial to the general community.

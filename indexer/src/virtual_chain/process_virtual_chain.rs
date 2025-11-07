@@ -55,7 +55,7 @@ pub async fn process_virtual_chain(
         debug!("Getting virtual chain from start_hash {}", start_hash);
         match kaspad_pool.get().await {
             Ok(kaspad) => {
-                match kaspad.get_virtual_chain_from_block(start_hash, !disable_transaction_acceptance).await {
+                match kaspad.get_virtual_chain_from_block(start_hash, !disable_transaction_acceptance, None).await {
                     Ok(res) => {
                         let start_request_time = Instant::now();
                         let added_blocks_count = res.added_chain_block_hashes.len();

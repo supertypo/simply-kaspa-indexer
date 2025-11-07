@@ -1,0 +1,330 @@
+# Tagging Mode - Filter Configuration (All Protocols)
+#
+# This configuration stores ALL transaction payloads (default behavior).
+# Specific protocols are TAGGED for easy identification and querying.
+#
+# Tagged protocols:
+#   - L2 & Rollups: Igra rollup
+#   - Tokens: Kasplex fungible tokens
+#   - Social: K Social network
+#   - Messaging: Kaspatalk Chat/Talk, Kasia encrypted messaging
+#   - Storage: Kaspa File storage and directory
+#   - Mining: 13 major mining pools (F2Pool, ViaBTC, HumPool, etc.)
+#   - Other transactions: stored with NULL tag
+#
+# Use case: Full archival with protocol classification
+# Example command:
+#   cargo run --release -- --filter-config examples/filters_tagging_all.yaml --database-url postgres://...
+
+version: "1.0"
+
+settings:
+  # Default behavior: STORE all payloads for all transactions
+  default_store_payload: true
+
+rules:
+  # ============================================================================
+  # MINING POOLS (Priority 200-220)
+  # ============================================================================
+
+  # Mining Pool: F2Pool (China) 
+  - name: f2pool-mining
+    tag: f2pool
+    module: mining
+    category: mining
+    priority: 220
+    enabled: true
+    store_payload: true
+    repository: https://www.f2pool.com/
+    conditions:
+      payload:
+        - prefix: "f2pool.com"
+          match_type: contains
+
+  # Mining Pool: ViaBTC (China) 
+  - name: viabtc-mining
+    tag: viabtc
+    module: mining
+    category: mining
+    priority: 219
+    enabled: true
+    store_payload: true
+    repository: https://www.viabtc.com/
+    conditions:
+      payload:
+        - prefix: "viabtc.com"
+          match_type: contains
+
+  # Mining Pool: HumPool (China)
+  - name: humpool-mining
+    tag: humpool
+    module: mining
+    category: mining
+    priority: 218
+    enabled: true
+    store_payload: true
+    repository: https://www.humpool.com/
+    conditions:
+      payload:
+        - prefix: "humpool.com"
+          match_type: contains
+
+  # Mining Pool: HeroMiners (Turkey) 
+  - name: herominers-mining
+    tag: herominers
+    module: mining
+    category: mining
+    priority: 217
+    enabled: true
+    store_payload: true
+    repository: https://herominers.com/
+    conditions:
+      payload:
+        - prefix: "herominers.com"
+          match_type: contains
+
+  # Mining Pool: Kryptex (Russia) 
+  - name: kryptex-mining
+    tag: kryptex
+    module: mining
+    category: mining
+    priority: 216
+    enabled: true
+    store_payload: true
+    repository: https://www.kryptex.com/
+    conditions:
+      payload:
+        - prefix: "kryptex.com"
+          match_type: contains
+
+  # Mining Pool: kaspa-pool.org (Independent) 
+  - name: kaspa-pool-org-mining
+    tag: kaspa-pool-org
+    module: mining
+    category: mining
+    priority: 215
+    enabled: true
+    store_payload: true
+    repository: https://kaspa-pool.org/
+    conditions:
+      payload:
+        - prefix: "kaspa-pool.org"
+          match_type: contains
+
+  # Mining Pool: Kasrate (Independent) 
+  - name: kasrate-mining
+    tag: kasrate
+    module: mining
+    category: mining
+    priority: 214
+    enabled: true
+    store_payload: true
+    repository: https://kasrate.io/
+    conditions:
+      payload:
+        - prefix: "kasrate.io"
+          match_type: contains
+
+  # Mining Pool: K1Pool (Independent)
+  - name: k1pool-mining
+    tag: k1pool
+    module: mining
+    category: mining
+    priority: 213
+    enabled: true
+    store_payload: true
+    repository: https://k1pool.com/
+    conditions:
+      payload:
+        - prefix: "k1pool.com"
+          match_type: contains
+
+  # Mining Pool: WoolyPooly (Europe) 
+  - name: woolypooly-mining
+    tag: woolypooly
+    module: mining
+    category: mining
+    priority: 212
+    enabled: true
+    store_payload: true
+    repository: https://woolypooly.com/
+    conditions:
+      payload:
+        - prefix: "woolypooly.com"
+          match_type: contains
+
+  # Mining Pool: 2Miners (Europe) 
+  - name: 2miners-mining
+    tag: 2miners
+    module: mining
+    category: mining
+    priority: 211
+    enabled: true
+    store_payload: true
+    repository: https://2miners.com/
+    conditions:
+      payload:
+        - prefix: "2miners.com"
+          match_type: contains
+
+  # Mining Pool: IceRiver (ASIC manufacturer pool) 
+  - name: iceriver-mining
+    tag: iceriver
+    module: mining
+    category: mining
+    priority: 210
+    enabled: true
+    store_payload: true
+    repository: https://iceriver.io/
+    conditions:
+      payload:
+        - prefix: "iceriver.io"
+          match_type: contains
+
+  # Mining Pool: Miningcore (Generic software) 
+  - name: miningcore-mining
+    tag: miningcore
+    module: mining
+    category: mining
+    priority: 209
+    enabled: true
+    store_payload: true
+    repository: https://github.com/miningcore/miningcore
+    conditions:
+      payload:
+        - prefix: "miningcore"
+          match_type: contains
+
+  # Mining Pool: bpool (Independent) 
+  - name: bpool-mining
+    tag: bpool
+    module: mining
+    category: mining
+    priority: 208
+    enabled: true
+    store_payload: true
+    repository: https://bpool.io/
+    conditions:
+      payload:
+        - prefix: "bpool.io"
+          match_type: contains
+
+  # ============================================================================
+  # L2 & ROLLUPS (Priority 100-119)
+  # ============================================================================
+
+  # Igra has higher priority (110) to ensure it's checked first
+  # This matters when a transaction could match multiple rules
+  - name: igra-rollup
+    priority: 110
+    enabled: true
+    tag: igra
+    module: igra
+    category: l2
+    repository: https://igralabs.com/
+    store_payload: true  # Redundant with default_store_payload=true, but explicit
+    conditions:
+      txid:
+        prefix: "97b1"
+      payload:
+        - prefix: "hex:94"
+
+  # ============================================================================
+  # TOKENS & NFTs (Priority 90-99)
+  # ============================================================================
+
+  - name: kasplex-protocol
+    priority: 100
+    enabled: true
+    tag: kasplex
+    module: kasplex
+    category: tokens
+    repository: https://kasplex.org/
+    store_payload: true  
+    conditions:
+      payload:
+        - prefix: "kasplex"
+
+  # ============================================================================
+  # SOCIAL NETWORKS (Priority 80-89)
+  # ============================================================================
+
+  - name: k-social-network
+    priority: 90
+    enabled: true
+    tag: k_social
+    module: k
+    category: social
+    repository: https://github.com/thesheepcat/K
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "k:1"
+
+  # ============================================================================
+  # MESSAGING (Priority 75-84)
+  # ============================================================================
+
+  - name: kaspatalk-chat
+    priority: 85
+    enabled: true
+    tag: kaspatalk
+    module: chat
+    category: messaging
+    repository: https://github.com/thesheepcat/kaspatalk-backend
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "kch:"
+
+  - name: kaspatalk-talk
+    priority: 84
+    enabled: true
+    tag: kaspatalk
+    module: talk
+    category: social
+    repository: https://github.com/thesheepcat/kaspatalk-backend
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "ktk:"
+
+  - name: kasia-encrypted
+    priority: 80
+    enabled: true
+    tag: kasia
+    module: kasia
+    category: messaging
+    repository: https://github.com/K-Kluster/Kasia
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "ciph_msg"
+
+  # ============================================================================
+  # FILE STORAGE (Priority 70-74)
+  # ============================================================================
+
+  - name: kaspa-file
+    priority: 75
+    enabled: true
+    tag: kaspa_file
+    module: file
+    category: storage
+    repository: https://github.com/RossKU/kaspa-file-storage-v2
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "kaspa-file"
+
+  - name: kaspa-directory
+    priority: 74
+    enabled: true
+    tag: kaspa_file
+    module: directory
+    category: storage
+    repository: https://github.com/RossKU/kaspa-file-storage-v2
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "kaspa-directory"

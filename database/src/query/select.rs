@@ -3,6 +3,8 @@ use crate::models::query::table_details::TableDetails;
 use crate::models::subnetwork::Subnetwork;
 use crate::models::types::hash::Hash;
 use sqlx::{Error, Pool, Postgres, Row};
+use crate::models::sequencing_commitment::SequencingCommitment;
+use crate::models::block::Block;
 
 pub async fn select_database_details(pool: &Pool<Postgres>) -> Result<DatabaseDetails, Error> {
     sqlx::query_as::<_, DatabaseDetails>(
@@ -60,4 +62,18 @@ pub async fn select_is_chain_block(block_hash: &Hash, pool: &Pool<Postgres>) -> 
         .fetch_one(pool)
         .await?
         .try_get(0)
+}
+
+pub async fn select_sequencing_commitment(block_hash: &Hash, pool: &Pool<Postgres>) -> Result<Option<SequencingCommitment>, Error> {
+    sqlx::query_as("SELECT * FROM sequencing_commitments WHERE block_hash = $1")
+        .bind(block_hash)
+        .fetch_optional(pool)
+        .await
+}
+
+pub async fn select_block(block_hash: &Hash, pool: &Pool<Postgres>) -> Result<Option<Block>, Error> {
+    sqlx::query_as("SELECT * FROM blocks WHERE hash = $1")
+        .bind(block_hash)
+        .fetch_optional(pool)
+        .await
 }

@@ -7,12 +7,18 @@ use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 
 /// Wrapper type for kaspa_hashes::Hash implementing the SQLX Encode & Decode traits
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Hash(KaspaHash);
 
 impl Hash {
     pub const fn as_bytes(&self) -> [u8; 32] {
         self.0.as_bytes()
+    }
+}
+
+impl Default for Hash {
+    fn default() -> Self {
+        Hash(KaspaHash::default())
     }
 }
 

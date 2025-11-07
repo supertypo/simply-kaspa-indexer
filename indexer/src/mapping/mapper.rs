@@ -1,5 +1,9 @@
 use kaspa_rpc_core::{RpcBlock, RpcTransaction};
+use log::info;
 use simply_kaspa_cli::cli_args::{CliArgs, CliField};
+use simply_kaspa_cli::filter_config::FilterConfig;
+use simply_kaspa_database::tag_cache::TagCache;
+use std::sync::{Arc, RwLock};
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
 use simply_kaspa_database::models::block::Block as SqlBlock;
 use simply_kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
@@ -10,10 +14,13 @@ use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTra
 use simply_kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 
-use crate::{blocks, transactions};
+use crate::mapping::{blocks, transactions};
 
 #[derive(Clone)]
 pub struct KaspaDbMapper {
+    cli_args: CliArgs,
+    filter_config: Option<Arc<RwLock<FilterConfig>>>,
+    tag_cache: Option<TagCache>,
     block_accepted_id_merkle_root: bool,
     block_merge_set_blues_hashes: bool,
     block_merge_set_reds_hashes: bool,
@@ -44,8 +51,25 @@ pub struct KaspaDbMapper {
 }
 
 impl KaspaDbMapper {
-    pub fn new(cli_args: CliArgs) -> KaspaDbMapper {
+    pub fn new(
+        cli_args: CliArgs,
+        tag_cache: Option<TagCache>,
+        filter_config: Option<Arc<RwLock<FilterConfig>>>,
+    ) -> KaspaDbMapper {
+        // Log filter config status
+        if let Some(ref config) = filter_config {
+            let config_lock = config.read().unwrap();
+            info!("Using filter config with {} enabled rules, {} disabled rules",
+                  config_lock.rules.iter().filter(|r| r.enabled).count(),
+                  config_lock.rules.iter().filter(|r| !r.enabled).count());
+        } else {
+            info!("No filter config specified, storing all payloads");
+        }
+
         KaspaDbMapper {
+            cli_args: cli_args.clone(),
+            filter_config,
+            tag_cache,
             block_accepted_id_merkle_root: !cli_args.is_excluded(CliField::BlockAcceptedIdMerkleRoot),
             block_merge_set_blues_hashes: !cli_args.is_excluded(CliField::BlockMergeSetBluesHashes),
             block_merge_set_reds_hashes: !cli_args.is_excluded(CliField::BlockMergeSetRedsHashes),
@@ -117,6 +141,8 @@ impl KaspaDbMapper {
             self.tx_mass,
             self.tx_payload,
             self.tx_block_time,
+            self.filter_config.as_ref(),
+            self.tag_cache.as_ref(),
         )
     }
 

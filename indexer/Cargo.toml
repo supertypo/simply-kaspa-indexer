@@ -14,7 +14,6 @@ simply-kaspa-cli.workspace = true
 simply-kaspa-signal.workspace = true
 simply-kaspa-kaspad.workspace = true
 simply-kaspa-database.workspace = true
-simply-kaspa-mapping.workspace = true
 kaspa-wrpc-client.workspace = true
 kaspa-rpc-core.workspace = true
 kaspa-p2p-lib.workspace = true
@@ -32,6 +31,8 @@ moka.workspace = true
 chrono.workspace = true
 bigdecimal.workspace = true
 hex.workspace = true
+regex.workspace = true
+rayon.workspace = true
 env_logger.workspace = true
 log.workspace = true
 clap.workspace = true
@@ -51,3 +52,5 @@ url.workspace = true
 rand.workspace = true
 uuid = { version = "1.12.1", features = ["v4"] }
 indexmap.workspace = true
+kaspa-merkle = { git = "https://github.com/kaspanet/rusty-kaspa", branch = "master" }
+blake2b_simd = "1.0.0"

@@ -1,5 +1,10 @@
+use log::{debug, trace};
 use bigdecimal::ToPrimitive;
+use hex;
 use kaspa_rpc_core::RpcTransaction;
+use simply_kaspa_cli::filter_config::{FilterConfig, FilterRule, MatchType, PrefixCondition};
+use simply_kaspa_database::tag_cache::TagCache;
+use std::sync::{Arc, RwLock};
 
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
 use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
@@ -7,6 +12,93 @@ use simply_kaspa_database::models::script_transaction::ScriptTransaction as SqlS
 use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
 use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
 use simply_kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
+
+/// Check if data matches a prefix condition (supports prefix/contains/regex modes)
+fn matches_prefix(data: &[u8], condition: &PrefixCondition) -> bool {
+    match condition.match_type {
+        MatchType::Prefix => {
+            // Original prefix matching (starts_with) - fastest ~50ns
+            let decoded_prefix = &condition.decoded_prefix;
+            let check_length = condition.length.unwrap_or(decoded_prefix.len()).min(decoded_prefix.len());
+
+            trace!("Checking prefix: '{}', data len: {}, prefix len: {}, check len: {}",
+                   condition.prefix, data.len(), decoded_prefix.len(), check_length);
+
+            data.len() >= check_length && data[..check_length].starts_with(&decoded_prefix[..check_length])
+        }
+        MatchType::Contains => {
+            // Substring matching (search anywhere in data) - medium speed ~300ns
+            let decoded_prefix = &condition.decoded_prefix;
+            let check_length = condition.length.unwrap_or(decoded_prefix.len()).min(decoded_prefix.len());
+
+            trace!("Checking contains: '{}', data len: {}, pattern len: {}",
+                   condition.prefix, data.len(), check_length);
+
+            if decoded_prefix.is_empty() || data.len() < check_length {
+                return false;
+            }
+
+            // Use sliding window to search for pattern anywhere in data
+            data.windows(check_length).any(|window| window == &decoded_prefix[..check_length])
+        }
+        MatchType::Regex => {
+            // Regex matching (full pattern support) - slowest ~2μs
+            if let Some(ref regex) = condition.compiled_regex {
+                trace!("Checking regex: '{}', data len: {}", condition.prefix, data.len());
+
+                // Convert data to string for regex matching (lossy conversion)
+                let text = String::from_utf8_lossy(data);
+                regex.is_match(&text)
+            } else {
+                // Regex not compiled (shouldn't happen if preprocessing worked)
+                trace!("Regex pattern not compiled for: '{}'", condition.prefix);
+                false
+            }
+        }
+    }
+}
+
+/// Evaluate if a transaction matches a rule (uses pre-decoded prefixes)
+fn evaluate_rule(txid_hex: &str, payload: &[u8], rule: &FilterRule) -> bool {
+    // Check TXID condition if present
+    if let Some(ref txid_condition) = rule.conditions.txid {
+        // Use pre-decoded prefix (computed at config load time)
+        let decoded_prefix = &txid_condition.decoded_prefix;
+        let prefix_str = if txid_condition.prefix.starts_with("hex:") {
+            hex::encode(decoded_prefix)
+        } else {
+            // UTF-8 prefix was stored as bytes, convert back to string
+            String::from_utf8_lossy(decoded_prefix).to_string()
+        };
+
+        let check_length = txid_condition.length.unwrap_or(prefix_str.len()).min(prefix_str.len());
+
+        if !(txid_hex.starts_with(&prefix_str[..check_length]) && txid_hex.len() >= check_length) {
+            trace!("Rule '{}': TXID mismatch", rule.name);
+            return false;
+        }
+        trace!("Rule '{}': TXID match", rule.name);
+    }
+
+    // Check payload conditions if present
+    if let Some(ref payload_conditions) = rule.conditions.payload {
+        let mut payload_matched = false;
+        for condition in payload_conditions {
+            if matches_prefix(payload, condition) {
+                trace!("Rule '{}': Payload matched prefix '{}'", rule.name, condition.prefix);
+                payload_matched = true;
+                break;
+            }
+        }
+        if !payload_matched {
+            trace!("Rule '{}': No payload match", rule.name);
+            return false;
+        }
+    }
+
+    debug!("Rule '{}' MATCHED (tag: {})", rule.name, rule.tag);
+    true
+}
 
 pub fn map_transaction(
     subnetwork_key: i32,
@@ -16,15 +108,56 @@ pub fn map_transaction(
     include_mass: bool,
     include_payload: bool,
     include_block_time: bool,
+    filter_config: Option<&Arc<RwLock<FilterConfig>>>,
+    tag_cache: Option<&TagCache>,
 ) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
+
+    let txid_hex = verbose_data.transaction_id.to_string();
+    let payload_bytes = &transaction.payload;
+
+    let mut matched_tag: Option<(String, String)> = None; // (tag, module)
+    let mut store_payload = false;
+
+    // Apply filtering rules if config is provided
+    if let Some(config_arc) = filter_config {
+        // Acquire read lock to access filter config
+        let config = config_arc.read().unwrap();
+
+        // Use pre-sorted rules (computed at config load time)
+        for rule in &config.sorted_enabled_rules {
+            if evaluate_rule(&txid_hex, payload_bytes, rule) {
+                let module = rule.module.as_deref().unwrap_or("default");
+                matched_tag = Some((rule.tag.clone(), module.to_string()));
+                store_payload = rule.store_payload;
+                break; // First match wins (highest priority)
+            }
+        }
+
+        // If no rule matched, use default
+        if matched_tag.is_none() {
+            store_payload = config.settings.default_store_payload;
+        }
+    } else {
+        // No config = store all payloads (backward compatible)
+        store_payload = true;
+    }
+
+    // Convert matched tag+module to tag_id via TagCache
+    let tag_id = if let Some((tag, module)) = matched_tag {
+        tag_cache.and_then(|cache| cache.get_tag_id(&tag, &module))
+    } else {
+        None
+    };
+
     SqlTransaction {
         transaction_id: verbose_data.transaction_id.into(),
         subnetwork_id: include_subnetwork_id.then_some(subnetwork_key),
         hash: include_hash.then_some(verbose_data.hash.into()),
         mass: (include_mass && verbose_data.compute_mass != 0).then_some(verbose_data.compute_mass.to_i32().unwrap()),
-        payload: (include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
+        payload: (store_payload && include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time.to_i64().unwrap()),
+        tag_id,
     }
 }
 

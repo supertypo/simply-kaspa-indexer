@@ -2,6 +2,7 @@ use crate::models::types::blue_work::BlueWork;
 use crate::models::types::hash::Hash;
 use crate::models::types::nonce::Nonce;
 
+#[derive(sqlx::FromRow)]
 pub struct Block {
     pub hash: Hash,
     pub accepted_id_merkle_root: Option<Hash>,

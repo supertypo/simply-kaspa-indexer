@@ -1,0 +1,22 @@
+[package]
+name = "kaspa-payload-retrofit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90.0"
+
+[[bin]]
+name = "kaspa-payload-retrofit"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1.41.1", features = ["rt-multi-thread", "macros"] }
+sqlx = { version = "0.8.2", features = ["runtime-tokio", "tls-rustls", "postgres"] }
+clap = { version = "4.5.20", features = ["derive"] }
+log = "0.4.22"
+env_logger = "0.11.5"
+indicatif = "0.17.8"
+hex = "0.4.3"
+
+# Local dependencies
+simply-kaspa-database = { path = "../database" }
+simply-kaspa-cli = { path = "../cli" }

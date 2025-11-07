@@ -2,3 +2,7 @@
 *.iml
 target/
 docker-compose.yaml
+docs/
+.env
+.DS_Store
+CLAUDE.md
