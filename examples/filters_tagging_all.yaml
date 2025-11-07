@@ -27,7 +27,7 @@ rules:
   # MINING POOLS (Priority 200-220)
   # ============================================================================
 
-  # Mining Pool: F2Pool (China) - ~21,347 txs
+  # Mining Pool: F2Pool (China) 
   - name: f2pool-mining
     tag: f2pool
     module: mining
@@ -41,7 +41,7 @@ rules:
         - prefix: "f2pool.com"
           match_type: contains
 
-  # Mining Pool: ViaBTC (China) - ~21,219 txs
+  # Mining Pool: ViaBTC (China) 
   - name: viabtc-mining
     tag: viabtc
     module: mining
@@ -55,7 +55,7 @@ rules:
         - prefix: "viabtc.com"
           match_type: contains
 
-  # Mining Pool: HumPool (China) - ~12,980 txs
+  # Mining Pool: HumPool (China)
   - name: humpool-mining
     tag: humpool
     module: mining
@@ -69,7 +69,7 @@ rules:
         - prefix: "humpool.com"
           match_type: contains
 
-  # Mining Pool: HeroMiners (Turkey) - ~9,568 txs
+  # Mining Pool: HeroMiners (Turkey) 
   - name: herominers-mining
     tag: herominers
     module: mining
@@ -83,7 +83,7 @@ rules:
         - prefix: "herominers.com"
           match_type: contains
 
-  # Mining Pool: Kryptex (Russia) - ~5,177 txs
+  # Mining Pool: Kryptex (Russia) 
   - name: kryptex-mining
     tag: kryptex
     module: mining
@@ -97,7 +97,7 @@ rules:
         - prefix: "kryptex.com"
           match_type: contains
 
-  # Mining Pool: kaspa-pool.org (Independent) - ~3,291 txs
+  # Mining Pool: kaspa-pool.org (Independent) 
   - name: kaspa-pool-org-mining
     tag: kaspa-pool-org
     module: mining
@@ -111,7 +111,7 @@ rules:
         - prefix: "kaspa-pool.org"
           match_type: contains
 
-  # Mining Pool: Kasrate (Independent) - ~1,914 txs
+  # Mining Pool: Kasrate (Independent) 
   - name: kasrate-mining
     tag: kasrate
     module: mining
@@ -125,7 +125,7 @@ rules:
         - prefix: "kasrate.io"
           match_type: contains
 
-  # Mining Pool: K1Pool (Independent) - ~1,247 txs
+  # Mining Pool: K1Pool (Independent)
   - name: k1pool-mining
     tag: k1pool
     module: mining
@@ -139,7 +139,7 @@ rules:
         - prefix: "k1pool.com"
           match_type: contains
 
-  # Mining Pool: WoolyPooly (Europe) - ~1,145 txs
+  # Mining Pool: WoolyPooly (Europe) 
   - name: woolypooly-mining
     tag: woolypooly
     module: mining
@@ -153,7 +153,7 @@ rules:
         - prefix: "woolypooly.com"
           match_type: contains
 
-  # Mining Pool: 2Miners (Europe) - ~1,043 txs
+  # Mining Pool: 2Miners (Europe) 
   - name: 2miners-mining
     tag: 2miners
     module: mining
@@ -167,7 +167,7 @@ rules:
         - prefix: "2miners.com"
           match_type: contains
 
-  # Mining Pool: IceRiver (ASIC manufacturer pool) - ~337 txs
+  # Mining Pool: IceRiver (ASIC manufacturer pool) 
   - name: iceriver-mining
     tag: iceriver
     module: mining
@@ -181,7 +181,7 @@ rules:
         - prefix: "iceriver.io"
           match_type: contains
 
-  # Mining Pool: Miningcore (Generic software) - ~14 txs
+  # Mining Pool: Miningcore (Generic software) 
   - name: miningcore-mining
     tag: miningcore
     module: mining
@@ -195,7 +195,7 @@ rules:
         - prefix: "miningcore"
           match_type: contains
 
-  # Mining Pool: bpool (Independent) - ~2 txs
+  # Mining Pool: bpool (Independent) 
   - name: bpool-mining
     tag: bpool
     module: mining

@@ -103,20 +103,20 @@ Mining pools use coinbase transaction payloads to identify their block rewards. 
 
 ### Igra Rollup
 **Website**: https://igralabs.com/
-**Category**: L2 Gaming
+**Category**: L2 
 **Description**: Gaming rollup protocol for Kaspa
 
 **Identification**:
 - TXID prefix: `97b1` (4 hex chars)
 - Payload prefix: `hex:94` (1 byte, RLP encoding marker)
 
-**Use Case**: Gaming state commitments and rollup transactions
+**Use Case**: L2 Evm
 
 ---
 
 ## Tokens & NFTs
 
-### Kasplex
+### Kasplex (needs better payload identification to separate L2 / KRC20)
 **Website**: https://kasplex.org/
 **Category**: Tokens
 **Description**: Token and NFT protocol for Kaspa
