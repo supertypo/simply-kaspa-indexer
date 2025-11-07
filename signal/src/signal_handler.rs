@@ -1,4 +1,4 @@
-use log::warn;
+use log::{info, warn};
 use std::process;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,16 +13,22 @@ use tokio::sync::broadcast::Sender;
 pub struct SignalHandler {
     shutdown_tx: Sender<()>,
     shutdown_sent: Arc<AtomicBool>,
+    reload_tx: Sender<()>,
 }
 
 impl SignalHandler {
     pub fn new() -> SignalHandler {
         let (shutdown_tx, _) = broadcast::channel(1);
-        SignalHandler { shutdown_tx, shutdown_sent: Arc::new(AtomicBool::new(false)) }
+        let (reload_tx, _) = broadcast::channel(10);
+        SignalHandler { shutdown_tx, shutdown_sent: Arc::new(AtomicBool::new(false)), reload_tx }
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<()> {
         self.shutdown_tx.subscribe()
+    }
+
+    pub fn subscribe_reload(&self) -> broadcast::Receiver<()> {
+        self.reload_tx.subscribe()
     }
 
     pub fn is_shutdown(&self) -> bool {
@@ -42,6 +48,7 @@ impl SignalHandler {
         {
             let mut sigterm = signal(SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
             let mut sigint = signal(SignalKind::interrupt()).expect("Failed to set up SIGINT handler");
+            let mut sighup = signal(SignalKind::hangup()).expect("Failed to set up SIGHUP handler");
             loop {
                 tokio::select! {
                     _ = sigint.recv() => {
@@ -49,6 +56,9 @@ impl SignalHandler {
                     },
                     _ = sigterm.recv() => {
                         self.handle_signal("SIGTERM");
+                    },
+                    _ = sighup.recv() => {
+                        self.handle_reload();
                     },
                 }
             }
@@ -73,6 +83,11 @@ impl SignalHandler {
         warn!("{} received, stopping... (repeat for forced close)", signal);
         self.shutdown_sent.store(true, Ordering::Relaxed);
         let _ = self.shutdown_tx.send(());
+    }
+
+    fn handle_reload(&self) {
+        info!("SIGHUP received, reloading configuration...");
+        let _ = self.reload_tx.send(());
     }
 }
 

@@ -2,8 +2,9 @@ use log::{debug, trace};
 use bigdecimal::ToPrimitive;
 use hex;
 use kaspa_rpc_core::RpcTransaction;
-use simply_kaspa_cli::filter_config::{FilterConfig, FilterRule, PrefixCondition};
+use simply_kaspa_cli::filter_config::{FilterConfig, FilterRule, MatchType, PrefixCondition};
 use simply_kaspa_database::tag_cache::TagCache;
+use std::sync::{Arc, RwLock};
 
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
 use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
@@ -12,15 +13,49 @@ use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
 use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
 use simply_kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
 
-/// Check if data matches a prefix condition (uses pre-decoded prefix)
+/// Check if data matches a prefix condition (supports prefix/contains/regex modes)
 fn matches_prefix(data: &[u8], condition: &PrefixCondition) -> bool {
-    let decoded_prefix = &condition.decoded_prefix;
-    let check_length = condition.length.unwrap_or(decoded_prefix.len()).min(decoded_prefix.len());
+    match condition.match_type {
+        MatchType::Prefix => {
+            // Original prefix matching (starts_with) - fastest ~50ns
+            let decoded_prefix = &condition.decoded_prefix;
+            let check_length = condition.length.unwrap_or(decoded_prefix.len()).min(decoded_prefix.len());
 
-    trace!("Checking prefix: '{}', data len: {}, prefix len: {}, check len: {}",
-           condition.prefix, data.len(), decoded_prefix.len(), check_length);
+            trace!("Checking prefix: '{}', data len: {}, prefix len: {}, check len: {}",
+                   condition.prefix, data.len(), decoded_prefix.len(), check_length);
 
-    data.len() >= check_length && data[..check_length].starts_with(&decoded_prefix[..check_length])
+            data.len() >= check_length && data[..check_length].starts_with(&decoded_prefix[..check_length])
+        }
+        MatchType::Contains => {
+            // Substring matching (search anywhere in data) - medium speed ~300ns
+            let decoded_prefix = &condition.decoded_prefix;
+            let check_length = condition.length.unwrap_or(decoded_prefix.len()).min(decoded_prefix.len());
+
+            trace!("Checking contains: '{}', data len: {}, pattern len: {}",
+                   condition.prefix, data.len(), check_length);
+
+            if decoded_prefix.is_empty() || data.len() < check_length {
+                return false;
+            }
+
+            // Use sliding window to search for pattern anywhere in data
+            data.windows(check_length).any(|window| window == &decoded_prefix[..check_length])
+        }
+        MatchType::Regex => {
+            // Regex matching (full pattern support) - slowest ~2μs
+            if let Some(ref regex) = condition.compiled_regex {
+                trace!("Checking regex: '{}', data len: {}", condition.prefix, data.len());
+
+                // Convert data to string for regex matching (lossy conversion)
+                let text = String::from_utf8_lossy(data);
+                regex.is_match(&text)
+            } else {
+                // Regex not compiled (shouldn't happen if preprocessing worked)
+                trace!("Regex pattern not compiled for: '{}'", condition.prefix);
+                false
+            }
+        }
+    }
 }
 
 /// Evaluate if a transaction matches a rule (uses pre-decoded prefixes)
@@ -73,7 +108,7 @@ pub fn map_transaction(
     include_mass: bool,
     include_payload: bool,
     include_block_time: bool,
-    filter_config: Option<&FilterConfig>,
+    filter_config: Option<&Arc<RwLock<FilterConfig>>>,
     tag_cache: Option<&TagCache>,
 ) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
@@ -85,7 +120,10 @@ pub fn map_transaction(
     let mut store_payload = false;
 
     // Apply filtering rules if config is provided
-    if let Some(config) = filter_config {
+    if let Some(config_arc) = filter_config {
+        // Acquire read lock to access filter config
+        let config = config_arc.read().unwrap();
+
         // Use pre-sorted rules (computed at config load time)
         for rule in &config.sorted_enabled_rules {
             if evaluate_rule(&txid_hex, payload_bytes, rule) {

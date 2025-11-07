@@ -1950,6 +1950,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "indicatif"
+version = "0.17.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "183b3088984b400f4cfac3620d5e076c84da5364016b4f49473de574b2586235"
+dependencies = [
+ "console",
+ "number_prefix",
+ "portable-atomic",
+ "unicode-width",
+ "web-time",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2376,6 +2389,38 @@ dependencies = [
  "tonic 0.12.3",
  "tonic-build",
  "uuid 1.12.1",
+]
+
+[[package]]
+name = "kaspa-payload-analyzer"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "env_logger",
+ "hex",
+ "indicatif",
+ "log",
+ "serde",
+ "serde_yaml",
+ "simply-kaspa-cli",
+ "simply-kaspa-database",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
+name = "kaspa-payload-retrofit"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "env_logger",
+ "hex",
+ "indicatif",
+ "log",
+ "simply-kaspa-cli",
+ "simply-kaspa-database",
+ "sqlx",
+ "tokio",
 ]
 
 [[package]]
@@ -3036,6 +3081,12 @@ checksum = "5c7398b9c8b70908f6371f47ed36737907c87c52af34c268fed0bf0ceb92ead9"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "number_prefix"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "objc2-core-foundation"
@@ -4199,6 +4250,7 @@ dependencies = [
  "hex",
  "humantime",
  "humantime-serde",
+ "regex",
  "serde",
  "serde_yaml",
  "utoipa",
@@ -4246,13 +4298,14 @@ dependencies = [
  "log",
  "moka",
  "rand 0.9.2",
+ "rayon",
+ "regex",
  "serde",
  "serde_json",
  "serde_with",
  "simply-kaspa-cli",
  "simply-kaspa-database",
  "simply-kaspa-kaspad",
- "simply-kaspa-mapping",
  "simply-kaspa-signal",
  "sysinfo 0.37.1",
  "tokio",
@@ -4274,19 +4327,6 @@ dependencies = [
  "kaspa-rpc-core",
  "kaspa-wrpc-client",
  "log",
-]
-
-[[package]]
-name = "simply-kaspa-mapping"
-version = "0.0.0"
-dependencies = [
- "bigdecimal",
- "hex",
- "kaspa-rpc-core",
- "log",
- "rayon",
- "simply-kaspa-cli",
- "simply-kaspa-database",
 ]
 
 [[package]]
@@ -4397,6 +4437,7 @@ dependencies = [
  "native-tls",
  "once_cell",
  "percent-encoding",
+ "rustls",
  "serde",
  "serde_json",
  "sha2",
@@ -4406,6 +4447,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
+ "webpki-roots",
 ]
 
 [[package]]

@@ -1,9 +1,21 @@
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
 use crate::prefix_trie::PrefixTrie;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MatchType {
+    /// Match prefix only (starts_with) - fastest, ~50ns
+    Prefix,
+    /// Match anywhere in data (contains) - medium speed, ~300ns
+    Contains,
+    /// Match with regex pattern - slowest, ~2μs
+    Regex,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FilterConfig {
@@ -38,6 +50,8 @@ pub struct FilterRule {
     pub module: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repository: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,9 +67,19 @@ pub struct PrefixCondition {
     pub prefix: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub length: Option<usize>,
+    /// Match type: prefix (default), contains, or regex
+    #[serde(default = "default_match_type")]
+    pub match_type: MatchType,
     /// Pre-decoded prefix bytes - computed at load time
     #[serde(skip)]
     pub decoded_prefix: Vec<u8>,
+    /// Pre-compiled regex pattern (only for regex match_type) - computed at load time
+    #[serde(skip)]
+    pub compiled_regex: Option<Regex>,
+}
+
+fn default_match_type() -> MatchType {
+    MatchType::Prefix
 }
 
 impl FilterConfig {
@@ -79,19 +103,45 @@ impl FilterConfig {
         Ok(config)
     }
 
-    /// Decode all prefix strings into bytes at load time
+    /// Decode all prefix strings into bytes and compile regex patterns at load time
     fn preprocess_prefixes(&mut self) -> Result<(), String> {
         for rule in &mut self.rules {
             // Decode TXID prefix if present
             if let Some(ref mut txid_cond) = rule.conditions.txid {
-                txid_cond.decoded_prefix = Self::decode_prefix_string(&txid_cond.prefix)?;
+                Self::preprocess_condition(txid_cond, &rule.name, "txid")?;
             }
 
             // Decode payload prefixes if present
             if let Some(ref mut payload_conds) = rule.conditions.payload {
                 for cond in payload_conds {
-                    cond.decoded_prefix = Self::decode_prefix_string(&cond.prefix)?;
+                    Self::preprocess_condition(cond, &rule.name, "payload")?;
                 }
+            }
+        }
+        Ok(())
+    }
+
+    /// Preprocess a single condition: decode prefix and compile regex if needed
+    fn preprocess_condition(cond: &mut PrefixCondition, rule_name: &str, field: &str) -> Result<(), String> {
+        match cond.match_type {
+            MatchType::Prefix | MatchType::Contains => {
+                // Decode prefix to bytes
+                cond.decoded_prefix = Self::decode_prefix_string(&cond.prefix)?;
+            }
+            MatchType::Regex => {
+                // Compile regex pattern with safety limits
+                let regex = Regex::new(&cond.prefix)
+                    .map_err(|e| format!("Rule '{}': {} invalid regex '{}': {}", rule_name, field, cond.prefix, e))?;
+
+                // Validate regex size (safety check)
+                if cond.prefix.len() > 256 {
+                    return Err(format!("Rule '{}': {} regex pattern too long (max 256 bytes): '{}'",
+                        rule_name, field, cond.prefix));
+                }
+
+                cond.compiled_regex = Some(regex);
+                // For regex mode, also store the pattern as bytes for contains fallback if needed
+                cond.decoded_prefix = cond.prefix.as_bytes().to_vec();
             }
         }
         Ok(())
@@ -269,11 +319,14 @@ mod tests {
                     payload: Some(vec![PrefixCondition {
                         prefix: "test".to_string(),
                         length: None,
+                        match_type: MatchType::Prefix,
                         decoded_prefix: Vec::new(),
+                        compiled_regex: None,
                     }]),
                 },
                 module: None,
                 repository: None,
+                category: None,
             }],
             sorted_enabled_rules: Vec::new(),
             txid_trie: None,
@@ -300,6 +353,7 @@ mod tests {
                 },
                 module: None,
                 repository: None,
+                category: None,
             }],
             sorted_enabled_rules: Vec::new(),
             txid_trie: None,
@@ -326,7 +380,9 @@ mod tests {
                         payload: Some(vec![PrefixCondition {
                             prefix: "test".to_string(),
                             length: None,
+                            match_type: MatchType::Prefix,
                             decoded_prefix: Vec::new(),
+                            compiled_regex: None,
                         }]),
                     },
                     module: None,
@@ -343,7 +399,9 @@ mod tests {
                         payload: Some(vec![PrefixCondition {
                             prefix: "test2".to_string(),
                             length: None,
+                            match_type: MatchType::Prefix,
                             decoded_prefix: Vec::new(),
+                            compiled_regex: None,
                         }]),
                     },
                     module: None,
@@ -375,7 +433,9 @@ mod tests {
                         payload: Some(vec![PrefixCondition {
                             prefix: "low".to_string(),
                             length: None,
+                            match_type: MatchType::Prefix,
                             decoded_prefix: Vec::new(),
+                            compiled_regex: None,
                         }]),
                     },
                     module: None,
@@ -392,7 +452,9 @@ mod tests {
                         payload: Some(vec![PrefixCondition {
                             prefix: "high".to_string(),
                             length: None,
+                            match_type: MatchType::Prefix,
                             decoded_prefix: Vec::new(),
+                            compiled_regex: None,
                         }]),
                     },
                     module: None,

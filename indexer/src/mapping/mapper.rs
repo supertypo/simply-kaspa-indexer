@@ -1,8 +1,9 @@
 use kaspa_rpc_core::{RpcBlock, RpcTransaction};
-use log::{error, info};
+use log::info;
 use simply_kaspa_cli::cli_args::{CliArgs, CliField};
 use simply_kaspa_cli::filter_config::FilterConfig;
 use simply_kaspa_database::tag_cache::TagCache;
+use std::sync::{Arc, RwLock};
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
 use simply_kaspa_database::models::block::Block as SqlBlock;
 use simply_kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
@@ -13,12 +14,12 @@ use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTra
 use simply_kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 
-use crate::{blocks, transactions};
+use crate::mapping::{blocks, transactions};
 
 #[derive(Clone)]
 pub struct KaspaDbMapper {
     cli_args: CliArgs,
-    filter_config: Option<FilterConfig>,
+    filter_config: Option<Arc<RwLock<FilterConfig>>>,
     tag_cache: Option<TagCache>,
     block_accepted_id_merkle_root: bool,
     block_merge_set_blues_hashes: bool,
@@ -50,26 +51,20 @@ pub struct KaspaDbMapper {
 }
 
 impl KaspaDbMapper {
-    pub fn new(cli_args: CliArgs, tag_cache: Option<TagCache>) -> KaspaDbMapper {
-        // Load and validate filter configuration if provided
-        let filter_config = if let Some(ref config_path) = cli_args.filter_config {
-            match FilterConfig::from_file(config_path) {
-                Ok(config) => {
-                    info!("Loaded filter config from: {}", config_path);
-                    info!("Filter rules: {} enabled, {} disabled",
-                          config.rules.iter().filter(|r| r.enabled).count(),
-                          config.rules.iter().filter(|r| !r.enabled).count());
-                    Some(config)
-                }
-                Err(e) => {
-                    error!("Failed to load filter config: {}", e);
-                    panic!("Invalid filter configuration");
-                }
-            }
+    pub fn new(
+        cli_args: CliArgs,
+        tag_cache: Option<TagCache>,
+        filter_config: Option<Arc<RwLock<FilterConfig>>>,
+    ) -> KaspaDbMapper {
+        // Log filter config status
+        if let Some(ref config) = filter_config {
+            let config_lock = config.read().unwrap();
+            info!("Using filter config with {} enabled rules, {} disabled rules",
+                  config_lock.rules.iter().filter(|r| r.enabled).count(),
+                  config_lock.rules.iter().filter(|r| !r.enabled).count());
         } else {
             info!("No filter config specified, storing all payloads");
-            None
-        };
+        }
 
         KaspaDbMapper {
             cli_args: cli_args.clone(),

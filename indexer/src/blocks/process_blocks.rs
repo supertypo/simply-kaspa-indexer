@@ -15,7 +15,7 @@ use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_database::models::block::Block;
 use simply_kaspa_database::models::block_parent::BlockParent;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
-use simply_kaspa_mapping::mapper::KaspaDbMapper;
+use crate::mapping::mapper::KaspaDbMapper;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use tokio::sync::RwLock;
 use tokio::time::sleep;

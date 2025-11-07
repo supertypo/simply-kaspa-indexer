@@ -23,6 +23,7 @@ rules:
     enabled: true
     tag: igra
     module: igra
+    category: l2
     repository: https://igralabs.com/
     store_payload: true
     conditions:

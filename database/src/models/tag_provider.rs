@@ -8,6 +8,7 @@ pub struct TagProvider {
     pub prefix: String,
     pub repository_url: Option<String>,
     pub description: Option<String>,
+    pub category: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 

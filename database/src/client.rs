@@ -27,7 +27,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 11;
+    const SCHEMA_VERSION: u8 = 12;
     const SEQCOM_TABLE_DDL: &'static str = "CREATE TABLE IF NOT EXISTS sequencing_commitments (block_hash BYTEA PRIMARY KEY, seqcom_hash BYTEA NOT NULL, parent_seqcom_hash BYTEA);";
 
     pub async fn new(url: &str, pool_size: u32) -> Result<KaspaDbClient, Error> {
@@ -169,6 +169,17 @@ impl KaspaDbClient {
                             info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
                             // Update schema version to 11
                             self.upsert_var("schema_version", &"11".to_string()).await?;
+                            version += 1;
+                        } else {
+                            panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
+                        }
+                    }
+                    if version == 11 {
+                        let ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/12_add_category.up.sql"));
+                        if upgrade_db {
+                            warn!("\n{ddl}\nUpgrading schema from v{version} to v{}. ^", version + 1);
+                            query::misc::execute_ddl(ddl, &self.pool).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
                             version += 1;
                         } else {
                             panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")

@@ -291,15 +291,17 @@ pub async fn insert_tag_provider(
     prefix: &str,
     repository_url: Option<&str>,
     description: Option<&str>,
+    category: Option<&str>,
     pool: &Pool<Postgres>,
 ) -> Result<i32, Error> {
     sqlx::query(
-        "INSERT INTO tag_providers (tag, module, prefix, repository_url, description)
-         VALUES ($1, $2, $3, $4, $5)
+        "INSERT INTO tag_providers (tag, module, prefix, repository_url, description, category)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (tag, module) DO UPDATE SET
              prefix = EXCLUDED.prefix,
              repository_url = EXCLUDED.repository_url,
-             description = EXCLUDED.description
+             description = EXCLUDED.description,
+             category = EXCLUDED.category
          RETURNING id"
     )
     .bind(tag)
@@ -307,6 +309,7 @@ pub async fn insert_tag_provider(
     .bind(prefix)
     .bind(repository_url)
     .bind(description)
+    .bind(category)
     .fetch_one(pool)
     .await?
     .try_get(0)

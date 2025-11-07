@@ -1,6 +1,7 @@
 pub mod blocks;
 pub mod checkpoint;
 pub mod macros;
+pub mod mapping;
 pub mod prune;
 pub mod settings;
 pub mod transactions;

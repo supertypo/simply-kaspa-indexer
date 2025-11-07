@@ -3,7 +3,7 @@ CREATE TABLE vars
     key   VARCHAR(255) PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT INTO vars (key, value) VALUES ('schema_version', '11');
+INSERT INTO vars (key, value) VALUES ('schema_version', '12');
 
 
 CREATE TABLE blocks
@@ -51,10 +51,12 @@ CREATE TABLE tag_providers
     prefix          VARCHAR(100) NOT NULL,
     repository_url  TEXT,
     description     TEXT,
+    category        VARCHAR(50),
     created_at      TIMESTAMP DEFAULT NOW(),
     UNIQUE (tag, module)
 );
 CREATE INDEX ON tag_providers (tag, module);
+CREATE INDEX ON tag_providers (category);
 
 
 CREATE TABLE transactions

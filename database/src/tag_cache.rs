@@ -50,6 +50,7 @@ impl TagCache {
         prefix: &str,
         repository: Option<&str>,
         description: Option<&str>,
+        category: Option<&str>,
         pool: &Pool<Postgres>,
     ) -> Result<i32, sqlx::Error> {
         // Check cache first (read lock)
@@ -62,7 +63,7 @@ impl TagCache {
         }
 
         // Not in cache, insert/update in database
-        let tag_id = insert_tag_provider(tag, Some(module), prefix, repository, description, pool).await?;
+        let tag_id = insert_tag_provider(tag, Some(module), prefix, repository, description, category, pool).await?;
 
         // Update cache (write lock)
         {
