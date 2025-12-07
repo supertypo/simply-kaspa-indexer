@@ -1,0 +1,58 @@
+services:
+
+  kaspa_rest_server:
+    container_name: kaspa_rest_server
+    image: kaspanet/kaspa-rest-server:latest
+    restart: unless-stopped
+    environment:
+      KASPAD_WRPC_URL: ws://kaspad:17110
+      SQL_URI: postgresql+asyncpg://postgres:postgres@kaspa_db:5432/postgres
+      USE_SCRIPT_FOR_ADDRESS: true
+      PREV_OUT_RESOLVED: true
+    ports:
+      - "8000:8000" # Kaspa REST API, http://localhost:8000/ (swagger-ui)
+
+  kaspa_indexer:
+    container_name: kaspa_indexer
+    image: supertypo/simply-kaspa-indexer:latest
+    restart: unless-stopped
+    command: |
+      -u 
+      -s ws://kaspad:17110
+      -d postgresql://postgres:postgres@kaspa_db:5432/postgres
+      -l 0.0.0.0:8500
+      --prune-db="0 4 * * *"
+      --retention=7d
+      --enable=transactions_inputs_resolve
+      --disable=block_parent_table,blocks_transactions_table,addresses_transactions_table,vcp_wait_for_sync,initial_utxo_import
+      --exclude-fields=block_accepted_id_merkle_root,block_merge_set_blues_hashes,block_merge_set_reds_hashes,block_selected_parent_hash,block_bits,block_blue_work,block_daa_score,block_hash_merkle_root,block_nonce,block_pruning_point,block_utxo_commitment,block_version,tx_hash,tx_mass,tx_payload,tx_in_signature_script,tx_in_sig_op_count,tx_in_block_time,tx_out_script_public_key_address,tx_out_block_time
+    ports:
+      - "8500:8500" # Indexer API (health + db metrics) - http://localhost:8500/api/ (swagger-ui)
+
+  kaspad:
+    container_name: kaspad
+    image: supertypo/rusty-kaspad:latest
+    restart: unless-stopped
+    ports:
+      - "16111:16111" # P2P
+      - "16110:16110" # GRPC
+      - "17110:17110" # WRPC
+    volumes:
+      - /var/kaspad:/app/data/
+    command: kaspad --yes --nologfiles --disable-upnp --utxoindex --rpclisten=0.0.0.0:16110 --rpclisten-borsh=0.0.0.0:17110
+
+  kaspa_db:
+    container_name: kaspa_db
+    image: postgres:18-alpine
+    restart: unless-stopped
+    shm_size: 8G # set to 50% of available RAM
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - /var/kaspa_db/:/var/lib/postgresql/data/
+#      - ./postgresql.conf:/var/lib/postgresql/18/docker/postgresql.conf # Must be uncommented AFTER first startup
+      # postgresql.conf is tuned for 16GB RAM, set shared_buffers to ~33% of available RAM if you have more/less
