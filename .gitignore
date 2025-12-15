@@ -1,8 +1,4 @@
 .idea/
 *.iml
 target/
-docker-compose.yaml
-docs/
-.env
-.DS_Store
-CLAUDE.md
+/docker-compose.yaml
