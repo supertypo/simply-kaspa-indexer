@@ -1,0 +1,189 @@
+version: "1.0"
+
+settings:
+  # Mining pool transactions typically don't need body storage
+  # Only store transaction IDs for indexing purposes
+  default_store_payload: false
+
+rules:
+  # Mining Pool: F2Pool (China) - ~21,347 txs
+  - name: f2pool-mining
+    tag: f2pool
+    module: mining
+    category: mining
+    priority: 220
+    enabled: true
+    store_payload: true
+    repository: https://www.f2pool.com/
+    conditions:
+      payload:
+        - prefix: "f2pool.com"
+          match_type: contains
+
+  # Mining Pool: ViaBTC (China) - ~21,219 txs
+  - name: viabtc-mining
+    tag: viabtc
+    module: mining
+    category: mining
+    priority: 219
+    enabled: true
+    store_payload: true
+    repository: https://www.viabtc.com/
+    conditions:
+      payload:
+        - prefix: "viabtc.com"
+          match_type: contains
+
+  # Mining Pool: HumPool (China) - ~12,980 txs
+  - name: humpool-mining
+    tag: humpool
+    module: mining
+    category: mining
+    priority: 218
+    enabled: true
+    store_payload: true
+    repository: https://www.humpool.com/
+    conditions:
+      payload:
+        - prefix: "humpool.com"
+          match_type: contains
+
+  # Mining Pool: HeroMiners (Turkey) - ~9,568 txs
+  - name: herominers-mining
+    tag: herominers
+    module: mining
+    category: mining
+    priority: 217
+    enabled: true
+    store_payload: true
+    repository: https://herominers.com/
+    conditions:
+      payload:
+        - prefix: "herominers.com"
+          match_type: contains
+
+  # Mining Pool: Kryptex (Russia) - ~5,177 txs
+  - name: kryptex-mining
+    tag: kryptex
+    module: mining
+    category: mining
+    priority: 216
+    enabled: true
+    store_payload: true
+    repository: https://www.kryptex.com/
+    conditions:
+      payload:
+        - prefix: "kryptex.com"
+          match_type: contains
+
+  # Mining Pool: kaspa-pool.org (Independent) - ~3,291 txs
+  - name: kaspa-pool-org-mining
+    tag: kaspa-pool-org
+    module: mining
+    category: mining
+    priority: 215
+    enabled: true
+    store_payload: true
+    repository: https://kaspa-pool.org/
+    conditions:
+      payload:
+        - prefix: "kaspa-pool.org"
+          match_type: contains
+
+  # Mining Pool: Kasrate (Independent) - ~1,914 txs
+  - name: kasrate-mining
+    tag: kasrate
+    module: mining
+    category: mining
+    priority: 214
+    enabled: true
+    store_payload: true
+    repository: https://kasrate.io/
+    conditions:
+      payload:
+        - prefix: "kasrate.io"
+          match_type: contains
+
+  # Mining Pool: K1Pool (Independent) - ~1,247 txs
+  - name: k1pool-mining
+    tag: k1pool
+    module: mining
+    category: mining
+    priority: 213
+    enabled: true
+    store_payload: true
+    repository: https://k1pool.com/
+    conditions:
+      payload:
+        - prefix: "k1pool.com"
+          match_type: contains
+
+  # Mining Pool: WoolyPooly (Europe) - ~1,145 txs
+  - name: woolypooly-mining
+    tag: woolypooly
+    module: mining
+    category: mining
+    priority: 212
+    enabled: true
+    store_payload: true
+    repository: https://woolypooly.com/
+    conditions:
+      payload:
+        - prefix: "woolypooly.com"
+          match_type: contains
+
+  # Mining Pool: 2Miners (Europe) - ~1,043 txs
+  - name: 2miners-mining
+    tag: 2miners
+    module: mining
+    category: mining
+    priority: 211
+    enabled: true
+    store_payload: true
+    repository: https://2miners.com/
+    conditions:
+      payload:
+        - prefix: "2miners.com"
+          match_type: contains
+
+  # Mining Pool: IceRiver (ASIC manufacturer pool) - ~337 txs
+  - name: iceriver-mining
+    tag: iceriver
+    module: mining
+    category: mining
+    priority: 210
+    enabled: true
+    store_payload: true
+    repository: https://iceriver.io/
+    conditions:
+      payload:
+        - prefix: "iceriver.io"
+          match_type: contains
+
+  # Mining Pool: Miningcore (Generic software) - ~14 txs
+  - name: miningcore-mining
+    tag: miningcore
+    module: mining
+    category: mining
+    priority: 209
+    enabled: true
+    store_payload: true
+    repository: https://github.com/miningcore/miningcore
+    conditions:
+      payload:
+        - prefix: "miningcore"
+          match_type: contains
+
+  # Mining Pool: bpool (Independent) - ~2 txs
+  - name: bpool-mining
+    tag: bpool
+    module: mining
+    category: mining
+    priority: 208
+    enabled: true
+    store_payload: true
+    repository: https://bpool.io/
+    conditions:
+      payload:
+        - prefix: "bpool.io"
+          match_type: contains

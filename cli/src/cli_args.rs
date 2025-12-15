@@ -3,6 +3,7 @@ use clap::error::{Error, ErrorKind};
 use clap::{Args, Parser, ValueEnum};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
+
 use std::time::Duration;
 use utoipa::ToSchema;
 
@@ -16,6 +17,10 @@ pub enum CliEnable {
     TransactionsInputsResolve,
     /// Forces (pruning point) utxo set import on startup (otherwise only on empty db)
     ForceUtxoImport,
+    /// Enables KIP-15 Sequencing Commitment computation and storage
+    SeqCom,
+    /// Enables Trie-based prefix matching for transaction filtering (faster with 10+ rules)
+    TrieMatching,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]
@@ -139,6 +144,8 @@ pub struct CliArgs {
         use_value_delimiter = true
     )]
     pub exclude_fields: Option<Vec<CliField>>,
+    #[clap(long, help = "Path to transaction filter configuration file (YAML)")]
+    pub filter_config: Option<String>,
 }
 
 impl CliArgs {
@@ -209,6 +216,7 @@ impl PruningConfig {
 pub struct HumantimeDurationParser;
 
 impl TypedValueParser for HumantimeDurationParser {
+
     type Value = Duration;
 
     fn parse_ref(&self, _cmd: &clap::Command, _arg: Option<&clap::Arg>, raw: &OsStr) -> Result<Self::Value, clap::Error> {

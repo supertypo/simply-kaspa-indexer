@@ -7,7 +7,9 @@ use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
 use log::{error, info, trace, warn};
 use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliEnable};
+use simply_kaspa_cli::filter_config::FilterConfig;
 use simply_kaspa_database::client::KaspaDbClient;
+use simply_kaspa_database::tag_cache::TagCache;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
 use simply_kaspa_indexer::checkpoint::{CheckpointBlock, CheckpointOrigin, process_checkpoints};
@@ -17,10 +19,10 @@ use simply_kaspa_indexer::transactions::process_transactions::process_transactio
 use simply_kaspa_indexer::utxo_import::utxo_set_importer::UtxoSetImporter;
 use simply_kaspa_indexer::vars::load_block_checkpoint;
 use simply_kaspa_indexer::virtual_chain::process_virtual_chain::process_virtual_chain;
+use simply_kaspa_indexer::mapping::mapper::KaspaDbMapper;
 use simply_kaspa_indexer::web::model::metrics::Metrics;
 use simply_kaspa_indexer::web::web_server::WebServer;
 use simply_kaspa_kaspad::manager::KaspadManager;
-use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::env;
 use std::str::FromStr;
@@ -29,6 +31,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::task;
+use std::sync::RwLock as StdRwLock;
 
 #[tokio::main]
 async fn main() {
@@ -61,7 +64,8 @@ async fn main() {
         info!("Initializing database");
         database.drop_schema().await.expect("Unable to drop schema");
     }
-    database.create_schema(cli_args.upgrade_db).await.expect("Unable to create schema");
+    let seqcom_enabled = cli_args.is_enabled(CliEnable::SeqCom);
+    database.create_schema(cli_args.upgrade_db, seqcom_enabled).await.expect("Unable to create schema");
 
     start_processing(cli_args, kaspad_pool, database).await;
 }
@@ -141,7 +145,116 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     let txs_queue = Arc::new(ArrayQueue::new(queue_capacity));
     let checkpoint_queue = Arc::new(ArrayQueue::new(30000));
 
-    let mapper = KaspaDbMapper::new(cli_args.clone());
+    // Bootstrap tag providers and build TagCache if filter config is provided
+    let (tag_cache, filter_config) = if let Some(ref config_path) = cli_args.filter_config {
+        match FilterConfig::from_file(config_path) {
+            Ok(mut config) => {
+                info!("Bootstrapping tag providers from filter config");
+
+                // Build tries if --enable trie_matching
+                if cli_args.is_enabled(CliEnable::TrieMatching) {
+                    info!("Building prefix tries for fast matching (10+ rules)");
+                    config.build_tries();
+                    info!("Tries built: {} TXID nodes, {} payload nodes",
+                          config.txid_trie.as_ref().map(|t| t.node_count()).unwrap_or(0),
+                          config.payload_trie.as_ref().map(|t| t.node_count()).unwrap_or(0));
+                }
+
+                // Bootstrap tag providers to database and build cache
+                let tag_cache = TagCache::new();
+                for rule in &config.sorted_enabled_rules {
+                    // Extract prefix from rule conditions for tag_provider record
+                    let prefix = if let Some(ref txid_cond) = rule.conditions.txid {
+                        txid_cond.prefix.clone()
+                    } else if let Some(ref payload_conds) = rule.conditions.payload {
+                        payload_conds.first().map(|c| c.prefix.clone()).unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
+
+                    let module = rule.module.as_deref().unwrap_or("default");
+                    match tag_cache.upsert_tag(
+                        &rule.tag,
+                        module,
+                        &prefix,
+                        rule.repository.as_deref(),
+                        Some(&rule.name), // Use rule name as description
+                        rule.category.as_deref(),
+                        database.pool()
+                    ).await {
+                        Ok(tag_id) => {
+                            info!("Tag provider '{}:{}' → tag_id {}", rule.tag, module, tag_id);
+                        }
+                        Err(e) => {
+                            error!("Failed to upsert tag provider '{}:{}': {}", rule.tag, module, e);
+                        }
+                    }
+                }
+
+                info!("TagCache initialized with {} tag providers", tag_cache.len());
+
+                // Wrap config in Arc<RwLock> for hot reload capability
+                let filter_config = Arc::new(StdRwLock::new(config));
+
+                (Some(tag_cache), Some(filter_config))
+            }
+            Err(e) => {
+                error!("Failed to load filter config: {}", e);
+                panic!("Invalid filter configuration");
+            }
+        }
+    } else {
+        (None, None)
+    };
+
+    let mapper = KaspaDbMapper::new(cli_args.clone(), tag_cache, filter_config.clone());
+
+    // Spawn config reload handler if filter config is enabled
+    if let Some(config_arc) = filter_config {
+        let mut reload_rx = signal_handler.subscribe_reload();
+        let config_path = cli_args.filter_config.clone().unwrap();
+        let trie_enabled = cli_args.is_enabled(CliEnable::TrieMatching);
+
+        task::spawn(async move {
+            loop {
+                match reload_rx.recv().await {
+                    Ok(_) => {
+                        info!("Reloading filter config from {}...", config_path);
+                        match FilterConfig::from_file(&config_path) {
+                            Ok(mut new_config) => {
+                                // Build tries if enabled
+                                if trie_enabled {
+                                    new_config.build_tries();
+                                    info!("Tries rebuilt: {} TXID nodes, {} payload nodes",
+                                          new_config.txid_trie.as_ref().map(|t| t.node_count()).unwrap_or(0),
+                                          new_config.payload_trie.as_ref().map(|t| t.node_count()).unwrap_or(0));
+                                }
+
+                                // Acquire write lock and replace config
+                                match config_arc.write() {
+                                    Ok(mut config) => {
+                                        *config = new_config;
+                                        info!("Filter config reloaded successfully with {} enabled rules",
+                                              config.sorted_enabled_rules.len());
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to acquire write lock for config reload: {}", e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to reload filter config: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Reload channel error: {}", e);
+                        break;
+                    }
+                }
+            }
+        });
+    }
 
     let settings = Settings { cli_args: cli_args.clone(), net_bps, net_tps_max, checkpoint, disable_vcp_wait_for_sync };
     let start_vcp = Arc::new(AtomicBool::new(false));

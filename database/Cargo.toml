@@ -13,6 +13,7 @@ name = "simply_kaspa_database"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
+chrono.workspace = true
 kaspa-hashes.workspace = true
 sqlx.workspace = true
 itertools.workspace = true

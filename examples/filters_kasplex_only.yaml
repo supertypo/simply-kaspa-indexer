@@ -1,0 +1,26 @@
+# Kasplex Protocol Only - Filter Configuration
+#
+# This configuration stores ONLY Kasplex protocol transactions.
+# All other transactions are stored as ID-only stubs (no payload).
+#
+# Use case: Kasplex token/NFT indexing
+# Example command:
+#   cargo run --release -- --filter-config examples/filters_kasplex_only.yaml --database-url postgres://...
+
+version: "1.0"
+
+settings:
+  # Default behavior: do NOT store payloads for unmatched transactions
+  default_store_payload: false
+
+rules:
+  - name: kasplex-protocol
+    priority: 100
+    enabled: true
+    tag: kasplex
+    module: kasplex
+    repository: https://kasplex.org/
+    store_payload: true
+    conditions:
+      payload:
+        - prefix: "kasplex"
