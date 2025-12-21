@@ -10,12 +10,8 @@ use utoipa::ToSchema;
 #[clap(rename_all = "snake_case")]
 pub enum CliEnable {
     None,
-    /// Enables dynamic VCP tip distance, reduces write load due to reorgs
-    DynamicVcpTipDistance,
     /// Enables resolving transactions_inputs previous_outpoint
     TransactionsInputsResolve,
-    /// Forces (pruning point) utxo set import on startup (otherwise only on empty db)
-    ForceUtxoImport,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]
@@ -36,16 +32,14 @@ pub enum CliDisable {
     BlocksTransactionsTable,
     /// Disables the transactions table
     TransactionsTable,
-    /// Disables the transactions_inputs table
-    TransactionsInputsTable,
-    /// Disables the transactions_outputs table
-    TransactionsOutputsTable,
+    /// Disables transactions inputs (array column)
+    TransactionsInputs,
+    /// Disables transactions outputs (array column)
+    TransactionsOutputs,
     /// Disables the addresses_transactions (or scripts_transactions) table
     AddressesTransactionsTable,
     /// Disables initial utxo set import
     InitialUtxoImport,
-    /// Start VCP as soon as the filler has passed the previous run. Use with care
-    VcpWaitForSync,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]
@@ -78,14 +72,11 @@ pub enum CliField {
     TxInPreviousOutpoint,
     TxInSignatureScript,
     TxInSigOpCount,
-    /// Excluding this will increase load for populating adress-/scripts_transactions
-    TxInBlockTime,
     TxOutAmount,
     /// Excluding both this and script_public_key_address will disable adress-/scripts_transactions
     TxOutScriptPublicKey,
     /// Excluding this, scripts_transactions to be populated instead of adresses_transactions
     TxOutScriptPublicKeyAddress,
-    TxOutBlockTime,
 }
 
 #[derive(Parser, Clone, Debug, ToSchema, Serialize, Deserialize)]
