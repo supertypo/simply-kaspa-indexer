@@ -114,6 +114,8 @@ pub struct CliArgs {
     pub batch_concurrency: i8,
     #[clap(short = 't', long, default_value = "60", help = "Cache ttl (secs). Adjusts tx/block caches for in-memory de-duplication")]
     pub cache_ttl: u64,
+    #[clap(long, default_value = "0", help = "In-memory store capacity for latest blocks (secs). 0 to disable.")]
+    pub block_store_ttl: u64,
     #[clap(long, default_value = "1000", value_parser = clap::value_parser!(u64).range(100..=10000), help = "Poll interval for blocks (ms)")]
     pub block_interval: u64,
     #[clap(long, default_value = "1000", value_parser = clap::value_parser!(u64).range(100..=10000), help = "Poll interval for vcp (ms)")]

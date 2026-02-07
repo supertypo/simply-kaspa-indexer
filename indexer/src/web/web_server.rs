@@ -1,6 +1,7 @@
 use crate::settings::Settings;
+use crate::utils::fifo_cache::FifoCache;
 use crate::web::endpoint;
-use crate::web::endpoint::{health, metrics};
+use crate::web::endpoint::{blocks, health, metrics};
 use crate::web::model::metrics::Metrics;
 use axum::body::{Body, to_bytes};
 use axum::http::{HeaderValue, Request, header};
@@ -8,6 +9,7 @@ use axum::middleware::Next;
 use axum::response::Response;
 use axum::{Extension, Router, middleware, routing::get};
 use deadpool::managed::{Object, Pool};
+use kaspa_rpc_core::RpcBlock;
 use log::{Level, info, trace};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_kaspad::manager::KaspadManager;
@@ -25,6 +27,7 @@ use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::{Config, SwaggerUi};
 
 pub const INFO_TAG: &str = "info";
+pub const BLOCKS_TAG: &str = "blocks";
 
 #[derive(OpenApi)]
 #[openapi(
@@ -35,9 +38,11 @@ pub const INFO_TAG: &str = "info";
     paths(
         endpoint::health::get_health,
         endpoint::metrics::get_metrics,
+        endpoint::blocks::get_blocks,
     ),
     tags(
         (name = INFO_TAG, description = "Info API endpoints"),
+        (name = BLOCKS_TAG, description = "Blocks API endpoints"),
     ),
 )]
 struct ApiDoc;
@@ -49,6 +54,7 @@ pub struct WebServer {
     kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
     database_client: KaspaDbClient,
     system: Arc<RwLock<System>>,
+    block_store: Arc<FifoCache<u64, Vec<RpcBlock>>>,
 }
 
 impl WebServer {
@@ -58,8 +64,17 @@ impl WebServer {
         metrics: Arc<RwLock<Metrics>>,
         kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
         database_client: KaspaDbClient,
+        block_store: Arc<FifoCache<u64, Vec<RpcBlock>>>,
     ) -> Self {
-        WebServer { settings, signal, metrics, kaspad_pool, database_client, system: Arc::new(RwLock::new(System::new())) }
+        WebServer {
+            settings,
+            signal,
+            metrics,
+            kaspad_pool,
+            database_client,
+            system: Arc::new(RwLock::new(System::new())),
+            block_store,
+        }
     }
 
     pub async fn run(self: Arc<Self>) -> Result<(), Error> {
@@ -69,6 +84,7 @@ impl WebServer {
         let (api_router, api) = OpenApiRouter::with_openapi(set_server_path(base_path))
             .route(&format!("{}{}", base_path, health::PATH), get(health::get_health))
             .route(&format!("{}{}", base_path, metrics::PATH), get(metrics::get_metrics))
+            .route(&format!("{}{}", base_path, blocks::PATH), get(blocks::get_blocks))
             .split_for_parts();
         let swagger_config = Config::default().use_base_layout().try_it_out_enabled(true).display_request_duration(true);
         let swagger =
@@ -84,7 +100,9 @@ impl WebServer {
             .layer(Extension(self.kaspad_pool.clone()))
             .layer(Extension(self.database_client.clone()))
             .layer(Extension(self.metrics.clone()))
-            .layer(Extension(self.system.clone()));
+            .layer(Extension(self.system.clone()))
+            .layer(Extension(self.block_store.clone()))
+            .layer(Extension(self.settings.cli_args.block_store_ttl));
 
         info!("Starting web server listener on {}, api path: {}/api", listen, base_path);
         let listener = tokio::net::TcpListener::bind(listen).await.expect("Failed to open listener");
