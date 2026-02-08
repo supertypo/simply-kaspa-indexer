@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::settings::Settings;
+use crate::utils::fifo_cache::FifoCache;
 use crate::web::model::metrics::{Metrics, MetricsBlock};
 use chrono::{DateTime, Utc};
 use crossbeam_queue::ArrayQueue;
@@ -47,6 +48,7 @@ pub struct KaspaBlocksFetcher {
     lag_count: i32,
     tip_hashes: HashSet<KaspaHash>,
     block_cache: Cache<KaspaHash, ()>,
+    block_store: Option<Arc<FifoCache<u64, Vec<RpcBlock>>>>,
 }
 
 impl KaspaBlocksFetcher {
@@ -59,6 +61,7 @@ impl KaspaBlocksFetcher {
         kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
         blocks_queue: Arc<ArrayQueue<BlockData>>,
         txs_queue: Arc<ArrayQueue<TransactionData>>,
+        block_store: Option<Arc<FifoCache<u64, Vec<RpcBlock>>>>,
     ) -> KaspaBlocksFetcher {
         let ttl = settings.cli_args.cache_ttl;
         let cache_size = settings.net_bps as u64 * ttl * 2;
@@ -78,6 +81,7 @@ impl KaspaBlocksFetcher {
             lag_count: 0,
             tip_hashes: HashSet::new(),
             block_cache,
+            block_store,
         }
     }
 
@@ -168,6 +172,14 @@ impl KaspaBlocksFetcher {
                 trace!("Ignoring known block hash {}", block_hash);
                 continue;
             }
+
+            if let Some(ref block_store) = self.block_store {
+                let blue_score = b.header.blue_score;
+                let mut blocks = block_store.get(&blue_score).await.unwrap_or_default();
+                blocks.push(b.clone());
+                block_store.insert(blue_score, blocks).await;
+            }
+
             let mut transaction_data = TransactionData {
                 transactions: b.transactions,
                 block_hash: b.header.hash,

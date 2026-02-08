@@ -2,6 +2,7 @@ use clap::Parser;
 use crossbeam_queue::ArrayQueue;
 use deadpool::managed::{Object, Pool};
 use futures_util::future::try_join_all;
+use humantime::format_duration;
 use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
@@ -14,6 +15,7 @@ use simply_kaspa_indexer::checkpoint::{CheckpointBlock, CheckpointOrigin, proces
 use simply_kaspa_indexer::prune::pruner;
 use simply_kaspa_indexer::settings::Settings;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
+use simply_kaspa_indexer::utils::fifo_cache::FifoCache;
 use simply_kaspa_indexer::utxo_import::utxo_set_importer::UtxoSetImporter;
 use simply_kaspa_indexer::vars::load_block_checkpoint;
 use simply_kaspa_indexer::virtual_chain::process_virtual_chain::process_virtual_chain;
@@ -159,8 +161,24 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     metrics.components.virtual_chain_processor.only_blocks = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
     let metrics = Arc::new(RwLock::new(metrics));
 
-    let webserver =
-        Arc::new(WebServer::new(settings.clone(), signal_handler.clone(), metrics.clone(), kaspad_pool.clone(), database.clone()));
+    let block_store_size = {
+        if settings.cli_args.block_store_ttl > 0 {
+            info!("Block store enabled (ttl={})", format_duration(Duration::from_secs(settings.cli_args.block_store_ttl)));
+        } else {
+            info!("Block store disabled");
+        }
+        settings.cli_args.block_store_ttl * settings.net_bps as u64
+    };
+    let block_store = Arc::new(FifoCache::new(block_store_size as usize));
+
+    let webserver = Arc::new(WebServer::new(
+        settings.clone(),
+        signal_handler.clone(),
+        metrics.clone(),
+        kaspad_pool.clone(),
+        database.clone(),
+        block_store.clone(),
+    ));
     let webserver_task = task::spawn(async move { webserver.run().await.unwrap() });
 
     if utxo_set_import {
@@ -181,6 +199,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         kaspad_pool.clone(),
         blocks_queue.clone(),
         txs_queue.clone(),
+        (block_store_size > 0).then(|| block_store.clone()),
     );
 
     let mut tasks = vec![
