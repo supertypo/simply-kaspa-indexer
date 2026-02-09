@@ -1,13 +1,11 @@
 use kaspa_rpc_core::{RpcBlock, RpcTransaction};
-use simply_kaspa_cli::cli_args::{CliArgs, CliField};
+use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliField};
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
 use simply_kaspa_database::models::block::Block as SqlBlock;
 use simply_kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
 use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
 use simply_kaspa_database::models::script_transaction::ScriptTransaction as SqlScriptTransaction;
 use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
-use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
-use simply_kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 
 use crate::{blocks, transactions};
@@ -33,14 +31,14 @@ pub struct KaspaDbMapper {
     tx_mass: bool,
     tx_payload: bool,
     tx_block_time: bool,
+    tx_in: bool,
     tx_in_previous_outpoint: bool,
     tx_in_signature_script: bool,
     tx_in_sig_op_count: bool,
-    tx_in_block_time: bool,
+    tx_out: bool,
     tx_out_amount: bool,
     tx_out_script_public_key: bool,
     tx_out_script_public_key_address: bool,
-    tx_out_block_time: bool,
 }
 
 impl KaspaDbMapper {
@@ -65,14 +63,14 @@ impl KaspaDbMapper {
             tx_mass: !cli_args.is_excluded(CliField::TxMass),
             tx_payload: !cli_args.is_excluded(CliField::TxPayload),
             tx_block_time: !cli_args.is_excluded(CliField::TxBlockTime),
+            tx_in: !cli_args.is_disabled(CliDisable::TransactionsInputs),
             tx_in_previous_outpoint: !cli_args.is_excluded(CliField::TxInPreviousOutpoint),
             tx_in_signature_script: !cli_args.is_excluded(CliField::TxInSignatureScript),
             tx_in_sig_op_count: !cli_args.is_excluded(CliField::TxInSigOpCount),
-            tx_in_block_time: !cli_args.is_excluded(CliField::TxInBlockTime),
+            tx_out: !cli_args.is_disabled(CliDisable::TransactionsOutputs),
             tx_out_amount: !cli_args.is_excluded(CliField::TxOutAmount),
             tx_out_script_public_key: !cli_args.is_excluded(CliField::TxOutScriptPublicKey),
             tx_out_script_public_key_address: !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress),
-            tx_out_block_time: !cli_args.is_excluded(CliField::TxOutBlockTime),
         }
     }
 
@@ -117,31 +115,19 @@ impl KaspaDbMapper {
             self.tx_mass,
             self.tx_payload,
             self.tx_block_time,
+            self.tx_in,
+            self.tx_in_previous_outpoint,
+            self.tx_in_signature_script,
+            self.tx_in_sig_op_count,
+            self.tx_out,
+            self.tx_out_amount,
+            self.tx_out_script_public_key,
+            self.tx_out_script_public_key_address,
         )
     }
 
     pub fn map_block_transaction(&self, transaction: &RpcTransaction) -> SqlBlockTransaction {
         transactions::map_block_transaction(transaction)
-    }
-
-    pub fn map_transaction_inputs(&self, transaction: &RpcTransaction) -> Vec<SqlTransactionInput> {
-        transactions::map_transaction_inputs(
-            transaction,
-            self.tx_in_previous_outpoint,
-            self.tx_in_signature_script,
-            self.tx_in_sig_op_count,
-            self.tx_in_block_time,
-        )
-    }
-
-    pub fn map_transaction_outputs(&self, transaction: &RpcTransaction) -> Vec<SqlTransactionOutput> {
-        transactions::map_transaction_outputs(
-            transaction,
-            self.tx_out_amount,
-            self.tx_out_script_public_key,
-            self.tx_out_script_public_key_address,
-            self.tx_out_block_time,
-        )
     }
 
     pub fn map_transaction_outputs_address(&self, transaction: &RpcTransaction) -> Vec<SqlAddressTransaction> {

@@ -1,3 +1,5 @@
+use crate::models::transaction_input::TransactionInput;
+use crate::models::transaction_output::TransactionOutput;
 use crate::models::types::hash::Hash;
 use crate::models::types::payload::Payload;
 
@@ -9,6 +11,8 @@ pub struct Transaction {
     pub mass: Option<i32>,
     pub payload: Option<Payload>,
     pub block_time: Option<i64>,
+    pub inputs: Option<Vec<TransactionInput>>,
+    pub outputs: Option<Vec<TransactionOutput>>,
 }
 
 impl Eq for Transaction {}

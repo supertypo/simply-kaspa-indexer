@@ -34,7 +34,6 @@ pub async fn process_blocks(
     let batch_scale = settings.cli_args.batch_scale;
     let batch_size = (800f64 * batch_scale) as usize;
     let disable_virtual_chain_processing = settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing);
-    let disable_vcp_wait_for_sync = settings.disable_vcp_wait_for_sync;
     let disable_blocks = settings.cli_args.is_disabled(CliDisable::BlocksTable);
     let disable_block_relations = settings.cli_args.is_disabled(CliDisable::BlockParentTable);
     let mut first_block = true;
@@ -47,8 +46,6 @@ pub async fn process_blocks(
 
     while !signal_handler.is_shutdown() {
         if let Some(block_data) = rpc_blocks_queue.pop() {
-            let synced = block_data.synced;
-
             if !disable_blocks {
                 blocks.push(mapper.map_block(&block_data.block));
             }
@@ -86,7 +83,7 @@ pub async fn process_blocks(
                     )
                     .await;
                     first_block = false;
-                    if (disable_vcp_wait_for_sync || synced) && tas_deleted == 0 {
+                    if tas_deleted == 0 {
                         noop_delete_count += 1;
                     } else {
                         noop_delete_count = 0;
