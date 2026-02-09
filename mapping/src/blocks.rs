@@ -44,6 +44,9 @@ pub fn map_block(
 }
 
 pub fn map_block_parents(block: &RpcBlock) -> Vec<SqlBlockParent> {
+    if block.header.parents_by_level.len() == 0 {
+        return vec![];
+    }
     block.header.parents_by_level[0]
         .iter()
         .map(|v| SqlBlockParent { block_hash: block.header.hash.into(), parent_hash: v.to_owned().into() })
