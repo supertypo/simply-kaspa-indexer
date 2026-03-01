@@ -1,15 +1,8 @@
 # Simply Kaspa Indexer
 A high performance Kaspa PostgreSQL indexer implemented in Rust.  
 
-## About
-The indexer has been implemented from scratch by deriving the functional spec of [kaspa-db-filler](https://github.com/lAmeR1/kaspa-db-filler).  
-As part of this process the database schema was reworked to better support concurrency.  
-This means that databases populated by the lAmeR1/kaspa-db-filler must be migrated to be compatible.  
-A schema migration script has been developed and is available [here](https://github.com/supertypo/kaspa-db-filler-migration).  
-A compatible version of the kaspa-rest-server is available [here](https://github.com/kaspa-ng/kaspa-rest-server).
-
 ## Binary releases
-For now, binary releases are built for linux/amd64 and linux/arm64.
+Binary releases are built for linux/amd64 and linux/arm64.
 Docker images are available from https://hub.docker.com/r/supertypo/simply-kaspa-indexer
 
 ## Important notes
@@ -40,11 +33,11 @@ effective_cache_size = 8GB
 In addition, I highly recommend running Postgres on ZFS with compression=lz4 (or zstd) for space savings as well as for improving performance. Make sure to also set recordsize=16k.
 
 ### 10bps note
-The indexer is able to keep up with fully satured 10bps (2000+tps) as long as Postgres is running on a sufficiently high-end NVMe.  
-By disabling optional tables and fields you can bring the requirements down if running on lesser hardware.
+The indexer is able to keep up with fully satured 10bps (2000+tps) as long as Postgres is running on a sufficiently high-end NVMe (Samsung 990 Pro equivalent).  
+By disabling optional tables you can bring the requirements down if running on lesser hardware.
 
 ### Historical data
-The indexer will begin collecting data from the point in time when it's started.  
+The indexer will begin collecting data from the last pruning point when it's started.  
 If you have an archival node, you can specify the start-block using the --ignore_checkpoint argument and specify an older start block.  
 Please make contact with us on the [Kaspa Discord](https://kaspa.org) if you need a pg_dump-file of historical records.
 
@@ -154,66 +147,8 @@ Example command arguments:
 Having the indexer resolve inputs at index time allows avoiding the expensive join at query time. In essence this load is moved to the indexer, 
 except if you also choose to use it to resolve addresses by dropping the addresses_transactions table and querying inputs and outputs directly,
 in this case the added effort is zero or even negative. To enable add the argument: --enable=transactions_inputs_resolve.  
-  
-If you want to have the indexer pre-resolve inputs but already have existing data in the db, you have to manually pre-resolve existing inputs first. 
-Make sure the indexer is stopped and apply the following SQL:
-```sql
-CREATE TABLE transactions_inputs_resolved AS
-SELECT
-    i.transaction_id,
-    i.index,
-    i.previous_outpoint_hash,
-    i.previous_outpoint_index,
-    i.signature_script,
-    i.sig_op_count,
-    i.block_time,
-    o.script_public_key AS previous_outpoint_script,
-    o.amount AS previous_outpoint_amount
-FROM transactions_inputs i
-LEFT JOIN transactions_outputs o
-    ON i.previous_outpoint_hash = o.transaction_id
-    AND i.previous_outpoint_index = o.index;
 
-DROP TABLE transactions_inputs;
-ALTER TABLE transactions_inputs_resolved RENAME TO transactions_inputs;
-ALTER TABLE transactions_inputs ADD PRIMARY KEY (transaction_id, index);
-ANALYZE transactions_inputs;
-```
-If you are using kaspa-rest-server you can apply the PREV_OUT_RESOLVED=true env var afterward to disable the expensive join for resolve_previous_outpoints=light queries.
-
-### Address to transaction mapping without separate table
-When --enable=transactions_inputs_resolve is specified (see above), you can look up transactions without a separate mapping table.  
-  
-First make sure the filler is running without exclude on tx_in_block_time and tx_out_block_time.  
-If the db already contains inputs and/or outputs without block_time you will have to populate the column manually:
-```sql
-CREATE TABLE transactions_inputs_with_block_time AS
-SELECT
-    i.transaction_id,
-    i.index,
-    i.previous_outpoint_hash,
-    i.previous_outpoint_index,
-    i.signature_script,
-    i.sig_op_count,
-    t.block_time,
-    i.previous_outpoint_script,
-    i.previous_outpoint_amount
-FROM transactions_inputs i
-JOIN transactions t ON i.transaction_id = t.transaction_id;
-
-DROP TABLE transactions_inputs;
-ALTER TABLE transactions_inputs_with_block_time RENAME TO transactions_inputs;
-ALTER TABLE transactions_inputs ADD PRIMARY KEY (transaction_id, index);
-ANALYZE transactions_inputs;
-```
-Then use the same method to enrich transactions_outputs with block_time from transactions.  
-
-Lastly the appropriate indexes for efficient querying must be created:
-```sql
-CREATE INDEX ON transactions_inputs (previous_outpoint_script, block_time DESC);
-CREATE INDEX ON transactions_outputs (script_public_key, block_time DESC);
-```
-Afterward truncate the addresses_transactions/scripts_transactions table, apply --disable=addresses_transactions_table to the indexer and start it.
+If you are using kaspa-rest-server you should apply the PREV_OUT_RESOLVED=true env var.
 
 ## Help
 ```
@@ -259,20 +194,30 @@ Options:
           
           [default: 1.0]
 
+      --batch-concurrency <BATCH_CONCURRENCY>
+          Batch concurrency factor [1-10]. Per table batch concurrency
+          
+          [default: 2]
+
   -t, --cache-ttl <CACHE_TTL>
           Cache ttl (secs). Adjusts tx/block caches for in-memory de-duplication
           
           [default: 60]
 
+      --block-interval <BLOCK_INTERVAL>
+          Poll interval for blocks (ms)
+          
+          [default: 1000]
+
+      --vcp-interval <VCP_INTERVAL>
+          Poll interval for vcp (ms)
+          
+          [default: 1000]
+
       --vcp-window <VCP_WINDOW>
           Window size for automatic vcp tip distance adjustment (in seconds)
           
           [default: 600]
-
-      --vcp-interval <VCP_INTERVAL>
-          Poll interval for vcp (in seconds)
-          
-          [default: 4]
 
   -i, --ignore-checkpoint <IGNORE_CHECKPOINT>
           Ignore checkpoint and start from a specified block, 'p' for pruning point or 'v' for virtual
@@ -285,6 +230,11 @@ Options:
 
       --prune-db [<PRUNE_DB>]
           Enables db pruning. Optional cron expression. Default: '0 4 * * *' = daily 04:00 (UTC)
+
+      --prune-batch-size <PRUNE_BATCH_SIZE>
+          Batch size for db pruning
+          
+          [default: 100000]
 
       --retention <RETENTION>
           Global data retention for db pruning. Ex: 60d, 24h, etc
@@ -309,9 +259,7 @@ Options:
 
           Possible values:
           - none
-          - dynamic_vcp_tip_distance:    Enables dynamic VCP tip distance, reduces write load due to reorgs
           - transactions_inputs_resolve: Enables resolving transactions_inputs previous_outpoint
-          - force_utxo_import:           Forces (pruning point) utxo set import on startup (otherwise only on empty db)
 
       --disable <DISABLE>
           Disable specific functionality
@@ -325,11 +273,10 @@ Options:
           - block_parent_table:           Disables the block_parent table
           - blocks_transactions_table:    Disables the blocks_transactions table
           - transactions_table:           Disables the transactions table
-          - transactions_inputs_table:    Disables the transactions_inputs table
-          - transactions_outputs_table:   Disables the transactions_outputs table
+          - transactions_inputs:          Disables transactions inputs (array column)
+          - transactions_outputs:         Disables transactions outputs (array column)
           - addresses_transactions_table: Disables the addresses_transactions (or scripts_transactions) table
           - initial_utxo_import:          Disables initial utxo set import
-          - vcp_wait_for_sync:            Start VCP as soon as the filler has passed the previous run. Use with care
 
       --exclude-fields <EXCLUDE_FIELDS>
           Exclude specific fields. If include_fields is specified this argument is ignored.
@@ -358,9 +305,7 @@ Options:
           - tx_in_previous_outpoint:          Used for identifying wallet address of sender
           - tx_in_signature_script
           - tx_in_sig_op_count
-          - tx_in_block_time:                 Excluding this will increase load for populating adress-/scripts_transactions
           - tx_out_amount
           - tx_out_script_public_key:         Excluding both this and script_public_key_address will disable adress-/scripts_transactions
           - tx_out_script_public_key_address: Excluding this, scripts_transactions to be populated instead of adresses_transactions
-          - tx_out_block_time
 ```
