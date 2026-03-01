@@ -20,10 +20,8 @@ use rand::prelude::IndexedRandom;
 use rand::rng;
 use simply_kaspa_cli::cli_args::{CliArgs, CliField};
 use simply_kaspa_database::client::KaspaDbClient;
-use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance;
-use simply_kaspa_database::models::transaction_output::TransactionOutput;
+use simply_kaspa_database::models::utxo::Utxo;
 use simply_kaspa_signal::signal_handler::SignalHandler;
-use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -47,7 +45,6 @@ pub struct UtxoSetImporter {
     include_amount: bool,
     include_script_public_key: bool,
     include_script_public_key_address: bool,
-    include_block_time: bool,
 }
 
 impl UtxoSetImporter {
@@ -63,7 +60,6 @@ impl UtxoSetImporter {
         let include_amount = !cli_args.is_excluded(CliField::TxOutAmount);
         let include_script_public_key = !cli_args.is_excluded(CliField::TxOutScriptPublicKey);
         let include_script_public_key_address = !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress);
-        let include_block_time = !cli_args.is_excluded(CliField::TxOutBlockTime);
         UtxoSetImporter {
             cli_args,
             signal_handler,
@@ -75,7 +71,6 @@ impl UtxoSetImporter {
             include_amount,
             include_script_public_key,
             include_script_public_key_address,
-            include_block_time,
         }
     }
 
@@ -112,11 +107,24 @@ impl UtxoSetImporter {
                 }
                 match adaptor.connect_peer(address).await {
                     Ok(peer_key) => {
+                        self.database.truncate_utxos().await.unwrap();
                         match self.receive_and_handle(adaptor.clone(), peer_key, self.pruning_point_hash, receiver).await {
-                            Ok(_) => completed = true,
-                            Err(_) => sleep(Duration::from_secs(5)).await,
+                            Ok(_) => {
+                                adaptor.terminate_all_peers().await;
+                                info!("Finalizing import, merging staging UTXO set to transactions...");
+                                let transactions_committed = self.database.insert_utxos_to_transactions().await.unwrap();
+                                info!("Staging UTXO set successfully merged as {transactions_committed} transactions!");
+                                self.database.truncate_utxos().await.unwrap();
+                                let mut metrics = self.metrics.write().await;
+                                metrics.components.utxo_importer.transactions_committed = Some(transactions_committed);
+                                completed = true
+                            }
+                            Err(_) => {
+                                adaptor.terminate_all_peers().await;
+                                self.database.truncate_utxos().await.unwrap();
+                                sleep(Duration::from_secs(5)).await;
+                            }
                         }
-                        adaptor.terminate_all_peers().await;
                     }
                     Err(e) => warn!("Peer connection failed: {e}, retrying..."),
                 }
@@ -136,10 +144,9 @@ impl UtxoSetImporter {
         pruning_point_hash: KaspaHash,
         mut receiver: Receiver<KaspadMessage>,
     ) -> Result<(), ProtocolError> {
-        let mut acceptance_committed_count = 0;
-        let mut outputs_committed_count = 0;
+        let mut utxos_committed_count = 0;
         let mut utxo_chunk_count = 0;
-        let mut utxos_count: u64 = 0;
+        let mut total_utxos_count: u64 = 0;
         while !self.signal_handler.is_shutdown() {
             match timeout(Duration::from_secs(IBD_TIMEOUT_SECONDS), receiver.recv()).await {
                 Ok(op) => match op {
@@ -152,7 +159,6 @@ impl UtxoSetImporter {
                             adaptor
                                 .send(peer_key, make_message!(Payload::Addresses, AddressesMessage { address_list: vec![] }))
                                 .await?;
-                            // Peer is alive and ready, continue requesting UTXO set...
                             adaptor
                                 .send(
                                     peer_key,
@@ -165,12 +171,11 @@ impl UtxoSetImporter {
                         }
                         Some(Payload::PruningPointUtxoSetChunk(msg)) => {
                             utxo_chunk_count += 1;
-                            utxos_count += msg.outpoint_and_utxo_entry_pairs.len() as u64;
-                            let (acceptance_count, output_count) = self.persist_utxos(msg.outpoint_and_utxo_entry_pairs).await;
-                            acceptance_committed_count += acceptance_count;
-                            outputs_committed_count += output_count;
+                            total_utxos_count += msg.outpoint_and_utxo_entry_pairs.len() as u64;
+                            let utxos_count = self.persist_utxos(msg.outpoint_and_utxo_entry_pairs).await;
+                            utxos_committed_count += utxos_count;
                             if utxo_chunk_count % IBD_BATCH_SIZE == 0 {
-                                self.print_progress(utxo_chunk_count, acceptance_committed_count, outputs_committed_count);
+                                self.print_progress(utxo_chunk_count, utxos_committed_count);
                                 adaptor
                                     .send(
                                         peer_key,
@@ -181,18 +186,16 @@ impl UtxoSetImporter {
                                     )
                                     .await?;
                                 let mut metrics = self.metrics.write().await;
-                                metrics.components.utxo_importer.utxos_imported = Some(utxos_count);
-                                metrics.components.utxo_importer.acceptances_committed = Some(acceptance_committed_count);
-                                metrics.components.utxo_importer.outputs_committed = Some(outputs_committed_count);
+                                metrics.components.utxo_importer.utxos_imported = Some(total_utxos_count);
+                                metrics.components.utxo_importer.utxos_committed = Some(utxos_committed_count);
                             }
                         }
                         Some(Payload::DonePruningPointUtxoSetChunks(_)) => {
-                            self.print_progress(utxo_chunk_count, acceptance_committed_count, outputs_committed_count);
-                            info!("Pruning point UTXO set import completed successfully!");
+                            self.print_progress(utxo_chunk_count, utxos_committed_count);
+                            info!("Pruning point UTXO set staging import completed");
                             let mut metrics = self.metrics.write().await;
-                            metrics.components.utxo_importer.utxos_imported = Some(utxos_count);
-                            metrics.components.utxo_importer.acceptances_committed = Some(acceptance_committed_count);
-                            metrics.components.utxo_importer.outputs_committed = Some(outputs_committed_count);
+                            metrics.components.utxo_importer.utxos_imported = Some(total_utxos_count);
+                            metrics.components.utxo_importer.utxos_committed = Some(utxos_committed_count);
                             return Ok(());
                         }
                         Some(Payload::UnexpectedPruningPoint(_)) => {
@@ -220,14 +223,14 @@ impl UtxoSetImporter {
         Err(ProtocolError::Other("Aborted"))
     }
 
-    async fn persist_utxos(&self, outpoint_and_utxo_entry_pair: Vec<OutpointAndUtxoEntryPair>) -> (u64, u64) {
-        let transaction_outputs: Vec<TransactionOutput> = outpoint_and_utxo_entry_pair
+    async fn persist_utxos(&self, outpoint_and_utxo_entry_pair: Vec<OutpointAndUtxoEntryPair>) -> u64 {
+        let transaction_outputs: Vec<_> = outpoint_and_utxo_entry_pair
             .into_iter()
             .map(|u| {
                 let outpoint = u.outpoint.unwrap();
                 let utxo_entry = u.utxo_entry.unwrap();
                 let script_public_key: ScriptPublicKey = utxo_entry.script_public_key.unwrap().try_into().unwrap();
-                TransactionOutput {
+                Utxo {
                     transaction_id: KaspaHash::from_slice(outpoint.transaction_id.unwrap().bytes.as_slice()).into(),
                     index: outpoint.index.to_i16().unwrap(),
                     amount: self.include_amount.then_some(utxo_entry.amount as i64),
@@ -236,25 +239,13 @@ impl UtxoSetImporter {
                         .include_script_public_key_address
                         .then(|| extract_script_pub_key_address(&script_public_key, self.prefix).map(|a| a.payload_to_string()).ok())
                         .flatten(),
-                    block_time: self.include_block_time.then_some(0),
                 }
             })
             .collect();
-        let mut unique_acceptances = HashSet::new();
-        let tx_acceptances: Vec<TransactionAcceptance> = transaction_outputs
-            .iter()
-            .filter(|o| unique_acceptances.insert(&o.transaction_id))
-            .map(|o| TransactionAcceptance { transaction_id: Some(o.transaction_id.clone()), block_hash: None })
-            .collect();
-        let acceptance_count = self.database.insert_transaction_acceptances(&tx_acceptances).await.unwrap();
-        let output_count = self.database.insert_transaction_outputs(&transaction_outputs).await.unwrap();
-        (acceptance_count, output_count)
+        self.database.insert_utxos(&transaction_outputs).await.unwrap()
     }
 
-    fn print_progress(&self, utxo_chunk_count: u32, acceptance_committed_count: u64, outputs_committed_count: u64) {
-        info!(
-            "Imported {} UTXO chunks. Committed {} accepted transactions, {} outputs",
-            utxo_chunk_count, acceptance_committed_count, outputs_committed_count,
-        );
+    fn print_progress(&self, utxo_chunk_count: u32, utxos_committed_count: u64) {
+        info!("Imported {} UTXO set chunks, totaling {} UTXOs", utxo_chunk_count, utxos_committed_count,);
     }
 }

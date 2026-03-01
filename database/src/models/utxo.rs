@@ -1,8 +1,7 @@
-use sqlx::Type;
+use crate::models::types::hash::Hash;
 
-#[derive(Type, Clone)]
-#[sqlx(type_name = "transactions_outputs")]
-pub struct TransactionOutput {
+pub struct Utxo {
+    pub transaction_id: Hash,
     pub index: i16,
     pub amount: Option<i64>,
     pub script_public_key: Option<Vec<u8>>,

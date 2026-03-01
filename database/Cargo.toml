@@ -18,3 +18,4 @@ sqlx.workspace = true
 itertools.workspace = true
 regex.workspace = true
 log.workspace = true
+hex.workspace = true

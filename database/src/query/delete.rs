@@ -147,11 +147,13 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
     // Force disable seqscan, as it will never be a good idea when pruning
     sqlx::query("SET LOCAL enable_seqscan = off").execute(tx.as_mut()).await?;
 
-    // Find & delete old transactions
-    let sql = "DELETE FROM transactions WHERE ctid IN (SELECT t.ctid FROM transactions t WHERE t.block_time < $1 LIMIT $2) RETURNING transaction_id";
+    // Find old transactions
+    let sql = "SELECT transaction_id FROM transactions WHERE block_time < $1 LIMIT $2";
     let expired_txids = sqlx::query_scalar::<_, Hash>(sql).bind(block_time_lt).bind(batch_size).fetch_all(tx.as_mut()).await?;
-    total_rows_affected += expired_txids.len() as u64;
-    debug!("prune_transactions: Found & deleted {} expired transactions", expired_txids.len());
+    debug!("prune_transactions: Found {} expired transactions", expired_txids.len());
+    if expired_txids.is_empty() {
+        return Ok(total_rows_affected);
+    }
 
     // Find rejected transactions
     let sql = "SELECT transaction_id FROM transactions_acceptances WHERE transaction_id = ANY($1)";
@@ -160,50 +162,55 @@ pub async fn prune_transactions_chunk(block_time_lt: i64, batch_size: i32, pool:
     let rejected_txids: Vec<_> = expired_txids.iter().filter(|id| !accepted_txids.contains(id)).cloned().collect();
     debug!("prune_transactions: Found {} expired rejected transactions", rejected_txids.len());
 
-    // Delete rejected transaction inputs
-    let sql = "DELETE FROM transactions_inputs WHERE transaction_id = ANY($1)";
+    // Delete rejected transactions
+    let sql = "DELETE FROM transactions WHERE transaction_id = ANY($1)";
     let rows_affected = sqlx::query(sql).bind(&rejected_txids).execute(tx.as_mut()).await?.rows_affected();
-    debug!("prune_transactions: Deleted {rows_affected} expired rejected transactions_inputs");
-    total_rows_affected += rows_affected;
-
-    // Delete rejected transaction outputs
-    let sql = "DELETE FROM transactions_outputs WHERE transaction_id = ANY($1)";
-    let rows_affected = sqlx::query(sql).bind(&rejected_txids).execute(tx.as_mut()).await?.rows_affected();
-    debug!("prune_transactions: Deleted {rows_affected} expired rejected transactions_outputs");
+    debug!("prune_transactions: Deleted {rows_affected} expired rejected transactions");
     total_rows_affected += rows_affected;
 
     // Find spent transaction outputs while deleting transaction_inputs
-    let sql =
-        "DELETE FROM transactions_inputs WHERE transaction_id = ANY($1) RETURNING previous_outpoint_hash, previous_outpoint_index";
+    let sql = "
+        WITH spent_outputs AS (
+            SELECT i.previous_outpoint_hash, i.previous_outpoint_index
+            FROM transactions t, unnest(t.inputs) i
+            WHERE t.transaction_id = ANY($1)
+        ),
+        _ AS (
+            UPDATE transactions
+            SET hash       = NULL,
+                mass       = NULL,
+                payload    = NULL,
+                inputs     = NULL
+            WHERE transaction_id = ANY ($1))
+        SELECT previous_outpoint_hash transaction_id, COUNT(*)::smallint spent_count FROM spent_outputs GROUP BY previous_outpoint_hash";
     let spent_tx_outputs: Vec<_> =
         sqlx::query_as::<_, (Hash, i16)>(sql).bind(accepted_txids.iter().collect::<Vec<_>>()).fetch_all(tx.as_mut()).await?;
-    debug!("prune_transactions: Deleted {} expired transactions_inputs", spent_tx_outputs.len());
-    total_rows_affected += spent_tx_outputs.len() as u64;
+    debug!(
+        "prune_transactions: Deleted {} expired transactions_inputs",
+        spent_tx_outputs.iter().map(|(_, count)| *count as i64).sum::<i64>()
+    );
 
-    // Delete spent transaction outputs
-    let sql = "DELETE FROM transactions_outputs WHERE (transaction_id, index) IN (SELECT * FROM UNNEST($1, $2))";
-    let (t, i): (Vec<_>, Vec<_>) = spent_tx_outputs.iter().cloned().unzip();
-    let rows_affected = sqlx::query(sql).bind(t).bind(i).execute(tx.as_mut()).await?.rows_affected();
-    debug!("prune_transactions: Deleted {rows_affected} expired spent transactions_outputs");
-    total_rows_affected += rows_affected;
+    // Mark spent transaction outputs
+    let sql = "
+        UPDATE transactions t
+        SET outputs_spent = COALESCE(t.outputs_spent, 0) + spent.count
+        FROM (SELECT unnest($1) transaction_id, unnest($2) count) spent
+        WHERE t.transaction_id = spent.transaction_id";
+    let (possibly_spent_txids, c): (Vec<_>, Vec<_>) = spent_tx_outputs.iter().cloned().unzip();
+    let rows_affected = sqlx::query(sql).bind(&possibly_spent_txids).bind(&c).execute(tx.as_mut()).await?.rows_affected();
+    debug!("prune_transactions: Marked {rows_affected} expired transactions with spent outputs");
 
-    // Find fully spent transactions
-    let possibly_spent_txids: HashSet<_> = spent_tx_outputs.into_iter().map(|(t, _)| t).collect();
-    let sql = "SELECT transaction_id FROM transactions_outputs WHERE transaction_id = ANY($1)";
-    let unspent_txids: HashSet<_> = sqlx::query_scalar::<_, Hash>(sql)
-        .bind(possibly_spent_txids.iter().collect::<Vec<_>>())
-        .fetch_all(tx.as_mut())
-        .await?
-        .into_iter()
-        .collect();
-    let fully_spent_txids: Vec<_> = possibly_spent_txids.iter().filter(|id| !unspent_txids.contains(id)).cloned().collect();
-    debug!("prune_transactions: Found {} expired fully spent transactions", fully_spent_txids.len());
+    // Find & delete fully spent transactions
+    let sql =
+        "DELETE FROM transactions WHERE transaction_id = ANY($1) AND outputs_spent = cardinality(outputs) RETURNING transaction_id";
+    let fully_spent_txids = sqlx::query_scalar::<_, Hash>(sql).bind(possibly_spent_txids).fetch_all(tx.as_mut()).await?;
+    debug!("prune_transactions: Deleted {} expired fully spent transactions", fully_spent_txids.len());
+    total_rows_affected += fully_spent_txids.len() as u64;
 
     // Delete acceptances for fully spent transactions
     let sql = "DELETE FROM transactions_acceptances WHERE transaction_id = ANY($1)";
     let rows_affected = sqlx::query(sql).bind(&fully_spent_txids).execute(tx.as_mut()).await?.rows_affected();
-    debug!("prune_transactions: Pruned {rows_affected} expired spent transactions_acceptances");
-    total_rows_affected += rows_affected;
+    debug!("prune_transactions: Deleted {rows_affected} expired spent transactions_acceptances");
 
     tx.commit().await?;
     Ok(total_rows_affected)

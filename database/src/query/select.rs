@@ -8,13 +8,13 @@ pub async fn select_database_details(pool: &Pool<Postgres>) -> Result<DatabaseDe
     sqlx::query_as::<_, DatabaseDetails>(
         "
         SELECT 
-            current_database() AS database_name,
-            current_schema() AS schema_name,
-            pg_database_size(current_database()) AS database_size,
-            (SELECT count(*) AS active_queries FROM pg_stat_activity WHERE state = 'active' AND pid <> pg_backend_pid()) AS active_queries,
-            (SELECT count(*) FROM pg_locks WHERE NOT granted) AS blocked_queries,
-            (SELECT count(*) FROM pg_stat_activity) AS active_connections,
-            (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max_connections;
+            current_database() database_name,
+            current_schema() schema_name,
+            pg_database_size(current_database()) database_size,
+            (SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND pid <> pg_backend_pid()) active_queries,
+            (SELECT count(*) FROM pg_locks WHERE NOT granted) blocked_queries,
+            (SELECT count(*) FROM pg_stat_activity) active_connections,
+            (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') max_connections;
     ",
     )
     .fetch_one(pool)
@@ -25,10 +25,10 @@ pub async fn select_all_table_details(pool: &Pool<Postgres>) -> Result<Vec<Table
     sqlx::query_as::<_, TableDetails>(
         "
         SELECT
-            cls.relname AS name,
-            pg_total_relation_size(cls.relname::text) AS total_size,
-            pg_indexes_size(cls.relname::text) AS indexes_size,
-            cls.reltuples::bigint AS approximate_row_count
+            cls.relname name,
+            pg_total_relation_size(cls.relname::text) total_size,
+            pg_indexes_size(cls.relname::text) indexes_size,
+            cls.reltuples::bigint approximate_row_count
         FROM pg_class cls
         JOIN pg_namespace nsp ON cls.relnamespace = nsp.oid
         WHERE nsp.nspname = current_schema()
