@@ -9,7 +9,7 @@ RUN apk --no-cache add \
   musl-dev \
   protobuf-dev \
   g++ \
-  clang15-dev \
+  clang18-dev \
   linux-headers \
   wasm-pack \
   openssl-dev \
