@@ -31,13 +31,13 @@ simply-kaspa-signal = { path = "signal" }
 simply-kaspa-database = { path = "database" }
 simply-kaspa-mapping = { path = "mapping" }
 simply-kaspa-kaspad = { path = "kaspad" }
-kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.1" }
-kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.1" }
-kaspa-p2p-lib = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.1" }
-kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.1" }
-kaspa-hashes = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.1" }
-kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.1" }
-kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.0.1" }
+kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
+kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
+kaspa-p2p-lib = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
+kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
+kaspa-hashes = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
+kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
+kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
 tokio = { version = "1.48.0", features = ["default", "signal"] }
 tokio-cron-scheduler = "0.15.1"
 tonic = { version = "0.14.2", features = ["gzip"] }
