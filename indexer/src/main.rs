@@ -209,6 +209,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             settings.clone(),
             signal_handler.clone(),
             metrics.clone(),
+            start_vcp.clone(),
             txs_queue.clone(),
             checkpoint_queue.clone(),
             database.clone(),
@@ -224,6 +225,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             checkpoint_queue.clone(),
             kaspad_pool.clone(),
             database.clone(),
+            mapper.clone(),
         )))
     }
 

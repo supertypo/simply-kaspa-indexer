@@ -10,8 +10,6 @@ use utoipa::ToSchema;
 #[clap(rename_all = "snake_case")]
 pub enum CliEnable {
     None,
-    /// Enables resolving transactions_inputs previous_outpoint
-    TransactionsInputsResolve,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]

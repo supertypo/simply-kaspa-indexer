@@ -233,8 +233,8 @@ impl KaspaDbClient {
         query::insert::insert_block_parents(block_parents, &self.pool).await
     }
 
-    pub async fn insert_transactions(&self, resolve_previous_outpoints: bool, transactions: &[Transaction]) -> Result<u64, Error> {
-        query::insert::insert_transactions(resolve_previous_outpoints, transactions, &self.pool).await
+    pub async fn insert_transactions(&self, transactions: &[Transaction], upsert_inputs: bool) -> Result<u64, Error> {
+        query::insert::insert_transactions(transactions, upsert_inputs, &self.pool).await
     }
 
     pub async fn insert_address_transactions(&self, address_transactions: &[AddressTransaction]) -> Result<u64, Error> {
@@ -243,14 +243,6 @@ impl KaspaDbClient {
 
     pub async fn insert_script_transactions(&self, script_transactions: &[ScriptTransaction]) -> Result<u64, Error> {
         query::insert::insert_script_transactions(script_transactions, &self.pool).await
-    }
-
-    pub async fn insert_address_transactions_from_inputs(&self, transaction_ids: &[Hash]) -> Result<u64, Error> {
-        query::insert::insert_address_transactions_from_inputs(transaction_ids, &self.pool).await
-    }
-
-    pub async fn insert_script_transactions_from_inputs(&self, transaction_ids: &[Hash]) -> Result<u64, Error> {
-        query::insert::insert_script_transactions_from_inputs(transaction_ids, &self.pool).await
     }
 
     pub async fn insert_block_transactions(&self, block_transactions: &[BlockTransaction]) -> Result<u64, Error> {

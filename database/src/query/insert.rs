@@ -7,7 +7,6 @@ use crate::models::block_transaction::BlockTransaction;
 use crate::models::script_transaction::ScriptTransaction;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
-use crate::models::types::hash::Hash;
 use crate::models::utxo::Utxo;
 use crate::query::common::generate_placeholders;
 
@@ -112,48 +111,17 @@ pub async fn insert_block_parents(block_parents: &[BlockParent], pool: &Pool<Pos
     Ok(query.execute(pool).await?.rows_affected())
 }
 
-pub async fn insert_transactions(
-    resolve_previous_outpoints: bool,
-    transactions: &[Transaction],
-    pool: &Pool<Postgres>,
-) -> Result<u64, Error> {
+pub async fn insert_transactions(transactions: &[Transaction], upsert_inputs: bool, pool: &Pool<Postgres>) -> Result<u64, Error> {
     const COLS: usize = 8;
-    let sql = if resolve_previous_outpoints {
-        format!(
-            "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
-             SELECT v.transaction_id, v.subnetwork_id, v.hash, v.mass, v.payload, v.block_time,
-               ARRAY(
-                 SELECT ROW(
-                   i.index,
-                   i.previous_outpoint_hash,
-                   i.previous_outpoint_index,
-                   i.signature_script,
-                   i.sig_op_count,
-                   COALESCE(i.previous_outpoint_script, o.script_public_key),
-                   COALESCE(i.previous_outpoint_amount, o.amount)
-                 )::transactions_inputs
-                 FROM UNNEST(v.inputs) i
-                 LEFT JOIN transactions output_t ON output_t.transaction_id = i.previous_outpoint_hash
-                 LEFT JOIN LATERAL (
-                   SELECT amount, script_public_key
-                   FROM UNNEST(output_t.outputs)
-                   WHERE index = i.previous_outpoint_index
-                   LIMIT 1
-                 ) o ON TRUE
-               ),
-               v.outputs
-             FROM (VALUES {}) v(transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
-             ON CONFLICT DO NOTHING",
-            generate_placeholders(transactions.len(), COLS)
-        )
-    } else {
-        format!(
-            "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
-             VALUES {}
-             ON CONFLICT DO NOTHING",
-            generate_placeholders(transactions.len(), COLS)
-        )
-    };
+    let on_conflict =
+        if upsert_inputs { "ON CONFLICT (transaction_id) DO UPDATE SET inputs = EXCLUDED.inputs" } else { "ON CONFLICT DO NOTHING" };
+    let sql = format!(
+        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
+         VALUES {}
+         {}",
+        generate_placeholders(transactions.len(), COLS),
+        on_conflict
+    );
 
     let mut query = sqlx::query(&sql);
     for tx in transactions {
@@ -199,38 +167,6 @@ pub async fn insert_script_transactions(script_transactions: &[ScriptTransaction
         query = query.bind(script_transaction.block_time);
     }
     Ok(query.execute(pool).await?.rows_affected())
-}
-
-pub async fn insert_address_transactions_from_inputs(transaction_ids: &[Hash], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let sql = "
-        INSERT INTO addresses_transactions (address, transaction_id, block_time)
-        SELECT
-            o.script_public_key_address,
-            t.transaction_id,
-            t.block_time
-        FROM transactions t
-        CROSS JOIN LATERAL UNNEST(t.inputs) i
-        JOIN transactions output_t  ON output_t.transaction_id = i.previous_outpoint_hash
-        JOIN LATERAL UNNEST(output_t.outputs) o ON o.index = i.previous_outpoint_index
-        WHERE t.transaction_id = ANY($1)
-        ON CONFLICT DO NOTHING";
-    Ok(sqlx::query(sql).bind(transaction_ids).execute(pool).await?.rows_affected())
-}
-
-pub async fn insert_script_transactions_from_inputs(transaction_ids: &[Hash], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let sql = "
-        INSERT INTO scripts_transactions (script_public_key, transaction_id, block_time)
-        SELECT
-            o.script_public_key,
-            t.transaction_id,
-            t.block_time
-        FROM transactions t
-        CROSS JOIN LATERAL UNNEST(t.inputs) i
-        JOIN transactions output_t  ON output_t.transaction_id = i.previous_outpoint_hash
-        JOIN LATERAL UNNEST(output_t.outputs) o ON o.index = i.previous_outpoint_index
-        WHERE t.transaction_id = ANY($1)
-        ON CONFLICT DO NOTHING";
-    Ok(sqlx::query(sql).bind(transaction_ids).execute(pool).await?.rows_affected())
 }
 
 pub async fn insert_block_transactions(block_transactions: &[BlockTransaction], pool: &Pool<Postgres>) -> Result<u64, Error> {
