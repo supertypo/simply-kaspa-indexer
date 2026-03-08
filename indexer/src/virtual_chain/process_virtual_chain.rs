@@ -9,7 +9,7 @@ use crossbeam_queue::ArrayQueue;
 use deadpool::managed::{Object, Pool};
 use kaspa_rpc_core::RpcDataVerbosityLevel;
 use kaspa_rpc_core::api::rpc::RpcApi;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_kaspad::manager::KaspadManager;
@@ -56,7 +56,7 @@ pub async fn process_virtual_chain(
 
     while !signal_handler.is_shutdown() {
         if !start_vcp.load(Ordering::Relaxed) {
-            debug!("Virtual chain processor waiting for start notification");
+            trace!("Virtual chain processor waiting for start notification");
             sleep(err_delay).await;
             continue;
         }
@@ -95,7 +95,7 @@ pub async fn process_virtual_chain(
                                 let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                                 let tps = rows_affected_tx as f64 / commit_time as f64 * 1000f64;
                                 info!(
-                                    "Committed {} accepted ({} rejected) txs in {}ms ({:.1} tps, {} adr_tx). Last tx: {}",
+                                    "Committed {} accepted and {} rejected txs in {}ms ({:.1} tps, {} adr_tx). Last tx: {}",
                                     rows_affected_tx_acc,
                                     rows_removed,
                                     commit_time,
@@ -158,7 +158,7 @@ pub async fn process_virtual_chain(
                                         break;
                                     }
                                 }
-                                debug!("Virtual chain processor is waiting for block_processor to catch up...");
+                                trace!("Virtual chain processor is waiting for block_processor to catch up...");
                                 sleep(poll_interval).await;
                                 if signal_handler.is_shutdown() {
                                     return;
