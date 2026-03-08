@@ -4,7 +4,7 @@ CREATE TABLE vars
     value TEXT NOT NULL
 );
 INSERT INTO vars (key, value)
-VALUES ('schema_version', '20');
+VALUES ('schema_version', '21');
 
 
 CREATE TABLE blocks
