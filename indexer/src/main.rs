@@ -6,7 +6,7 @@ use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
 use log::{error, info, trace, warn};
-use simply_kaspa_cli::cli_args::{CliArgs, CliDisable};
+use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
@@ -90,6 +90,9 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
 
     if let Some(enable) = &cli_args.enable {
         info!("Enable functionality is set, the following functionality will be enabled: {:?}", enable);
+    }
+    if cli_args.is_enabled(CliEnable::TransactionsInputsResolve) {
+        warn!("TransactionsInputsResolve is a NO-OP and will be removed in the future - inputs are always resolved");
     }
     if let Some(disable) = &cli_args.disable {
         info!("Disable functionality is set, the following functionality will be disabled: {:?}", disable);
