@@ -11,11 +11,22 @@ use crate::models::utxo::Utxo;
 use crate::query::common::generate_placeholders;
 
 pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i32, Error> {
-    sqlx::query("INSERT INTO subnetworks (subnetwork_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id")
+    let mut tx = pool.begin().await?;
+    sqlx::query("LOCK TABLE subnetworks IN EXCLUSIVE MODE").execute(tx.as_mut()).await?;
+    let id: i32 = match sqlx::query("SELECT id FROM subnetworks WHERE subnetwork_id = $1")
         .bind(subnetwork_id)
-        .fetch_one(pool)
+        .fetch_optional(tx.as_mut())
         .await?
-        .try_get(0)
+    {
+        Some(row) => row.try_get(0)?,
+        None => sqlx::query("INSERT INTO subnetworks (subnetwork_id) VALUES ($1) RETURNING id")
+            .bind(subnetwork_id)
+            .fetch_one(tx.as_mut())
+            .await?
+            .try_get(0)?,
+    };
+    tx.commit().await?;
+    Ok(id)
 }
 
 pub async fn insert_utxos(utxos: &[Utxo], pool: &Pool<Postgres>) -> Result<u64, Error> {
