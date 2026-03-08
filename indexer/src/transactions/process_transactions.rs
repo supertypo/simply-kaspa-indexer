@@ -48,6 +48,7 @@ pub async fn process_transactions(
     let disable_transactions = settings.cli_args.is_disabled(CliDisable::TransactionsTable);
     let disable_blocks_transactions = settings.cli_args.is_disabled(CliDisable::BlocksTransactionsTable);
     let disable_address_transactions = settings.cli_args.is_disabled(CliDisable::AddressesTransactionsTable);
+    let disable_rejected_transactions = settings.cli_args.is_disabled(CliDisable::RejectedTransactions);
     let exclude_tx_out_script_public_key_address = settings.cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress);
     let exclude_tx_out_script_public_key = settings.cli_args.is_excluded(CliField::TxOutScriptPublicKey);
 
@@ -87,42 +88,43 @@ pub async fn process_transactions(
                 blue_score: transaction_data.block_blue_score,
             });
             for transaction in transaction_data.transactions {
-                let transaction_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
-                if tx_id_cache.contains_key(&transaction_id) {
-                    trace!("Known transaction_id {}, keeping block relation only", transaction_id);
-                } else {
-                    if !disable_transactions {
-                        let subnetwork_id = transaction.subnetwork_id.to_string();
-                        let subnetwork_key = match subnetwork_map.get(&subnetwork_id) {
-                            Some(&subnetwork_key) => subnetwork_key,
-                            None => {
-                                let subnetwork_key =
-                                    database.insert_subnetwork(&subnetwork_id).await.expect("Insert subnetwork FAILED");
-                                subnetwork_map.insert(subnetwork_id.clone(), subnetwork_key);
-                                info!("Committed new subnetwork, id: {} subnetwork_id: {}", subnetwork_key, subnetwork_id);
-                                subnetwork_key
-                            }
-                        };
-                        transactions.push(mapper.map_transaction(&transaction, subnetwork_key));
-                    }
-                    if !disable_address_transactions {
-                        if !exclude_tx_out_script_public_key_address {
-                            tx_address_transactions.extend(mapper.map_transaction_outputs_address(&transaction));
-                        } else if !exclude_tx_out_script_public_key {
-                            tx_script_transactions.extend(mapper.map_transaction_outputs_script(&transaction));
+                if !disable_rejected_transactions {
+                    let transaction_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
+                    if tx_id_cache.contains_key(&transaction_id) {
+                        trace!("Known transaction_id {}, keeping block relation only", transaction_id);
+                    } else {
+                        if !disable_transactions {
+                            let subnetwork_id = transaction.subnetwork_id.to_string();
+                            let subnetwork_key = match subnetwork_map.get(&subnetwork_id) {
+                                Some(&subnetwork_key) => subnetwork_key,
+                                None => {
+                                    let subnetwork_key =
+                                        database.insert_subnetwork(&subnetwork_id).await.expect("Insert subnetwork FAILED");
+                                    subnetwork_map.insert(subnetwork_id.clone(), subnetwork_key);
+                                    info!("Committed new subnetwork, id: {} subnetwork_id: {}", subnetwork_key, subnetwork_id);
+                                    subnetwork_key
+                                }
+                            };
+                            transactions.push(mapper.map_transaction(&transaction, subnetwork_key));
                         }
+                        if !disable_address_transactions {
+                            if !exclude_tx_out_script_public_key_address {
+                                tx_address_transactions.extend(mapper.map_transaction_outputs_address(&transaction));
+                            } else if !exclude_tx_out_script_public_key {
+                                tx_script_transactions.extend(mapper.map_transaction_outputs_script(&transaction));
+                            }
+                        }
+                        tx_id_cache.insert(transaction_id, ());
                     }
-                    tx_id_cache.insert(transaction_id, ());
                 }
                 block_tx.push(mapper.map_block_transaction(&transaction));
             }
 
             if block_tx.len() >= batch_size || (!block_tx.is_empty() && Instant::now().duration_since(last_commit_time).as_secs() > 2)
             {
-                if start_vcp.load(Ordering::Relaxed) {
+                if !disable_rejected_transactions && start_vcp.load(Ordering::Relaxed) {
                     loop {
                         if let Some(vcp) = &metrics.read().await.components.virtual_chain_processor.last_block {
-                            // Keep distance to VCP to avoid it needing to upsert transactions inserted here
                             if vcp.daa_score.saturating_sub(checkpoint_blocks.last().unwrap().daa_score) >= 3 * settings.net_bps as u64
                             {
                                 break;
