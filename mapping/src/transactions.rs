@@ -34,20 +34,19 @@ pub fn map_transaction(
         payload: (include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time as i64),
         inputs: include_in
-            .then_some(map_transaction_inputs(
-                transaction,
-                include_in_previous_outpoint,
-                include_in_signature_script,
-                include_in_sig_op_count,
-            ))
+            .then(|| {
+                map_transaction_inputs(transaction, include_in_previous_outpoint, include_in_signature_script, include_in_sig_op_count)
+            })
             .flatten(),
         outputs: include_out
-            .then_some(map_transaction_outputs(
-                transaction,
-                include_out_amount,
-                include_out_script_public_key,
-                include_out_script_public_key_address,
-            ))
+            .then(|| {
+                map_transaction_outputs(
+                    transaction,
+                    include_out_amount,
+                    include_out_script_public_key,
+                    include_out_script_public_key_address,
+                )
+            })
             .flatten(),
     }
 }
@@ -77,7 +76,7 @@ pub fn map_transaction_inputs(
                 previous_outpoint_script: None,
                 previous_outpoint_amount: None,
             })
-            .collect::<Vec<SqlTransactionInput>>()
+            .collect()
     })
 }
 
@@ -102,7 +101,7 @@ pub fn map_transaction_outputs(
                         .then_some(verbose_data.script_public_key_address.payload_to_string()),
                 }
             })
-            .collect::<Vec<SqlTransactionOutput>>()
+            .collect()
     })
 }
 
@@ -119,7 +118,7 @@ pub fn map_transaction_outputs_address(transaction: &RpcTransaction) -> Vec<SqlA
                 block_time: tx_verbose_data.block_time as i64,
             }
         })
-        .collect::<Vec<SqlAddressTransaction>>()
+        .collect()
 }
 
 pub fn map_transaction_outputs_script(transaction: &RpcTransaction) -> Vec<SqlScriptTransaction> {
@@ -132,7 +131,7 @@ pub fn map_transaction_outputs_script(transaction: &RpcTransaction) -> Vec<SqlSc
             transaction_id: tx_verbose_data.transaction_id.into(),
             block_time: tx_verbose_data.block_time as i64,
         })
-        .collect::<Vec<SqlScriptTransaction>>()
+        .collect()
 }
 
 pub fn map_optional_transaction(
@@ -235,70 +234,88 @@ fn map_optional_transaction_outputs(
 }
 
 pub fn map_optional_transaction_inputs_address(transaction: &RpcOptionalTransaction) -> Vec<SqlAddressTransaction> {
-    let vd = transaction.verbose_data.as_ref().expect("Verbose data missing (RpcDataVerbosityLevel::High required)");
-    let tx_id: SqlHash = vd.transaction_id.expect("transaction_id missing in verbose data").into();
-    let block_time = vd.block_time.unwrap_or(0) as i64;
+    let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
+    let tx_id: SqlHash = verbose_data.transaction_id.expect("transaction_id missing in verbose data").into();
+    let block_time = verbose_data.block_time.unwrap() as i64;
     transaction
         .inputs
         .iter()
-        .filter_map(|input| {
-            input
+        .map(|input| SqlAddressTransaction {
+            address: input
                 .verbose_data
                 .as_ref()
-                .and_then(|ivd| ivd.utxo_entry.as_ref())
-                .and_then(|entry| entry.verbose_data.as_ref().and_then(|evd| evd.script_public_key_address.as_ref()))
-                .map(|addr| SqlAddressTransaction { address: addr.payload_to_string(), transaction_id: tx_id.clone(), block_time })
+                .unwrap()
+                .utxo_entry
+                .as_ref()
+                .unwrap()
+                .verbose_data
+                .as_ref()
+                .unwrap()
+                .script_public_key_address
+                .as_ref()
+                .unwrap()
+                .payload_to_string(),
+            transaction_id: tx_id.clone(),
+            block_time,
         })
         .filter(|at| !at.address.is_empty())
         .collect()
 }
 
 pub fn map_optional_transaction_inputs_script(transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
-    let vd = transaction.verbose_data.as_ref().expect("Verbose data missing (RpcDataVerbosityLevel::High required)");
-    let tx_id: SqlHash = vd.transaction_id.expect("transaction_id missing in verbose data").into();
-    let block_time = vd.block_time.unwrap_or(0) as i64;
+    let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
+    let tx_id: SqlHash = verbose_data.transaction_id.expect("transaction_id missing in verbose data").into();
+    let block_time = verbose_data.block_time.unwrap() as i64;
     transaction
         .inputs
         .iter()
-        .map(|input| {
-            let spk = input.verbose_data.as_ref().unwrap().utxo_entry.as_ref().unwrap().script_public_key.as_ref().unwrap();
-            SqlScriptTransaction { script_public_key: spk.script().to_vec(), transaction_id: tx_id.clone(), block_time }
+        .map(|input| SqlScriptTransaction {
+            script_public_key: input
+                .verbose_data
+                .as_ref()
+                .unwrap()
+                .utxo_entry
+                .as_ref()
+                .unwrap()
+                .script_public_key
+                .as_ref()
+                .unwrap()
+                .script()
+                .to_vec(),
+            transaction_id: tx_id.clone(),
+            block_time,
         })
         .filter(|st| !st.script_public_key.is_empty())
         .collect()
 }
 
 pub fn map_optional_transaction_outputs_address(transaction: &RpcOptionalTransaction) -> Vec<SqlAddressTransaction> {
-    let vd = transaction.verbose_data.as_ref().expect("Verbose data missing (RpcDataVerbosityLevel::High required)");
-    let tx_id: SqlHash = vd.transaction_id.expect("transaction_id missing in verbose data").into();
-    let block_time = vd.block_time.unwrap_or(0) as i64;
+    let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
+    let tx_id: SqlHash = verbose_data.transaction_id.expect("transaction_id missing in verbose data").into();
+    let block_time = verbose_data.block_time.unwrap() as i64;
     transaction
         .outputs
         .iter()
-        .filter_map(|output| {
-            output.verbose_data.as_ref().and_then(|ovd| ovd.script_public_key_address.as_ref()).map(|addr| SqlAddressTransaction {
-                address: addr.payload_to_string(),
-                transaction_id: tx_id.clone(),
-                block_time,
-            })
+        .map(|output| SqlAddressTransaction {
+            address: output.verbose_data.as_ref().unwrap().script_public_key_address.as_ref().unwrap().payload_to_string(),
+            transaction_id: tx_id.clone(),
+            block_time,
         })
         .filter(|at| !at.address.is_empty())
         .collect()
 }
 
 pub fn map_optional_transaction_outputs_script(transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
-    let vd = transaction.verbose_data.as_ref().expect("Verbose data missing (RpcDataVerbosityLevel::High required)");
-    let tx_id: SqlHash = vd.transaction_id.expect("transaction_id missing in verbose data").into();
-    let block_time = vd.block_time.unwrap_or(0) as i64;
+    let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
+    let tx_id: SqlHash = verbose_data.transaction_id.expect("transaction_id missing in verbose data").into();
+    let block_time = verbose_data.block_time.unwrap() as i64;
     transaction
         .outputs
         .iter()
-        .filter_map(|output| {
-            output.script_public_key.as_ref().map(|spk| SqlScriptTransaction {
-                script_public_key: spk.script().to_vec(),
-                transaction_id: tx_id.clone(),
-                block_time,
-            })
+        .map(|output| SqlScriptTransaction {
+            script_public_key: output.script_public_key.as_ref().unwrap().script().to_vec(),
+            transaction_id: tx_id.clone(),
+            block_time,
         })
         .filter(|st| !st.script_public_key.is_empty())
         .collect()
