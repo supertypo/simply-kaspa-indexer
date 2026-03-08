@@ -159,7 +159,7 @@ impl CliArgs {
 #[derive(Debug, Clone, Args, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PruningConfig {
-    #[clap(long, default_missing_value = "0 4 * * *", num_args = 0..=1, help = "Enables db pruning. Optional cron expression. Default: '0 4 * * *' = daily 04:00 (UTC)")]
+    #[clap(long, default_missing_value = "0 * * * *", num_args = 0..=1, help = "Enables db pruning. Optional cron expression (UTC). Default: '0 * * * *' = hourly")]
     pub prune_db: Option<String>,
     #[clap(long, default_value = "100000", help = "Batch size for db pruning")]
     pub prune_batch_size: i32,
