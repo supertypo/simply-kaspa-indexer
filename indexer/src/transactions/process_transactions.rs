@@ -229,7 +229,7 @@ pub async fn insert_txs(
 
 pub async fn insert_tx_addr(batch_scale: f64, batch_concurrency: i8, values: Vec<AddressTransaction>, database: KaspaDbClient) -> u64 {
     let batch_size = min((250f64 * batch_scale) as u16, 20000) as usize;
-    let key = "output addresses_transactions";
+    let key = "addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut values = values;
@@ -253,7 +253,7 @@ pub async fn insert_tx_script(
     database: KaspaDbClient,
 ) -> u64 {
     let batch_size = min((250f64 * batch_scale) as u16, 20000) as usize;
-    let key = "output scripts_transactions";
+    let key = "scripts_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
     let mut values = values;
