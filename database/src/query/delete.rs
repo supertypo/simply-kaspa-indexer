@@ -11,20 +11,20 @@ pub async fn delete_transaction_acceptances(block_hashes: &[Hash], pool: &Pool<P
         .rows_affected())
 }
 
-pub async fn prune_block_parent(block_time_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
+pub async fn prune_block_parent(blue_score_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = r#"
         DELETE FROM block_parent
         WHERE ctid IN (
             SELECT bp.ctid
             FROM block_parent bp
             JOIN blocks b ON bp.block_hash = b.hash
-            WHERE b.timestamp < $1
+            WHERE b.blue_score < $1
             LIMIT $2
         )
     "#;
     let mut total_rows_affected: u64 = 0;
     loop {
-        let rows_affected = sqlx::query(sql).bind(block_time_lt).bind(batch_size).execute(pool).await?.rows_affected();
+        let rows_affected = sqlx::query(sql).bind(blue_score_lt).bind(batch_size).execute(pool).await?.rows_affected();
         if rows_affected == 0 {
             break;
         }
@@ -33,20 +33,20 @@ pub async fn prune_block_parent(block_time_lt: i64, batch_size: i32, pool: &Pool
     Ok(total_rows_affected)
 }
 
-pub async fn prune_blocks_transactions_using_blocks(block_time_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
+pub async fn prune_blocks_transactions_using_blocks(blue_score_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = r#"
         DELETE FROM blocks_transactions
         WHERE ctid IN (
             SELECT bt.ctid
             FROM blocks_transactions bt
             JOIN blocks b ON bt.block_hash = b.hash
-            WHERE b.timestamp < $1
+            WHERE b.blue_score < $1
             LIMIT $2
         )
     "#;
     let mut total_rows_affected: u64 = 0;
     loop {
-        let rows_affected = sqlx::query(sql).bind(block_time_lt).bind(batch_size).execute(pool).await?.rows_affected();
+        let rows_affected = sqlx::query(sql).bind(blue_score_lt).bind(batch_size).execute(pool).await?.rows_affected();
         if rows_affected == 0 {
             break;
         }
@@ -82,7 +82,7 @@ pub async fn prune_blocks_transactions_using_transactions(
 }
 
 pub async fn prune_transactions_acceptances_using_blocks(
-    block_time_lt: i64,
+    blue_score_lt: i64,
     batch_size: i32,
     pool: &Pool<Postgres>,
 ) -> Result<u64, Error> {
@@ -92,13 +92,13 @@ pub async fn prune_transactions_acceptances_using_blocks(
             SELECT ta.ctid
             FROM transactions_acceptances ta
             JOIN blocks b ON ta.block_hash = b.hash
-            WHERE b.timestamp < $1
+            WHERE b.blue_score < $1
             LIMIT $2
         )
     "#;
     let mut total_rows_affected: u64 = 0;
     loop {
-        let rows_affected = sqlx::query(sql).bind(block_time_lt).bind(batch_size).execute(pool).await?.rows_affected();
+        let rows_affected = sqlx::query(sql).bind(blue_score_lt).bind(batch_size).execute(pool).await?.rows_affected();
         if rows_affected == 0 {
             break;
         }
@@ -107,19 +107,19 @@ pub async fn prune_transactions_acceptances_using_blocks(
     Ok(total_rows_affected)
 }
 
-pub async fn prune_blocks(block_time_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
+pub async fn prune_blocks(blue_score_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
     let sql = r#"
         DELETE FROM blocks
         WHERE ctid IN (
             SELECT b.ctid
             FROM blocks b
-            WHERE b.timestamp < $1
+            WHERE b.blue_score < $1
             LIMIT $2
         )
     "#;
     let mut total_rows_affected: u64 = 0;
     loop {
-        let rows_affected = sqlx::query(sql).bind(block_time_lt).bind(batch_size).execute(pool).await?.rows_affected();
+        let rows_affected = sqlx::query(sql).bind(blue_score_lt).bind(batch_size).execute(pool).await?.rows_affected();
         if rows_affected == 0 {
             break;
         }
