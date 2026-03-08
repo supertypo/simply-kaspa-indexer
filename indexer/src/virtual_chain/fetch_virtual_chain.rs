@@ -60,11 +60,11 @@ pub async fn fetch_virtual_chain(
                         return; // persister dropped — shutdown
                     }
 
-                    // Don't allow VCP to run ahead of blocks processor by more than 1 minute
+                    // Don't allow VCP to run ahead of blocks processor by more than 2 minutes
                     loop {
                         if last_daa_score.saturating_sub(
                             metrics.read().await.components.block_processor.last_block.as_ref().map(|b| b.daa_score).unwrap_or(0),
-                        ) < 60 * settings.net_bps as u64
+                        ) < 120 * settings.net_bps as u64
                         {
                             break;
                         }
