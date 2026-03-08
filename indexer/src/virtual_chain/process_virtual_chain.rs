@@ -105,7 +105,7 @@ pub async fn process_virtual_chain(
                 commit_time,
                 tps,
                 rows_affected_tx_addr,
-                chrono::DateTime::from_timestamp_millis(checkpoint_block.timestamp as i64 / 1000 * 1000).unwrap()
+                DateTime::from_timestamp_millis(checkpoint_block.timestamp as i64 / 1000 * 1000).unwrap()
             );
         } else {
             let rows_added = add_chain_blocks(batch_scale, &res.added_chain_block_hashes, &database).await;
@@ -114,7 +114,7 @@ pub async fn process_virtual_chain(
                 rows_added,
                 rows_removed,
                 Instant::now().duration_since(start_commit_time).as_millis(),
-                chrono::DateTime::from_timestamp_millis(checkpoint_block.timestamp as i64 / 1000 * 1000).unwrap()
+                DateTime::from_timestamp_millis(checkpoint_block.timestamp as i64 / 1000 * 1000).unwrap()
             );
         }
         {

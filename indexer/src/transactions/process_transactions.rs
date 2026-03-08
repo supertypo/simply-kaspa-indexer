@@ -130,7 +130,7 @@ pub async fn process_transactions(
                                 break;
                             }
                         }
-                        trace!("Transaction processor is waiting for virtual chain processor to catch up...");
+                        debug!("Transaction processor is waiting for virtual chain processor to catch up...");
                         sleep(Duration::from_millis(1000)).await;
                         if signal_handler.is_shutdown() {
                             return;

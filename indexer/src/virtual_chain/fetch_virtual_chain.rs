@@ -3,7 +3,7 @@ use crate::web::model::metrics::Metrics;
 use deadpool::managed::{Object, Pool};
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_rpc_core::{GetVirtualChainFromBlockV2Response, RpcDataVerbosityLevel};
-use log::{debug, error, trace};
+use log::{debug, error};
 use mpsc::Sender;
 use simply_kaspa_kaspad::manager::KaspadManager;
 use simply_kaspa_signal::signal_handler::SignalHandler;
@@ -33,7 +33,7 @@ pub async fn fetch_virtual_chain(
         }
 
         if !start_vcp.load(Ordering::Relaxed) {
-            trace!("Virtual chain processor waiting for start notification");
+            debug!("Virtual chain processor waiting for start notification");
             sleep(err_delay).await;
             continue;
         }
@@ -68,7 +68,7 @@ pub async fn fetch_virtual_chain(
                         {
                             break;
                         }
-                        trace!("Virtual chain processor is waiting for block_processor to catch up...");
+                        debug!("Virtual chain processor is waiting for block_processor to catch up...");
                         sleep(poll_interval).await;
                         if signal_handler.is_shutdown() {
                             return;
