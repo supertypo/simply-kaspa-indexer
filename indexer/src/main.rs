@@ -16,6 +16,7 @@ use simply_kaspa_indexer::settings::Settings;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
 use simply_kaspa_indexer::utxo_import::utxo_set_importer::UtxoSetImporter;
 use simply_kaspa_indexer::vars::load_block_checkpoint;
+use simply_kaspa_indexer::virtual_chain::fetch_virtual_chain::fetch_virtual_chain;
 use simply_kaspa_indexer::virtual_chain::process_virtual_chain::process_virtual_chain;
 use simply_kaspa_indexer::web::model::metrics::Metrics;
 use simply_kaspa_indexer::web::web_server::WebServer;
@@ -27,7 +28,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, mpsc};
 use tokio::task;
 
 #[tokio::main]
@@ -220,16 +221,24 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         )))
     }
     if !settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing) {
-        tasks.push(task::spawn(process_virtual_chain(
+        let (vcp_sender, vcp_receiver) = mpsc::channel(1);
+        tasks.push(task::spawn(fetch_virtual_chain(
             settings.clone(),
             signal_handler.clone(),
             metrics.clone(),
             start_vcp.clone(),
-            checkpoint_queue.clone(),
             kaspad_pool.clone(),
+            vcp_sender,
+        )));
+        tasks.push(task::spawn(process_virtual_chain(
+            settings.clone(),
+            signal_handler.clone(),
+            metrics.clone(),
+            checkpoint_queue.clone(),
             database.clone(),
             mapper.clone(),
-        )))
+            vcp_receiver,
+        )));
     }
 
     tasks.push(task::spawn(async move {
