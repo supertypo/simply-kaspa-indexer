@@ -67,17 +67,21 @@ pub async fn prune(
 ) {
     let cli_args = settings.cli_args.clone();
     let batch_size = settings.cli_args.pruning.prune_batch_size;
-    info!("\x1b[33mDatabase pruning started\x1b[0m");
     let common_start_time = now();
     let mut step_errors = 0;
     let (net_bps, checkpoint_blue_score, checkpoint_time) = {
         let mut metrics_rw = metrics.write().await;
+        if metrics_rw.components.db_pruner.running == Some(true) {
+            warn!("Database pruning skipped: previous run still in progress");
+            return;
+        }
         metrics_rw.components.db_pruner.running = Some(true);
         metrics_rw.components.db_pruner.start_time = Some(common_start_time);
         metrics_rw.components.db_pruner.results = Some(HashMap::new());
         let block = metrics_rw.checkpoint.block.as_ref().unwrap();
         (settings.net_bps as u64, block.blue_score, block.date_time)
     };
+    info!("\x1b[33mDatabase pruning started\x1b[0m");
 
     if let Some(retention) = pruning_config.retention_block_parent {
         let db = database.clone();
