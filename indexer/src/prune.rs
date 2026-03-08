@@ -82,14 +82,15 @@ pub async fn prune(
     if let Some(retention) = pruning_config.retention_block_parent {
         let db = database.clone();
         let retention = retention.min(pruning_config.retention_blocks.unwrap_or(Duration::MAX));
-        let blue_score_lt = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
-        let step_pruning_point = checkpoint_time.sub(retention);
+        let cutoff_blue_score = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
+        let cutoff_time = checkpoint_time.sub(retention);
         return_on_shutdown!(signal_handler.is_shutdown());
         step_errors += prune_step(
             "block_parent",
             metrics.clone(),
-            |_| async move { db.prune_block_parent(blue_score_lt, batch_size).await },
-            step_pruning_point,
+            |(blue_score, _)| async move { db.prune_block_parent(blue_score, batch_size).await },
+            cutoff_blue_score,
+            cutoff_time,
         )
         .await as i32;
     }
@@ -99,27 +100,29 @@ pub async fn prune(
         return_on_shutdown!(signal_handler.is_shutdown());
         if !cli_args.is_disabled(CliDisable::BlocksTable) {
             let retention = retention.min(pruning_config.retention_blocks.unwrap_or(Duration::MAX));
-            let blue_score_lt = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
-            let step_pruning_point = checkpoint_time.sub(retention);
+            let cutoff_blue_score = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
+            let cutoff_time = checkpoint_time.sub(retention);
             step_errors += prune_step(
                 "blocks_transactions (b)",
                 metrics.clone(),
-                |_| async move {
-                    db.prune_blocks_transactions_using_blocks(blue_score_lt, batch_size).await
+                |(blue_score, _)| async move {
+                    db.prune_blocks_transactions_using_blocks(blue_score, batch_size).await
                 },
-                step_pruning_point,
+                cutoff_blue_score,
+                cutoff_time,
             )
             .await as i32;
         } else {
             let retention = retention.min(pruning_config.retention_transactions.unwrap_or(Duration::MAX));
-            let step_pruning_point = checkpoint_time.sub(retention);
+            let cutoff_time = checkpoint_time.sub(retention);
             step_errors += prune_step(
                 "blocks_transactions (t)",
                 metrics.clone(),
-                |step_pruning_point| async move {
-                    db.prune_blocks_transactions_using_transactions(step_pruning_point, batch_size).await
+                |(_, time_ms)| async move {
+                    db.prune_blocks_transactions_using_transactions(time_ms, batch_size).await
                 },
-                step_pruning_point,
+                0,
+                cutoff_time,
             )
             .await as i32;
         }
@@ -130,15 +133,16 @@ pub async fn prune(
         let db = database.clone();
         if !cli_args.is_disabled(CliDisable::BlocksTable) {
             let retention = retention.min(pruning_config.retention_blocks.unwrap_or(Duration::MAX));
-            let blue_score_lt = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
-            let step_pruning_point = checkpoint_time.sub(retention);
+            let cutoff_blue_score = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
+            let cutoff_time = checkpoint_time.sub(retention);
             step_errors += prune_step(
                 "transactions_acceptances (b)",
                 metrics.clone(),
-                |_| async move {
-                    db.prune_transactions_acceptances_using_blocks(blue_score_lt, batch_size).await
+                |(blue_score, _)| async move {
+                    db.prune_transactions_acceptances_using_blocks(blue_score, batch_size).await
                 },
-                step_pruning_point,
+                cutoff_blue_score,
+                cutoff_time,
             )
             .await as i32;
         } else if !cli_args.is_disabled(CliDisable::TransactionsTable)
@@ -146,68 +150,73 @@ pub async fn prune(
             && !cli_args.is_disabled(CliDisable::TransactionAcceptance)
         {
             let retention = retention.min(pruning_config.retention_transactions.unwrap_or(Duration::MAX));
-            let step_pruning_point = checkpoint_time.sub(retention);
+            let cutoff_time = checkpoint_time.sub(retention);
             step_errors += prune_step(
                 "transactions_acceptances (t)",
                 metrics.clone(),
-                |step_pruning_point| async move {
-                    db.prune_transactions_acceptances_using_transactions(step_pruning_point, batch_size).await
+                |(_, time_ms)| async move {
+                    db.prune_transactions_acceptances_using_transactions(time_ms, batch_size).await
                 },
-                step_pruning_point,
+                0,
+                cutoff_time,
             )
             .await as i32;
         }
     }
 
     if let Some(retention) = pruning_config.retention_blocks {
-        let blue_score_lt = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
-        let step_pruning_point = checkpoint_time.sub(retention);
+        let cutoff_blue_score = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
+        let cutoff_time = checkpoint_time.sub(retention);
         return_on_shutdown!(signal_handler.is_shutdown());
         let db = database.clone();
         step_errors += prune_step(
             "blocks",
             metrics.clone(),
-            |_| async move { db.prune_blocks(blue_score_lt, batch_size).await },
-            step_pruning_point,
+            |(blue_score, _)| async move { db.prune_blocks(blue_score, batch_size).await },
+            cutoff_blue_score,
+            cutoff_time,
         )
         .await as i32;
     }
 
     if let Some(retention) = pruning_config.retention_transactions {
-        let step_pruning_point = checkpoint_time.sub(retention);
+        let cutoff_time = checkpoint_time.sub(retention);
         return_on_shutdown!(signal_handler.is_shutdown());
         let db = database.clone();
         step_errors += prune_step(
             "transactions",
             metrics.clone(),
-            |step_pruning_point| async move { db.prune_transactions(step_pruning_point, batch_size).await },
-            step_pruning_point,
+            |(_, time_ms)| async move { db.prune_transactions(time_ms, batch_size).await },
+            0,
+            cutoff_time,
         )
         .await as i32;
     }
 
     if let Some(retention) = pruning_config.retention_addresses_transactions {
-        let step_pruning_point = checkpoint_time.sub(retention);
+        let cutoff_time = checkpoint_time.sub(retention);
         return_on_shutdown!(signal_handler.is_shutdown());
         let db = database.clone();
         if !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress) {
             step_errors += prune_step(
                 "addresses_transactions",
                 metrics.clone(),
-                |step_pruning_point| async move {
-                    db.prune_addresses_transactions(step_pruning_point, batch_size).await
+                |(_, time_ms)| async move {
+                    db.prune_addresses_transactions(time_ms, batch_size).await
                 },
-                step_pruning_point,
+                0,
+                cutoff_time,
             )
             .await as i32;
         } else {
             step_errors += prune_step(
                 "scripts_transactions",
                 metrics.clone(),
-                |step_pruning_point| async move {
-                    db.prune_scripts_transactions(step_pruning_point, batch_size).await
+                |(_, time_ms)| async move {
+                    db.prune_scripts_transactions(time_ms, batch_size).await
                 },
-                step_pruning_point,
+                0,
+                cutoff_time,
             )
             .await as i32;
         }
@@ -228,14 +237,19 @@ pub async fn prune_step<F, Fut, E>(
     step_name: &'static str,
     metrics: Arc<RwLock<Metrics>>,
     db_call: F,
+    cutoff_blue_score: i64,
     cutoff_time: DateTime<Utc>,
 ) -> bool
 where
-    F: FnOnce(i64) -> Fut,
+    F: FnOnce((i64, i64)) -> Fut,
     Fut: Future<Output = Result<u64, E>> + Send + 'static,
     E: Error + Send + Sync + 'static,
 {
-    info!("Pruning {step_name} rows older than {cutoff_time}");
+    if cutoff_blue_score > 0 {
+        info!("Pruning {step_name} rows older than {cutoff_time} (bs: {cutoff_blue_score})");
+    } else {
+        info!("Pruning {step_name} rows older than {cutoff_time}");
+    }
     let start_time = now();
     let mut metrics_result =
         MetricsComponentDbPrunerResult { start_time, cutoff_time, duration: None, success: None, rows_deleted: None };
@@ -243,7 +257,7 @@ where
         let mut metrics_rw = metrics.write().await;
         metrics_rw.components.db_pruner.results.as_mut().unwrap().insert(step_name.to_string(), metrics_result.clone());
     }
-    let step_result = db_call(cutoff_time.timestamp_millis()).await;
+    let step_result = db_call((cutoff_blue_score, cutoff_time.timestamp_millis())).await;
 
     let success = step_result.is_ok();
     metrics_result.success = Some(success);
