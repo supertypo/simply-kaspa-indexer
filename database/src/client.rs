@@ -25,7 +25,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 20;
+    const SCHEMA_VERSION: u8 = 21;
 
     pub async fn new(url: &str, pool_size: u32) -> Result<KaspaDbClient, Error> {
         let url_cleaned = Regex::new(r"(postgres://postgres:)[^@]+(@)").expect("Failed to parse url").replace(url, "$1$2");
@@ -160,6 +160,17 @@ impl KaspaDbClient {
                             panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
                         }
                     }
+                    if version == 20 {
+                        let ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v20_to_v21.sql"));
+                        if upgrade_db {
+                            warn!("\n{ddl}\nUpgrading schema from v{version} to v{}. ^", version + 1);
+                            query::misc::execute_ddl(ddl, &self.pool).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            version += 1;
+                        } else {
+                            panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
+                        }
+                    }
                     trace!("Schema version is v{version}")
                 }
                 version = self.select_var("schema_version").await?.parse::<u8>().unwrap();
@@ -261,24 +272,28 @@ impl KaspaDbClient {
         query::delete::delete_transaction_acceptances(block_hashes, &self.pool).await
     }
 
-    pub async fn prune_block_parent(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_block_parent(block_time_lt, batch_size, &self.pool).await
+    pub async fn prune_block_parent(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_block_parent(blue_score_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_blocks_transactions_using_blocks(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_blocks_transactions_using_blocks(block_time_lt, batch_size, &self.pool).await
+    pub async fn prune_blocks_transactions_using_blocks(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_blocks_transactions_using_blocks(blue_score_lt, batch_size, &self.pool).await
     }
 
     pub async fn prune_blocks_transactions_using_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
         query::delete::prune_blocks_transactions_using_transactions(block_time_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_transactions_acceptances_using_blocks(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_transactions_acceptances_using_blocks(block_time_lt, batch_size, &self.pool).await
+    pub async fn prune_transactions_acceptances_using_blocks(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_transactions_acceptances_using_blocks(blue_score_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_blocks(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_blocks(block_time_lt, batch_size, &self.pool).await
+    pub async fn prune_transactions_acceptances_using_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_transactions_acceptances_using_transactions(block_time_lt, batch_size, &self.pool).await
+    }
+
+    pub async fn prune_blocks(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_blocks(blue_score_lt, batch_size, &self.pool).await
     }
 
     pub async fn prune_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {

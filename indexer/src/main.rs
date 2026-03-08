@@ -127,15 +127,18 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         warn!("Checkpoint not found, starting from pruning_point {}", checkpoint);
     }
 
-    let checkpoint_block = match kaspad_pool.get().await.unwrap().get_block(checkpoint, false).await {
-        Ok(block) => Some(CheckpointBlock {
+    let checkpoint_block = {
+        let block = kaspad_pool.get().await.unwrap().get_block(checkpoint, false).await
+            .expect("Failed to fetch checkpoint block from kaspad. \
+                The block may have been pruned. Connect to an archive node, \
+                or use --ignore-checkpoint=p to resume from the current pruning point");
+        CheckpointBlock {
             origin: CheckpointOrigin::Initial,
             hash: block.header.hash.into(),
             timestamp: block.header.timestamp,
             daa_score: block.header.daa_score,
             blue_score: block.header.blue_score,
-        }),
-        Err(_) => None,
+        }
     };
 
     let queue_capacity = (cli_args.batch_scale * 1000f64) as usize;
@@ -156,8 +159,8 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     metrics.settings = Some(settings_clone);
     metrics.queues.blocks_capacity = blocks_queue.capacity() as u64;
     metrics.queues.transactions_capacity = txs_queue.capacity() as u64;
-    metrics.checkpoint.origin = checkpoint_block.as_ref().map(|c| format!("{:?}", c.origin));
-    metrics.checkpoint.block = checkpoint_block.map(|c| c.into());
+    metrics.checkpoint.origin = Some(format!("{:?}", checkpoint_block.origin));
+    metrics.checkpoint.block = Some(checkpoint_block.into());
     metrics.components.transaction_processor.enabled = !settings.cli_args.is_disabled(CliDisable::TransactionProcessing);
     metrics.components.virtual_chain_processor.enabled = !settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing);
     metrics.components.virtual_chain_processor.only_blocks = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
@@ -242,7 +245,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     }
 
     tasks.push(task::spawn(async move {
-        if let Err(e) = pruner(cli_args.clone(), signal_handler.clone(), metrics.clone(), database.clone()).await {
+        if let Err(e) = pruner(settings.clone(), signal_handler.clone(), metrics.clone(), database.clone()).await {
             error!("Database pruner failed: {e}");
         }
     }));

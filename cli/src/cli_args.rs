@@ -178,6 +178,9 @@ pub struct PruningConfig {
     #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for transactions_* tables")]
     #[serde(with = "humantime_serde")]
     pub retention_transactions: Option<Duration>,
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for transactions_acceptances table")]
+    #[serde(with = "humantime_serde")]
+    pub retention_transactions_acceptances: Option<Duration>,
     #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for addresses_transactions, scripts_transactions tables")]
     #[serde(with = "humantime_serde")]
     pub retention_addresses_transactions: Option<Duration>,
@@ -193,6 +196,7 @@ impl PruningConfig {
         self.retention_blocks_transactions = self.resolve(self.retention_blocks_transactions);
         self.retention_blocks = self.resolve(self.retention_blocks);
         self.retention_transactions = self.resolve(self.retention_transactions);
+        self.retention_transactions_acceptances = self.resolve(self.retention_transactions_acceptances);
         self.retention_addresses_transactions = self.resolve(self.retention_addresses_transactions);
         self
     }
