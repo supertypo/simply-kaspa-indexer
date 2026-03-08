@@ -122,7 +122,8 @@ pub async fn process_virtual_chain(
             m.components.virtual_chain_processor.update_last_block(checkpoint_block.clone().into());
             m.components.virtual_chain_processor.tip_distance = Some(tip_distance);
             m.components.virtual_chain_processor.tip_distance_timestamp = Some(tip_distance_timestamp as u64);
-            m.components.virtual_chain_processor.tip_distance_date_time = DateTime::from_timestamp_millis(tip_distance_timestamp as i64);
+            m.components.virtual_chain_processor.tip_distance_date_time =
+                DateTime::from_timestamp_millis(tip_distance_timestamp as i64);
         }
 
         while checkpoint_queue.push(checkpoint_block.clone()).is_err() {

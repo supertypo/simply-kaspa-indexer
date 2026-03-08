@@ -16,7 +16,6 @@ use crate::models::subnetwork::Subnetwork;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::types::hash::Hash;
-use crate::models::utxo::Utxo;
 use crate::query;
 
 #[derive(Clone)]
@@ -196,10 +195,6 @@ impl KaspaDbClient {
         query::misc::execute_ddl(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/down.sql")), &self.pool).await
     }
 
-    pub async fn truncate_utxos(&self) -> Result<(), Error> {
-        query::misc::truncate_table("utxos", &self.pool).await
-    }
-
     pub async fn select_database_details(&self) -> Result<DatabaseDetails, Error> {
         query::select::select_database_details(&self.pool).await
     }
@@ -226,14 +221,6 @@ impl KaspaDbClient {
 
     pub async fn insert_subnetwork(&self, subnetwork_id: &String) -> Result<i32, Error> {
         query::insert::insert_subnetwork(subnetwork_id, &self.pool).await
-    }
-
-    pub async fn insert_utxos(&self, utxos: &[Utxo]) -> Result<u64, Error> {
-        query::insert::insert_utxos(utxos, &self.pool).await
-    }
-
-    pub async fn insert_utxos_to_transactions(&self) -> Result<u64, Error> {
-        query::insert::insert_utxos_to_transactions(&self.pool).await
     }
 
     pub async fn insert_blocks(&self, blocks: &[Block]) -> Result<u64, Error> {

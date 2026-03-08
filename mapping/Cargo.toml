@@ -16,4 +16,3 @@ crate-type = ["cdylib", "lib"]
 simply-kaspa-cli.workspace = true
 simply-kaspa-database.workspace = true
 kaspa-rpc-core.workspace = true
-bigdecimal.workspace = true

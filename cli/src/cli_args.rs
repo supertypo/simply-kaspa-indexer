@@ -40,8 +40,6 @@ pub enum CliDisable {
     TransactionsOutputs,
     /// Disables the addresses_transactions (or scripts_transactions) table
     AddressesTransactionsTable,
-    /// Disables initial utxo set import
-    InitialUtxoImport,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]
@@ -87,8 +85,6 @@ pub enum CliField {
 pub struct CliArgs {
     #[clap(short = 's', long, help = "RPC url to a kaspad instance, e.g 'ws://localhost:17110'. Leave empty to use the Kaspa PNN")]
     pub rpc_url: Option<String>,
-    #[clap(short = 'p', long, help = "P2P socket address to a kaspad instance, e.g 'localhost:16111'.")]
-    pub p2p_url: Option<String>,
     #[clap(short, long, default_value = "mainnet", help = "The network type and suffix, e.g. 'testnet-11'")]
     pub network: String,
     #[clap(short, long, default_value = "postgres://postgres:postgres@localhost:5432/postgres", help = "PostgreSQL url")]

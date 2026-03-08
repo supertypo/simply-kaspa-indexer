@@ -35,7 +35,8 @@ pub async fn pruner(
             retention.insert("block_parent".to_string(), format_duration(pruning_config.retention_block_parent));
             retention.insert("blocks_transactions".to_string(), format_duration(pruning_config.retention_blocks_transactions));
             retention.insert("blocks".to_string(), format_duration(pruning_config.retention_blocks));
-            retention.insert("transactions_acceptances".to_string(), format_duration(pruning_config.retention_transactions_acceptances));
+            retention
+                .insert("transactions_acceptances".to_string(), format_duration(pruning_config.retention_transactions_acceptances));
             retention.insert("transactions".to_string(), format_duration(pruning_config.retention_transactions));
             retention.insert("addresses_transactions".to_string(), format_duration(pruning_config.retention_addresses_transactions));
             metrics_rw.components.db_pruner.retention = Some(retention);
@@ -109,9 +110,7 @@ pub async fn prune(
             step_errors += prune_step(
                 "blocks_transactions (b)",
                 metrics.clone(),
-                |(blue_score, _)| async move {
-                    db.prune_blocks_transactions_using_blocks(blue_score, batch_size).await
-                },
+                |(blue_score, _)| async move { db.prune_blocks_transactions_using_blocks(blue_score, batch_size).await },
                 cutoff_blue_score,
                 cutoff_time,
             )
@@ -122,9 +121,7 @@ pub async fn prune(
             step_errors += prune_step(
                 "blocks_transactions (t)",
                 metrics.clone(),
-                |(_, time_ms)| async move {
-                    db.prune_blocks_transactions_using_transactions(time_ms, batch_size).await
-                },
+                |(_, time_ms)| async move { db.prune_blocks_transactions_using_transactions(time_ms, batch_size).await },
                 0,
                 cutoff_time,
             )
@@ -142,9 +139,7 @@ pub async fn prune(
             step_errors += prune_step(
                 "transactions_acceptances (b)",
                 metrics.clone(),
-                |(blue_score, _)| async move {
-                    db.prune_transactions_acceptances_using_blocks(blue_score, batch_size).await
-                },
+                |(blue_score, _)| async move { db.prune_transactions_acceptances_using_blocks(blue_score, batch_size).await },
                 cutoff_blue_score,
                 cutoff_time,
             )
@@ -158,9 +153,7 @@ pub async fn prune(
             step_errors += prune_step(
                 "transactions_acceptances (t)",
                 metrics.clone(),
-                |(_, time_ms)| async move {
-                    db.prune_transactions_acceptances_using_transactions(time_ms, batch_size).await
-                },
+                |(_, time_ms)| async move { db.prune_transactions_acceptances_using_transactions(time_ms, batch_size).await },
                 0,
                 cutoff_time,
             )
@@ -205,9 +198,7 @@ pub async fn prune(
             step_errors += prune_step(
                 "addresses_transactions",
                 metrics.clone(),
-                |(_, time_ms)| async move {
-                    db.prune_addresses_transactions(time_ms, batch_size).await
-                },
+                |(_, time_ms)| async move { db.prune_addresses_transactions(time_ms, batch_size).await },
                 0,
                 cutoff_time,
             )
@@ -216,9 +207,7 @@ pub async fn prune(
             step_errors += prune_step(
                 "scripts_transactions",
                 metrics.clone(),
-                |(_, time_ms)| async move {
-                    db.prune_scripts_transactions(time_ms, batch_size).await
-                },
+                |(_, time_ms)| async move { db.prune_scripts_transactions(time_ms, batch_size).await },
                 0,
                 cutoff_time,
             )

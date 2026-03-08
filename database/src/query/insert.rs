@@ -7,7 +7,6 @@ use crate::models::block_transaction::BlockTransaction;
 use crate::models::script_transaction::ScriptTransaction;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
-use crate::models::utxo::Utxo;
 use crate::query::common::generate_placeholders;
 
 pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i32, Error> {
@@ -27,49 +26,6 @@ pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) ->
     };
     tx.commit().await?;
     Ok(id)
-}
-
-pub async fn insert_utxos(utxos: &[Utxo], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 5;
-    let sql = format!(
-        "INSERT INTO utxos (transaction_id, index, amount, script_public_key, script_public_key_address)
-        VALUES {} ON CONFLICT DO NOTHING",
-        generate_placeholders(utxos.len(), COLS)
-    );
-    let mut query = sqlx::query(&sql);
-    for utxo in utxos {
-        query = query.bind(&utxo.transaction_id);
-        query = query.bind(utxo.index);
-        query = query.bind(utxo.amount);
-        query = query.bind(&utxo.script_public_key);
-        query = query.bind(&utxo.script_public_key_address);
-    }
-    Ok(query.execute(pool).await?.rows_affected())
-}
-
-pub async fn insert_utxos_to_transactions(pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let mut tx = pool.begin().await?;
-    let sql = "
-        CREATE TEMP TABLE transactions_tmp ON COMMIT DROP AS
-        SELECT
-            transaction_id,
-            array_agg(ROW(index, amount, script_public_key, script_public_key_address)::transactions_outputs) AS outputs
-        FROM utxos
-        GROUP BY transaction_id;
-    ";
-    tx.execute(sqlx::query(sql)).await?;
-
-    let sql = "INSERT INTO transactions (transaction_id, outputs) SELECT transaction_id, outputs FROM transactions_tmp";
-    let rows_affected_txs = tx.execute(sqlx::query(sql)).await?.rows_affected();
-
-    let sql = "INSERT INTO transactions_acceptances (transaction_id) SELECT transaction_id FROM transactions_tmp";
-    let rows_affected_tas = tx.execute(sqlx::query(sql)).await?.rows_affected();
-
-    if rows_affected_txs != rows_affected_tas {
-        panic!("Mismatched number of rows while committing utxos to transactions");
-    }
-    tx.commit().await?;
-    Ok(rows_affected_txs)
 }
 
 pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u64, Error> {

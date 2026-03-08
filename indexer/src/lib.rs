@@ -4,7 +4,6 @@ pub mod macros;
 pub mod prune;
 pub mod settings;
 pub mod transactions;
-pub mod utxo_import;
 pub mod vars;
 pub mod virtual_chain;
 pub mod web;

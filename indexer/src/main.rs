@@ -14,7 +14,6 @@ use simply_kaspa_indexer::checkpoint::{CheckpointBlock, CheckpointOrigin, proces
 use simply_kaspa_indexer::prune::pruner;
 use simply_kaspa_indexer::settings::Settings;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
-use simply_kaspa_indexer::utxo_import::utxo_set_importer::UtxoSetImporter;
 use simply_kaspa_indexer::vars::load_block_checkpoint;
 use simply_kaspa_indexer::virtual_chain::fetch_virtual_chain::fetch_virtual_chain;
 use simply_kaspa_indexer::virtual_chain::process_virtual_chain::process_virtual_chain;
@@ -102,7 +101,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         info!("Exclude fields is set, the following fields will be excluded: {:?}", exclude_fields);
     }
 
-    let mut utxo_set_import = false;
     let checkpoint: KaspaHash;
     if let Some(ignore_checkpoint) = cli_args.ignore_checkpoint.clone() {
         warn!("Checkpoint ignored due to user request (-i). This might lead to inconsistencies.");
@@ -120,18 +118,16 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         checkpoint = KaspaHash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
         info!("Starting from checkpoint {}", checkpoint);
     } else {
-        if !cli_args.is_disabled(CliDisable::InitialUtxoImport) {
-            utxo_set_import = true;
-        }
         checkpoint = block_dag_info.pruning_point_hash;
         warn!("Checkpoint not found, starting from pruning_point {}", checkpoint);
     }
 
     let checkpoint_block = {
-        let block = kaspad_pool.get().await.unwrap().get_block(checkpoint, false).await
-            .expect("Failed to fetch checkpoint block from kaspad. \
+        let block = kaspad_pool.get().await.unwrap().get_block(checkpoint, false).await.expect(
+            "Failed to fetch checkpoint block from kaspad. \
                 The block may have been pruned. Connect to an archive node, \
-                or use --ignore-checkpoint=p to resume from the current pruning point");
+                or use --ignore-checkpoint=p to resume from the current pruning point",
+        );
         CheckpointBlock {
             origin: CheckpointOrigin::Initial,
             hash: block.header.hash.into(),
@@ -154,7 +150,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     let mut metrics = Metrics::new(env!("CARGO_PKG_NAME").to_string(), cli_args.version(), cli_args.commit_id());
     let mut settings_clone = settings.clone();
     settings_clone.cli_args.rpc_url = settings_clone.cli_args.rpc_url.map(|_| "**hidden**".to_string());
-    settings_clone.cli_args.p2p_url = settings_clone.cli_args.p2p_url.map(|_| "**hidden**".to_string());
     settings_clone.cli_args.database_url = "**hidden**".to_string();
     metrics.settings = Some(settings_clone);
     metrics.queues.blocks_capacity = blocks_queue.capacity() as u64;
@@ -169,17 +164,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     let webserver =
         Arc::new(WebServer::new(settings.clone(), signal_handler.clone(), metrics.clone(), kaspad_pool.clone(), database.clone()));
     let webserver_task = task::spawn(async move { webserver.run().await.unwrap() });
-
-    if utxo_set_import {
-        let importer = UtxoSetImporter::new(
-            cli_args.clone(),
-            signal_handler.clone(),
-            metrics.clone(),
-            block_dag_info.pruning_point_hash,
-            database.clone(),
-        );
-        importer.start().await;
-    }
 
     let mut block_fetcher = KaspaBlocksFetcher::new(
         settings.clone(),

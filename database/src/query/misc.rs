@@ -6,7 +6,3 @@ pub async fn execute_ddl(ddl: &str, pool: &Pool<Postgres>) -> Result<(), Error> 
     }
     Ok(())
 }
-
-pub async fn truncate_table(table_name: &str, pool: &Pool<Postgres>) -> Result<(), Error> {
-    sqlx::query(&format!("TRUNCATE TABLE {}", table_name)).execute(pool).await.map(|_| ())
-}
