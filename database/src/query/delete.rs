@@ -27,6 +27,7 @@ pub async fn prune_block_parent(blue_score_lt: i64, batch_size: i32, pool: &Pool
         if rows_affected == 0 {
             break;
         }
+        debug!("prune_block_parent: Deleted {rows_affected} expired block_parent rows");
         total_rows_affected += rows_affected;
     }
     Ok(total_rows_affected)
@@ -49,6 +50,7 @@ pub async fn prune_blocks_transactions_using_blocks(blue_score_lt: i64, batch_si
         if rows_affected == 0 {
             break;
         }
+        debug!("prune_blocks_transactions_using_blocks: Deleted {rows_affected} expired blocks_transactions rows");
         total_rows_affected += rows_affected;
     }
     Ok(total_rows_affected)
@@ -75,6 +77,7 @@ pub async fn prune_blocks_transactions_using_transactions(
         if rows_affected == 0 {
             break;
         }
+        debug!("prune_blocks_transactions_using_transactions: Deleted {rows_affected} expired blocks_transactions rows");
         total_rows_affected += rows_affected;
     }
     Ok(total_rows_affected)
@@ -101,6 +104,7 @@ pub async fn prune_transactions_acceptances_using_blocks(
         if rows_affected == 0 {
             break;
         }
+        debug!("prune_transactions_acceptances_using_blocks: Deleted {rows_affected} expired transactions_acceptances rows");
         total_rows_affected += rows_affected;
     }
     Ok(total_rows_affected)
@@ -127,6 +131,7 @@ pub async fn prune_transactions_acceptances_using_transactions(
         if rows_affected == 0 {
             break;
         }
+        debug!("prune_transactions_acceptances_using_transactions: Deleted {rows_affected} expired transactions_acceptances rows");
         total_rows_affected += rows_affected;
     }
     Ok(total_rows_affected)
@@ -148,6 +153,7 @@ pub async fn prune_blocks(blue_score_lt: i64, batch_size: i32, pool: &Pool<Postg
         if rows_affected == 0 {
             break;
         }
+        debug!("prune_blocks: Deleted {rows_affected} expired blocks rows");
         total_rows_affected += rows_affected;
     }
     Ok(total_rows_affected)
@@ -191,6 +197,7 @@ pub async fn prune_addresses_transactions(block_time_lt: i64, batch_size: i32, p
         if rows_affected == 0 {
             break;
         }
+        debug!("prune_addresses_transactions: Deleted {rows_affected} expired addresses_transactions rows");
         total_rows_affected += rows_affected;
     }
     Ok(total_rows_affected)
@@ -212,6 +219,7 @@ pub async fn prune_scripts_transactions(block_time_lt: i64, batch_size: i32, poo
         if rows_affected == 0 {
             break;
         }
+        debug!("prune_scripts_transactions: Deleted {rows_affected} expired scripts_transactions rows");
         total_rows_affected += rows_affected;
     }
     Ok(total_rows_affected)
