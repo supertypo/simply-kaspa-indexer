@@ -95,9 +95,9 @@ pub async fn process_virtual_chain(
                                 let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                                 let tps = rows_affected_tx as f64 / commit_time as f64 * 1000f64;
                                 info!(
-                                    "Committed {} accepted and {} rejected txs in {}ms ({:.1} tps, {} adr_tx). Last tx: {}",
+                                    "Committed {} accepted{} txs in {}ms ({:.1} tps, {} adr_tx). Last tx: {}",
                                     rows_affected_tx_acc,
-                                    rows_removed,
+                                    if rows_removed > 0 { format!(" and {} rejected", rows_removed) } else { String::new() },
                                     commit_time,
                                     tps,
                                     rows_affected_tx_addr,
