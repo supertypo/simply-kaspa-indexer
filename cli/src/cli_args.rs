@@ -32,14 +32,16 @@ pub enum CliDisable {
     BlocksTransactionsTable,
     /// Disables the transactions table
     TransactionsTable,
-    /// Disables indexing rejected transactions (non-accepted txs)
-    RejectedTransactions,
     /// Disables transactions inputs (array column)
     TransactionsInputs,
     /// Disables transactions outputs (array column)
     TransactionsOutputs,
     /// Disables the addresses_transactions (or scripts_transactions) table
     AddressesTransactionsTable,
+    /// Ignores all rejected transactions (improves performance)
+    RejectedTransactions,
+    /// Ignores rejected non-coinbase transactions (improves performance)
+    RejectedNonCbTransactions,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]

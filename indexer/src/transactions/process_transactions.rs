@@ -49,6 +49,7 @@ pub async fn process_transactions(
     let disable_blocks_transactions = settings.cli_args.is_disabled(CliDisable::BlocksTransactionsTable);
     let disable_address_transactions = settings.cli_args.is_disabled(CliDisable::AddressesTransactionsTable);
     let disable_rejected_transactions = settings.cli_args.is_disabled(CliDisable::RejectedTransactions);
+    let disable_rejected_non_cb_transactions = settings.cli_args.is_disabled(CliDisable::RejectedNonCbTransactions);
     let exclude_tx_out_script_public_key_address = settings.cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress);
     let exclude_tx_out_script_public_key = settings.cli_args.is_excluded(CliField::TxOutScriptPublicKey);
 
@@ -88,7 +89,7 @@ pub async fn process_transactions(
                 blue_score: transaction_data.block_blue_score,
             });
             for transaction in transaction_data.transactions {
-                if !disable_rejected_transactions {
+                if !disable_rejected_transactions && (!disable_rejected_non_cb_transactions || transaction.subnetwork_id.is_builtin()) {
                     let transaction_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
                     if tx_id_cache.contains_key(&transaction_id) {
                         trace!("Known transaction_id {}, keeping block relation only", transaction_id);

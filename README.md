@@ -274,10 +274,11 @@ Options:
           - block_parent_table:           Disables the block_parent table
           - blocks_transactions_table:    Disables the blocks_transactions table
           - transactions_table:           Disables the transactions table
-          - rejected_transactions:        Disables indexing rejected transactions (non-accepted txs)
           - transactions_inputs:          Disables transactions inputs (array column)
           - transactions_outputs:         Disables transactions outputs (array column)
           - addresses_transactions_table: Disables the addresses_transactions (or scripts_transactions) table
+          - rejected_transactions:        Ignores all rejected transactions (improves performance)
+          - rejected_non_cb_transactions: Ignores rejected non-coinbase transactions (improves performance)
 
       --exclude-fields <EXCLUDE_FIELDS>
           Exclude specific fields. If include_fields is specified this argument is ignored.
