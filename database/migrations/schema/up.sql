@@ -44,16 +44,6 @@ CREATE TABLE subnetworks
 );
 
 
-CREATE TABLE utxos
-(
-    transaction_id            BYTEA,
-    index                     SMALLINT,
-    amount                    BIGINT,
-    script_public_key         BYTEA,
-    script_public_key_address TEXT
-);
-
-
 CREATE TYPE transactions_inputs AS
 (
     index                    SMALLINT,
