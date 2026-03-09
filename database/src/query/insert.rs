@@ -1,4 +1,4 @@
-use sqlx::{Error, Executor, Pool, Postgres, Row};
+use sqlx::{Error, Executor, Pool, Postgres};
 
 use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
@@ -8,25 +8,6 @@ use crate::models::script_transaction::ScriptTransaction;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::query::common::generate_placeholders;
-
-pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i32, Error> {
-    let mut tx = pool.begin().await?;
-    sqlx::query("LOCK TABLE subnetworks IN EXCLUSIVE MODE").execute(tx.as_mut()).await?;
-    let id: i32 = match sqlx::query("SELECT id FROM subnetworks WHERE subnetwork_id = $1")
-        .bind(subnetwork_id)
-        .fetch_optional(tx.as_mut())
-        .await?
-    {
-        Some(row) => row.try_get(0)?,
-        None => sqlx::query("INSERT INTO subnetworks (subnetwork_id) VALUES ($1) RETURNING id")
-            .bind(subnetwork_id)
-            .fetch_one(tx.as_mut())
-            .await?
-            .try_get(0)?,
-    };
-    tx.commit().await?;
-    Ok(id)
-}
 
 pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u64, Error> {
     const COLS: usize = 15;
@@ -93,7 +74,7 @@ pub async fn insert_transactions(transactions: &[Transaction], upsert_inputs: bo
     let mut query = sqlx::query(&sql);
     for tx in transactions {
         query = query.bind(&tx.transaction_id);
-        query = query.bind(tx.subnetwork_id);
+        query = query.bind(&tx.subnetwork_id);
         query = query.bind(&tx.hash);
         query = query.bind(tx.mass);
         query = query.bind(&tx.payload);

@@ -4,7 +4,7 @@ use futures_util::{StreamExt, stream};
 use indexmap::IndexSet;
 use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::RpcChainBlockAcceptedTransactions;
-use log::{debug, info, trace};
+use log::{debug, trace};
 use moka::sync::Cache;
 use simply_kaspa_cli::cli_args::{CliDisable, CliField};
 use simply_kaspa_database::client::KaspaDbClient;
@@ -15,11 +15,8 @@ use simply_kaspa_database::models::transaction_acceptance::TransactionAcceptance
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use std::cmp::min;
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::task;
-
-type SubnetworkMap = HashMap<String, i32>;
 
 pub async fn accept_transactions(
     batch_scale: f64,
@@ -28,7 +25,6 @@ pub async fn accept_transactions(
     chain_block_accepted_transactions: &[RpcChainBlockAcceptedTransactions],
     database: &KaspaDbClient,
     mapper: &KaspaDbMapper,
-    subnetwork_map: &mut SubnetworkMap,
 ) -> (u64, u64, u64) {
     let ttl = settings.cli_args.cache_ttl;
     let cache_size = settings.net_tps_max as u64 * ttl * 2;
@@ -55,17 +51,7 @@ pub async fn accept_transactions(
                 trace!("Known transaction_id {}, skipping", transaction_id);
             } else {
                 if !disable_transactions {
-                    let subnetwork_id = transaction.subnetwork_id.as_ref().unwrap().to_string();
-                    let subnetwork_key = match subnetwork_map.get(&subnetwork_id) {
-                        Some(&subnetwork_key) => subnetwork_key,
-                        None => {
-                            let subnetwork_key = database.insert_subnetwork(&subnetwork_id).await.expect("Insert subnetwork FAILED");
-                            subnetwork_map.insert(subnetwork_id.clone(), subnetwork_key);
-                            info!("Committed new subnetwork, id: {} subnetwork_id: {}", subnetwork_key, subnetwork_id);
-                            subnetwork_key
-                        }
-                    };
-                    transactions.push(mapper.map_optional_transaction(transaction, subnetwork_key));
+                    transactions.push(mapper.map_optional_transaction(transaction));
                 }
                 if !disable_address_transactions {
                     if !exclude_tx_out_script_public_key_address {

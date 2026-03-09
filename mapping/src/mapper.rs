@@ -106,9 +106,8 @@ impl KaspaDbMapper {
         block.verbose_data.as_ref().expect("Block verbose_data is missing").transaction_ids.len()
     }
 
-    pub fn map_transaction(&self, transaction: &RpcTransaction, subnetwork_key: i32) -> SqlTransaction {
+    pub fn map_transaction(&self, transaction: &RpcTransaction) -> SqlTransaction {
         transactions::map_transaction(
-            subnetwork_key,
             transaction,
             self.tx_subnetwork_id,
             self.tx_hash,
@@ -138,10 +137,9 @@ impl KaspaDbMapper {
         transactions::map_transaction_outputs_script(transaction)
     }
 
-    pub fn map_optional_transaction(&self, transaction: &RpcOptionalTransaction, subnetwork_key: i32) -> SqlTransaction {
+    pub fn map_optional_transaction(&self, transaction: &RpcOptionalTransaction) -> SqlTransaction {
         transactions::map_optional_transaction(
             transaction,
-            subnetwork_key,
             self.tx_subnetwork_id,
             self.tx_hash,
             self.tx_mass,

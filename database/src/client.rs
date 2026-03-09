@@ -12,7 +12,6 @@ use crate::models::block_transaction::BlockTransaction;
 use crate::models::query::database_details::DatabaseDetails;
 use crate::models::query::table_details::TableDetails;
 use crate::models::script_transaction::ScriptTransaction;
-use crate::models::subnetwork::Subnetwork;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::types::hash::Hash;
@@ -207,20 +206,12 @@ impl KaspaDbClient {
         query::select::select_var(key, &self.pool).await
     }
 
-    pub async fn select_subnetworks(&self) -> Result<Vec<Subnetwork>, Error> {
-        query::select::select_subnetworks(&self.pool).await
-    }
-
     pub async fn select_tx_count(&self, block_hash: &Hash) -> Result<i64, Error> {
         query::select::select_tx_count(block_hash, &self.pool).await
     }
 
     pub async fn select_is_chain_block(&self, block_hash: &Hash) -> Result<bool, Error> {
         query::select::select_is_chain_block(block_hash, &self.pool).await
-    }
-
-    pub async fn insert_subnetwork(&self, subnetwork_id: &String) -> Result<i32, Error> {
-        query::insert::insert_subnetwork(subnetwork_id, &self.pool).await
     }
 
     pub async fn insert_blocks(&self, blocks: &[Block]) -> Result<u64, Error> {

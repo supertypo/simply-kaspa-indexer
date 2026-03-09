@@ -8,8 +8,15 @@ use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTra
 use simply_kaspa_database::models::transaction_output::TransactionOutput as SqlTransactionOutput;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 
+/// Compresses a SubnetworkId (20 bytes) to a compact bytea: trailing zeros stripped,
+/// all-zeros (NATIVE) -> None.
+fn compress_subnetwork_id(id: &impl AsRef<[u8; 20]>) -> Option<Vec<u8>> {
+    let bytes = id.as_ref();
+    let len = bytes.iter().rposition(|&b| b != 0).map(|i| i + 1).unwrap_or(0);
+    if len == 0 { None } else { Some(bytes[..len].to_vec()) }
+}
+
 pub fn map_transaction(
-    subnetwork_key: i32,
     transaction: &RpcTransaction,
     include_subnetwork_id: bool,
     include_hash: bool,
@@ -28,7 +35,7 @@ pub fn map_transaction(
     let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
     SqlTransaction {
         transaction_id: verbose_data.transaction_id.into(),
-        subnetwork_id: include_subnetwork_id.then_some(subnetwork_key),
+        subnetwork_id: include_subnetwork_id.then(|| compress_subnetwork_id(&transaction.subnetwork_id)).flatten(),
         hash: include_hash.then_some(verbose_data.hash.into()),
         mass: (include_mass && verbose_data.compute_mass != 0).then_some(verbose_data.compute_mass as i32),
         payload: (include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
@@ -136,7 +143,6 @@ pub fn map_transaction_outputs_script(transaction: &RpcTransaction) -> Vec<SqlSc
 
 pub fn map_optional_transaction(
     transaction: &RpcOptionalTransaction,
-    subnetwork_key: i32,
     include_subnetwork_id: bool,
     include_hash: bool,
     include_mass: bool,
@@ -154,7 +160,7 @@ pub fn map_optional_transaction(
     let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
     SqlTransaction {
         transaction_id: verbose_data.transaction_id.unwrap().into(),
-        subnetwork_id: include_subnetwork_id.then_some(subnetwork_key),
+        subnetwork_id: include_subnetwork_id.then(|| compress_subnetwork_id(transaction.subnetwork_id.as_ref().unwrap())).flatten(),
         hash: include_hash.then_some(verbose_data.hash.unwrap().into()),
         mass: (include_mass && verbose_data.compute_mass.unwrap() != 0).then_some(verbose_data.compute_mass.unwrap() as i32),
         payload: (include_payload && !transaction.payload.as_ref().unwrap().is_empty())
