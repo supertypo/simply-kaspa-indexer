@@ -10,6 +10,10 @@ ALTER TABLE transactions DROP COLUMN outputs_spent;
 DROP TABLE utxos;
 
 
+-- Add tx version column (NULL maps to version 0; no rewrite needed for existing rows)
+ALTER TABLE transactions ADD COLUMN version SMALLINT;
+
+
 -- Migrate transactions.subnetwork_id from INTEGER FK to BYTEA (trailing-zeros stripped)
 CREATE TEMP TABLE subnetwork_compressed AS
 SELECT id, NULLIF(rtrim(decode(subnetwork_id, 'hex'), '\x00'::bytea), ''::bytea) AS compressed

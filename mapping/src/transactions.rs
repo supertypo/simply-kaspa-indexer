@@ -40,6 +40,7 @@ pub fn map_transaction(
         mass: (include_mass && verbose_data.compute_mass != 0).then_some(verbose_data.compute_mass as i32),
         payload: (include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time as i64),
+        version: (transaction.version != 0).then_some(transaction.version as i16),
         inputs: include_in
             .then(|| {
                 map_transaction_inputs(transaction, include_in_previous_outpoint, include_in_signature_script, include_in_sig_op_count)
@@ -166,6 +167,7 @@ pub fn map_optional_transaction(
         payload: (include_payload && !transaction.payload.as_ref().unwrap().is_empty())
             .then_some(transaction.payload.as_ref().unwrap().to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time.unwrap() as i64),
+        version: transaction.version.and_then(|v| (v != 0).then_some(v as i16)),
         inputs: include_in
             .then(|| {
                 map_optional_transaction_inputs(

@@ -60,11 +60,11 @@ pub async fn insert_block_parents(block_parents: &[BlockParent], pool: &Pool<Pos
 }
 
 pub async fn insert_transactions(transactions: &[Transaction], upsert_inputs: bool, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 8;
+    const COLS: usize = 9;
     let on_conflict =
         if upsert_inputs { "ON CONFLICT (transaction_id) DO UPDATE SET inputs = EXCLUDED.inputs" } else { "ON CONFLICT DO NOTHING" };
     let sql = format!(
-        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
+        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, version, inputs, outputs)
          VALUES {}
          {}",
         generate_placeholders(transactions.len(), COLS),
@@ -79,6 +79,7 @@ pub async fn insert_transactions(transactions: &[Transaction], upsert_inputs: bo
         query = query.bind(tx.mass);
         query = query.bind(&tx.payload);
         query = query.bind(tx.block_time);
+        query = query.bind(tx.version);
         query = query.bind(&tx.inputs);
         query = query.bind(&tx.outputs);
     }
