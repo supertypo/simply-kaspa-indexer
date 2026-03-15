@@ -24,7 +24,9 @@ CREATE UNIQUE INDEX ON subnetwork_compressed (id);
 
 ALTER TABLE transactions ADD COLUMN subnetwork_id_new BYTEA;
 
-DO $$
+CREATE OR REPLACE PROCEDURE _v21_migrate_subnetworks()
+LANGUAGE plpgsql
+AS $$
 DECLARE
     batch_ms      BIGINT := 24 * 3600 * 1000;
     t_min         BIGINT;
@@ -66,15 +68,20 @@ BEGIN
             rows_updated,
             total_updated;
 
-        EXIT WHEN t_cur + batch_ms > t_max;
-        t_cur := t_cur + batch_ms;
-
         INSERT INTO vars (key, value) VALUES ('v21_compressed_subnetworks_checkpoint', t_cur::TEXT)
         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+        COMMIT;
+
+        t_cur := t_cur + batch_ms;
+        EXIT WHEN t_cur > t_max;
     END LOOP;
 
-    RAISE NOTICE 'Done: % total', total_updated;
+    RAISE NOTICE 'Done: % total rows', total_updated;
 END $$;
+
+CALL _v21_migrate_subnetworks();
+DROP PROCEDURE _v21_migrate_subnetworks();
 
 DELETE FROM vars WHERE key = 'v21_compressed_subnetworks_checkpoint';
 DROP TABLE subnetwork_compressed;
