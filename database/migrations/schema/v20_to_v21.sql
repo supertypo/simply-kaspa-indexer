@@ -20,8 +20,6 @@ SELECT id, NULLIF(rtrim(decode(subnetwork_id, 'hex'), '\x00'::bytea), ''::bytea)
 FROM subnetworks
 WHERE NULLIF(rtrim(decode(subnetwork_id, 'hex'), '\x00'::bytea), ''::bytea) IS NOT NULL;
 
-CREATE UNIQUE INDEX ON subnetwork_compressed (id);
-
 ALTER TABLE transactions ADD COLUMN subnetwork_id_new BYTEA;
 
 CREATE OR REPLACE PROCEDURE _v21_migrate_subnetworks()
