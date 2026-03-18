@@ -13,7 +13,7 @@ use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use simply_kaspa_signal::signal_handler::SignalHandler;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
@@ -32,12 +32,6 @@ pub async fn process_virtual_chain(
     let batch_scale = settings.cli_args.batch_scale;
     let batch_concurrency = settings.cli_args.batch_concurrency;
     let disable_transaction_acceptance = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
-
-    let mut subnetwork_map = HashMap::new();
-    let results = database.select_subnetworks().await.expect("Select subnetworks FAILED");
-    for s in results {
-        subnetwork_map.insert(s.subnetwork_id, s.id);
-    }
 
     let mut tip_distance: u64 = 10;
     let mut tip_distance_timestamp: u128 = 0;
@@ -93,7 +87,6 @@ pub async fn process_virtual_chain(
                 &res.chain_block_accepted_transactions,
                 &database,
                 &mapper,
-                &mut subnetwork_map,
             )
             .await;
             let commit_time = Instant::now().duration_since(start_commit_time).as_millis();

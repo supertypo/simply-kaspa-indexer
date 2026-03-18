@@ -1,6 +1,5 @@
 use crate::models::query::database_details::DatabaseDetails;
 use crate::models::query::table_details::TableDetails;
-use crate::models::subnetwork::Subnetwork;
 use crate::models::types::hash::Hash;
 use sqlx::{Error, Pool, Postgres, Row};
 
@@ -42,12 +41,6 @@ pub async fn select_all_table_details(pool: &Pool<Postgres>) -> Result<Vec<Table
 
 pub async fn select_var(key: &str, pool: &Pool<Postgres>) -> Result<String, Error> {
     sqlx::query("SELECT value FROM vars WHERE key = $1").bind(key).fetch_one(pool).await?.try_get(0)
-}
-
-pub async fn select_subnetworks(pool: &Pool<Postgres>) -> Result<Vec<Subnetwork>, Error> {
-    let rows = sqlx::query("SELECT id, subnetwork_id FROM subnetworks").fetch_all(pool).await?;
-    let subnetworks = rows.into_iter().map(|row| Subnetwork { id: row.get("id"), subnetwork_id: row.get("subnetwork_id") }).collect();
-    Ok(subnetworks)
 }
 
 pub async fn select_tx_count(block_hash: &Hash, pool: &Pool<Postgres>) -> Result<i64, Error> {

@@ -37,13 +37,6 @@ CREATE TABLE block_parent
 CREATE INDEX ON block_parent (parent_hash);
 
 
-CREATE TABLE subnetworks
-(
-    id            SERIAL PRIMARY KEY,
-    subnetwork_id VARCHAR(40) NOT NULL
-);
-
-
 CREATE TYPE transactions_inputs AS
 (
     index                    SMALLINT,
@@ -68,7 +61,7 @@ CREATE TYPE transactions_outputs AS
 CREATE TABLE transactions
 (
     transaction_id BYTEA PRIMARY KEY,
-    subnetwork_id  INTEGER,
+    subnetwork_id  BYTEA,
     hash           BYTEA,
     mass           INTEGER,
     payload        BYTEA,

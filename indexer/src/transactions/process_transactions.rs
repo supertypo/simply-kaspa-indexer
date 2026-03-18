@@ -17,15 +17,12 @@ use simply_kaspa_database::models::transaction::Transaction;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::cmp::min;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio::task;
 use tokio::time::sleep;
-
-type SubnetworkMap = HashMap<String, i32>;
 
 pub async fn process_transactions(
     settings: Settings,
@@ -60,13 +57,6 @@ pub async fn process_transactions(
     let mut checkpoint_blocks = vec![];
     let mut last_commit_time = Instant::now();
 
-    let mut subnetwork_map = SubnetworkMap::new();
-    let results = database.select_subnetworks().await.expect("Select subnetworks FAILED");
-    for s in results {
-        subnetwork_map.insert(s.subnetwork_id, s.id);
-    }
-    info!("Loaded {} known subnetworks", subnetwork_map.len());
-
     if !disable_address_transactions {
         if !exclude_tx_out_script_public_key_address {
             info!("Using addresses_transactions for address transaction mapping");
@@ -95,18 +85,7 @@ pub async fn process_transactions(
                         trace!("Known transaction_id {}, keeping block relation only", transaction_id);
                     } else {
                         if !disable_transactions {
-                            let subnetwork_id = transaction.subnetwork_id.to_string();
-                            let subnetwork_key = match subnetwork_map.get(&subnetwork_id) {
-                                Some(&subnetwork_key) => subnetwork_key,
-                                None => {
-                                    let subnetwork_key =
-                                        database.insert_subnetwork(&subnetwork_id).await.expect("Insert subnetwork FAILED");
-                                    subnetwork_map.insert(subnetwork_id.clone(), subnetwork_key);
-                                    info!("Committed new subnetwork, id: {} subnetwork_id: {}", subnetwork_key, subnetwork_id);
-                                    subnetwork_key
-                                }
-                            };
-                            transactions.push(mapper.map_transaction(&transaction, subnetwork_key));
+                            transactions.push(mapper.map_transaction(&transaction));
                         }
                         if !disable_address_transactions {
                             if !exclude_tx_out_script_public_key_address {
