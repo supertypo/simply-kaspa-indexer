@@ -30,7 +30,15 @@ max_wal_size = 4GB
 min_wal_size = 80MB
 effective_cache_size = 8GB
 ```
-In addition, I highly recommend running Postgres on ZFS with compression=lz4 (or zstd) for space savings as well as for improving performance. Make sure to also set recordsize=16k.
+In addition, I highly recommend running Postgres on ZFS with compression=lz4 (or zstd) for space savings as well as for improving performance.   
+Suggested zfs options:
+```
+recordsize=8k
+compression=on
+atime=off
+xattr=sa
+redundant_metadata=most
+```
 
 ### 10bps note
 The indexer is able to keep up with fully satured 10bps (2000+tps) as long as Postgres is running on a sufficiently high-end NVMe (Samsung 990 Pro equivalent).  
@@ -131,24 +139,18 @@ exclude-fields:
     tx_payload,
     tx_in_signature_script,
     tx_in_sig_op_count,
-    tx_in_block_time,
-    tx_out_script_public_key_address,
-    tx_out_block_time
+    tx_out_script_public_key_address
 ```
 Example command arguments:
 ```
 -u -s ws://your-kaspad:17110 -d postgres://postgres:postgres@your-db:5432 -l 0.0.0.0:8500 \
 --prune-db --retention=7d \
---enable=transactions_inputs_resolve \
 --disable=block_parent_table,blocks_transactions_table,addresses_transactions_table,rejected_transactions \
---exclude-fields=block_accepted_id_merkle_root,block_merge_set_blues_hashes,block_merge_set_reds_hashes,block_selected_parent_hash,block_bits,block_blue_work,block_daa_score,block_hash_merkle_root,block_nonce,block_pruning_point,block_utxo_commitment,block_version,tx_hash,tx_mass,tx_payload,tx_in_signature_script,tx_in_sig_op_count,tx_in_block_time,tx_out_script_public_key_address,tx_out_block_time
+--exclude-fields=block_accepted_id_merkle_root,block_merge_set_blues_hashes,block_merge_set_reds_hashes,block_selected_parent_hash,block_bits,block_blue_work,block_daa_score,block_hash_merkle_root,block_nonce,block_pruning_point,block_utxo_commitment,block_version,tx_hash,tx_mass,tx_payload,tx_in_signature_script,tx_in_sig_op_count,tx_out_script_public_key_address
 ```
 
 ### Enable transactions_inputs_resolve
-Having the indexer resolve inputs at index time allows avoiding the expensive join at query time. In essence this load is moved to the indexer, 
-except if you also choose to use it to resolve addresses by dropping the addresses_transactions table and querying inputs and outputs directly,
-in this case the added effort is zero or even negative. To enable add the argument: --enable=transactions_inputs_resolve.  
-
+From v2.1.0 transactions_inputs_resolve is always enabled.
 If you are using kaspa-rest-server you should apply the PREV_OUT_RESOLVED=true env var.
 
 ## Help
