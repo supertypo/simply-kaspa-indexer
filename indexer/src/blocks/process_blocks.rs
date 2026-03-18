@@ -130,7 +130,7 @@ pub async fn process_blocks(
 }
 
 async fn insert_blocks(batch_scale: f64, values: Vec<Block>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((200f64 * batch_scale) as usize, 3500); // 2^16 / fields
+    let batch_size = min((550f64 * batch_scale) as usize, 4000); // 15 cols: 4000*15=60000 < 65535
     let key = "blocks";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
@@ -143,7 +143,7 @@ async fn insert_blocks(batch_scale: f64, values: Vec<Block>, database: KaspaDbCl
 }
 
 async fn insert_block_parents(batch_scale: f64, values: Vec<BlockParent>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((400f64 * batch_scale) as usize, 10000); // 2^16 / fields
+    let batch_size = min((1300f64 * batch_scale) as usize, 32000); // 2 cols: 32000*2=64000 < 65535
     let key = "block_parents";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
@@ -156,7 +156,7 @@ async fn insert_block_parents(batch_scale: f64, values: Vec<BlockParent>, databa
 }
 
 async fn delete_transaction_acceptances(batch_scale: f64, block_hashes: Vec<SqlHash>, db: KaspaDbClient) -> u64 {
-    let batch_size = min((100f64 * batch_scale) as usize, 50000); // 2^16 / fields
+    let batch_size = min((2000f64 * batch_scale) as usize, 65000); // ANY($1): no param limit
     let key = "transaction_acceptances";
     let start_time = Instant::now();
     debug!("Clearing {} {}", block_hashes.len(), key);

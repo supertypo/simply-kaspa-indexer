@@ -189,7 +189,7 @@ pub async fn insert_txs(
     upsert_inputs: bool,
     database: KaspaDbClient,
 ) -> u64 {
-    let batch_size = min((250f64 * batch_scale) as u16, 8000) as usize;
+    let batch_size = min((250f64 * batch_scale) as u16, 7000) as usize;
     let key = "transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
@@ -208,7 +208,7 @@ pub async fn insert_txs(
 }
 
 pub async fn insert_tx_addr(batch_scale: f64, batch_concurrency: i8, values: Vec<AddressTransaction>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((250f64 * batch_scale) as u16, 20000) as usize;
+    let batch_size = min((650f64 * batch_scale) as u16, 21000) as usize;
     let key = "addresses_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
@@ -232,7 +232,7 @@ pub async fn insert_tx_script(
     values: Vec<ScriptTransaction>,
     database: KaspaDbClient,
 ) -> u64 {
-    let batch_size = min((250f64 * batch_scale) as u16, 20000) as usize;
+    let batch_size = min((800f64 * batch_scale) as u16, 21000) as usize;
     let key = "scripts_transactions";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
@@ -251,7 +251,7 @@ pub async fn insert_tx_script(
 }
 
 async fn insert_block_txs(batch_scale: f64, batch_concurrency: i8, values: Vec<BlockTransaction>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((500f64 * batch_scale) as u16, 30000) as usize;
+    let batch_size = min((1300f64 * batch_scale) as u16, 32000) as usize;
     let key = "block/transaction mappings";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);

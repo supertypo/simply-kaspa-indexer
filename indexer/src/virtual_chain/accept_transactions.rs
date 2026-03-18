@@ -93,7 +93,7 @@ async fn insert_transaction_acceptances(
     values: Vec<TransactionAcceptance>,
     database: KaspaDbClient,
 ) -> u64 {
-    let batch_size = min((1000f64 * batch_scale) as u16, 7500) as usize;
+    let batch_size = min((1300f64 * batch_scale) as u16, 30000) as usize;
     let key = "transaction_acceptances";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);
