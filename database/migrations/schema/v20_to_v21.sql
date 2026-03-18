@@ -10,17 +10,21 @@ ALTER TABLE transactions DROP COLUMN outputs_spent;
 DROP TABLE utxos;
 
 
+-- Add tx version column (NULL maps to version 0; no rewrite needed for existing rows)
+ALTER TABLE transactions ADD COLUMN version SMALLINT;
+
+
 -- Migrate transactions.subnetwork_id from INTEGER FK to BYTEA (trailing-zeros stripped)
 CREATE TEMP TABLE subnetwork_compressed AS
 SELECT id, NULLIF(rtrim(decode(subnetwork_id, 'hex'), '\x00'::bytea), ''::bytea) AS compressed
 FROM subnetworks
 WHERE NULLIF(rtrim(decode(subnetwork_id, 'hex'), '\x00'::bytea), ''::bytea) IS NOT NULL;
 
-CREATE UNIQUE INDEX ON subnetwork_compressed (id);
-
 ALTER TABLE transactions ADD COLUMN subnetwork_id_new BYTEA;
 
-DO $$
+CREATE OR REPLACE PROCEDURE _v21_migrate_subnetworks()
+LANGUAGE plpgsql
+AS $$
 DECLARE
     batch_ms      BIGINT := 24 * 3600 * 1000;
     t_min         BIGINT;
@@ -62,15 +66,20 @@ BEGIN
             rows_updated,
             total_updated;
 
-        EXIT WHEN t_cur + batch_ms > t_max;
-        t_cur := t_cur + batch_ms;
-
         INSERT INTO vars (key, value) VALUES ('v21_compressed_subnetworks_checkpoint', t_cur::TEXT)
         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+        COMMIT;
+
+        t_cur := t_cur + batch_ms;
+        EXIT WHEN t_cur > t_max;
     END LOOP;
 
-    RAISE NOTICE 'Done: % total', total_updated;
+    RAISE NOTICE 'Done: % total rows', total_updated;
 END $$;
+
+CALL _v21_migrate_subnetworks();
+DROP PROCEDURE _v21_migrate_subnetworks();
 
 DELETE FROM vars WHERE key = 'v21_compressed_subnetworks_checkpoint';
 DROP TABLE subnetwork_compressed;

@@ -11,6 +11,7 @@ pub struct Transaction {
     pub mass: Option<i32>,
     pub payload: Option<Payload>,
     pub block_time: Option<i64>,
+    pub version: Option<i16>,
     pub inputs: Option<Vec<TransactionInput>>,
     pub outputs: Option<Vec<TransactionOutput>>,
 }

@@ -66,6 +66,7 @@ CREATE TABLE transactions
     mass           INTEGER,
     payload        BYTEA,
     block_time     BIGINT,
+    version        SMALLINT,
     inputs         transactions_inputs[],
     outputs        transactions_outputs[]
 );
