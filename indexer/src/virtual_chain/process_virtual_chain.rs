@@ -54,15 +54,15 @@ pub async fn process_virtual_chain(
         debug!("Getting virtual chain from start_hash {}", start_hash);
         match kaspad_pool.get().await {
             Ok(kaspad) => {
-                match kaspad.get_virtual_chain_from_block(start_hash, !disable_transaction_acceptance).await {
+                match kaspad.get_virtual_chain_from_block(start_hash, !disable_transaction_acceptance, Some(tip_distance as u64)).await
+                {
                     Ok(res) => {
                         let start_request_time = Instant::now();
                         let added_blocks_count = res.added_chain_block_hashes.len();
-                        if added_blocks_count > tip_distance {
-                            let removed_chain_block_hashes = res.removed_chain_block_hashes.as_slice();
-                            let added_chain_block_hashes = &res.added_chain_block_hashes[..added_blocks_count - tip_distance];
+                        if added_blocks_count > 0 {
+                            let removed_chain_block_hashes = res.removed_chain_block_hashes;
                             let last_accepting_block =
-                                kaspad.get_block(*added_chain_block_hashes.last().unwrap(), false).await.unwrap();
+                                kaspad.get_block(*res.added_chain_block_hashes.last().unwrap(), false).await.unwrap();
                             let checkpoint_block = CheckpointBlock {
                                 origin: CheckpointOrigin::Vcp,
                                 hash: last_accepting_block.header.hash.into(),
@@ -84,11 +84,11 @@ pub async fn process_virtual_chain(
                                 }
                             }
                             let start_commit_time = Instant::now();
-                            let rows_removed = remove_chain_blocks(batch_scale, removed_chain_block_hashes, &database).await;
+                            let rows_removed = remove_chain_blocks(batch_scale, &removed_chain_block_hashes, &database).await;
                             if !disable_transaction_acceptance {
-                                let accepted_transaction_ids = &res.accepted_transaction_ids[..added_blocks_count - tip_distance];
                                 let rows_added =
-                                    accept_transactions(batch_scale, batch_concurrency, accepted_transaction_ids, &database).await;
+                                    accept_transactions(batch_scale, batch_concurrency, &res.accepted_transaction_ids, &database)
+                                        .await;
                                 info!(
                                     "Committed {} accepted and {} rejected transactions in {}ms. Last accepted: {}",
                                     rows_added,
@@ -97,7 +97,7 @@ pub async fn process_virtual_chain(
                                     chrono::DateTime::from_timestamp_millis(checkpoint_block.timestamp as i64 / 1000 * 1000).unwrap()
                                 );
                             } else {
-                                let rows_added = add_chain_blocks(batch_scale, added_chain_block_hashes, &database).await;
+                                let rows_added = add_chain_blocks(batch_scale, &res.added_chain_block_hashes, &database).await;
                                 info!(
                                     "Committed {} added and {} removed chain blocks in {}ms. Last added: {}",
                                     rows_added,

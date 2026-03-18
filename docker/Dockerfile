@@ -1,7 +1,7 @@
 ##
 # builder image
 ##
-FROM rust:1.90-alpine AS builder
+FROM rust:1.93.1-alpine AS builder
 
 ARG REPO_DIR=.
 
@@ -9,7 +9,7 @@ RUN apk --no-cache add \
   musl-dev \
   protobuf-dev \
   g++ \
-  clang15-dev \
+  clang18-dev \
   linux-headers \
   wasm-pack \
   openssl-dev \
