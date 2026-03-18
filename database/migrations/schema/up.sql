@@ -4,7 +4,7 @@ CREATE TABLE vars
     value TEXT NOT NULL
 );
 INSERT INTO vars (key, value)
-VALUES ('schema_version', '20');
+VALUES ('schema_version', '21');
 
 
 CREATE TABLE blocks
@@ -44,16 +44,6 @@ CREATE TABLE subnetworks
 );
 
 
-CREATE TABLE utxos
-(
-    transaction_id            BYTEA,
-    index                     SMALLINT,
-    amount                    BIGINT,
-    script_public_key         BYTEA,
-    script_public_key_address TEXT
-);
-
-
 CREATE TYPE transactions_inputs AS
 (
     index                    SMALLINT,
@@ -84,8 +74,7 @@ CREATE TABLE transactions
     payload        BYTEA,
     block_time     BIGINT,
     inputs         transactions_inputs[],
-    outputs        transactions_outputs[],
-    outputs_spent  SMALLINT
+    outputs        transactions_outputs[]
 );
 CREATE INDEX ON transactions (block_time DESC);
 

@@ -6,7 +6,7 @@ use kaspa_hashes::Hash as KaspaHash;
 use kaspa_rpc_core::api::rpc::RpcApi;
 use kaspa_wrpc_client::prelude::{NetworkId, NetworkType};
 use log::{error, info, trace, warn};
-use simply_kaspa_cli::cli_args::{CliArgs, CliDisable};
+use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliEnable};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_indexer::blocks::fetch_blocks::KaspaBlocksFetcher;
 use simply_kaspa_indexer::blocks::process_blocks::process_blocks;
@@ -14,8 +14,8 @@ use simply_kaspa_indexer::checkpoint::{CheckpointBlock, CheckpointOrigin, proces
 use simply_kaspa_indexer::prune::pruner;
 use simply_kaspa_indexer::settings::Settings;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
-use simply_kaspa_indexer::utxo_import::utxo_set_importer::UtxoSetImporter;
 use simply_kaspa_indexer::vars::load_block_checkpoint;
+use simply_kaspa_indexer::virtual_chain::fetch_virtual_chain::fetch_virtual_chain;
 use simply_kaspa_indexer::virtual_chain::process_virtual_chain::process_virtual_chain;
 use simply_kaspa_indexer::web::model::metrics::Metrics;
 use simply_kaspa_indexer::web::web_server::WebServer;
@@ -27,7 +27,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, mpsc};
 use tokio::task;
 
 #[tokio::main]
@@ -91,6 +91,9 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     if let Some(enable) = &cli_args.enable {
         info!("Enable functionality is set, the following functionality will be enabled: {:?}", enable);
     }
+    if cli_args.is_enabled(CliEnable::TransactionsInputsResolve) {
+        warn!("TransactionsInputsResolve is a NO-OP and will be removed in the future - inputs are always resolved");
+    }
     if let Some(disable) = &cli_args.disable {
         info!("Disable functionality is set, the following functionality will be disabled: {:?}", disable);
     }
@@ -98,7 +101,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         info!("Exclude fields is set, the following fields will be excluded: {:?}", exclude_fields);
     }
 
-    let mut utxo_set_import = false;
     let checkpoint: KaspaHash;
     if let Some(ignore_checkpoint) = cli_args.ignore_checkpoint.clone() {
         warn!("Checkpoint ignored due to user request (-i). This might lead to inconsistencies.");
@@ -116,22 +118,23 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         checkpoint = KaspaHash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
         info!("Starting from checkpoint {}", checkpoint);
     } else {
-        if !cli_args.is_disabled(CliDisable::InitialUtxoImport) {
-            utxo_set_import = true;
-        }
         checkpoint = block_dag_info.pruning_point_hash;
         warn!("Checkpoint not found, starting from pruning_point {}", checkpoint);
     }
 
-    let checkpoint_block = match kaspad_pool.get().await.unwrap().get_block(checkpoint, false).await {
-        Ok(block) => Some(CheckpointBlock {
+    let checkpoint_block = {
+        let block = kaspad_pool.get().await.unwrap().get_block(checkpoint, false).await.expect(
+            "Failed to fetch checkpoint block from kaspad. \
+                The block may have been pruned. Connect to an archive node, \
+                or use --ignore-checkpoint=p to resume from the current pruning point",
+        );
+        CheckpointBlock {
             origin: CheckpointOrigin::Initial,
             hash: block.header.hash.into(),
             timestamp: block.header.timestamp,
             daa_score: block.header.daa_score,
             blue_score: block.header.blue_score,
-        }),
-        Err(_) => None,
+        }
     };
 
     let queue_capacity = (cli_args.batch_scale * 1000f64) as usize;
@@ -147,13 +150,12 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     let mut metrics = Metrics::new(env!("CARGO_PKG_NAME").to_string(), cli_args.version(), cli_args.commit_id());
     let mut settings_clone = settings.clone();
     settings_clone.cli_args.rpc_url = settings_clone.cli_args.rpc_url.map(|_| "**hidden**".to_string());
-    settings_clone.cli_args.p2p_url = settings_clone.cli_args.p2p_url.map(|_| "**hidden**".to_string());
     settings_clone.cli_args.database_url = "**hidden**".to_string();
     metrics.settings = Some(settings_clone);
     metrics.queues.blocks_capacity = blocks_queue.capacity() as u64;
     metrics.queues.transactions_capacity = txs_queue.capacity() as u64;
-    metrics.checkpoint.origin = checkpoint_block.as_ref().map(|c| format!("{:?}", c.origin));
-    metrics.checkpoint.block = checkpoint_block.map(|c| c.into());
+    metrics.checkpoint.origin = Some(format!("{:?}", checkpoint_block.origin));
+    metrics.checkpoint.block = Some(checkpoint_block.into());
     metrics.components.transaction_processor.enabled = !settings.cli_args.is_disabled(CliDisable::TransactionProcessing);
     metrics.components.virtual_chain_processor.enabled = !settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing);
     metrics.components.virtual_chain_processor.only_blocks = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
@@ -162,17 +164,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     let webserver =
         Arc::new(WebServer::new(settings.clone(), signal_handler.clone(), metrics.clone(), kaspad_pool.clone(), database.clone()));
     let webserver_task = task::spawn(async move { webserver.run().await.unwrap() });
-
-    if utxo_set_import {
-        let importer = UtxoSetImporter::new(
-            cli_args.clone(),
-            signal_handler.clone(),
-            metrics.clone(),
-            block_dag_info.pruning_point_hash,
-            database.clone(),
-        );
-        importer.start().await;
-    }
 
     let mut block_fetcher = KaspaBlocksFetcher::new(
         settings.clone(),
@@ -209,6 +200,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             settings.clone(),
             signal_handler.clone(),
             metrics.clone(),
+            start_vcp.clone(),
             txs_queue.clone(),
             checkpoint_queue.clone(),
             database.clone(),
@@ -216,19 +208,28 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         )))
     }
     if !settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing) {
-        tasks.push(task::spawn(process_virtual_chain(
+        let (vcp_sender, vcp_receiver) = mpsc::channel(1);
+        tasks.push(task::spawn(fetch_virtual_chain(
             settings.clone(),
             signal_handler.clone(),
             metrics.clone(),
             start_vcp.clone(),
-            checkpoint_queue.clone(),
             kaspad_pool.clone(),
+            vcp_sender,
+        )));
+        tasks.push(task::spawn(process_virtual_chain(
+            settings.clone(),
+            signal_handler.clone(),
+            metrics.clone(),
+            checkpoint_queue.clone(),
             database.clone(),
-        )))
+            mapper.clone(),
+            vcp_receiver,
+        )));
     }
 
     tasks.push(task::spawn(async move {
-        if let Err(e) = pruner(cli_args.clone(), signal_handler.clone(), metrics.clone(), database.clone()).await {
+        if let Err(e) = pruner(settings.clone(), signal_handler.clone(), metrics.clone(), database.clone()).await {
             error!("Database pruner failed: {e}");
         }
     }));

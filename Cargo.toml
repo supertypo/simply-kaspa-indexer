@@ -33,14 +33,9 @@ simply-kaspa-mapping = { path = "mapping" }
 simply-kaspa-kaspad = { path = "kaspad" }
 kaspa-wrpc-client = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
 kaspa-rpc-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
-kaspa-p2p-lib = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
-kaspa-consensus-core = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
 kaspa-hashes = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
-kaspa-addresses = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
-kaspa-txscript = { git = "https://github.com/kaspanet/rusty-kaspa.git", tag = "v1.1.0" }
 tokio = { version = "1.50.0", features = ["default", "signal"] }
 tokio-cron-scheduler = "0.15.1"
-tonic = { version = "0.14.5", features = ["gzip"] }
 futures-util = { version = "0.3.32", default-features = false }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "runtime-tokio-native-tls", "postgres"] }
 deadpool = { version = "0.13.0", features = ["managed", "rt_tokio_1"] }
@@ -48,7 +43,6 @@ crossbeam-queue = "0.3.12"
 moka = { version = "0.12.14", features = ["sync"] }
 itertools = "0.14.0"
 chrono = { version = "0.4.44", features = ["std", "serde"] }
-bigdecimal = "0.4.10"
 hex = "0.4.3"
 regex = "1.12.3"
 indexmap = "2.13.0"
@@ -68,5 +62,3 @@ sysinfo = "0.38.3"
 bytesize = "2.3.1"
 humantime = "2.3.0"
 humantime-serde = "1.1.1"
-url = "2.5.8"
-rand = "0.10.0"

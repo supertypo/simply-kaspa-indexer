@@ -16,7 +16,6 @@ use crate::models::subnetwork::Subnetwork;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::types::hash::Hash;
-use crate::models::utxo::Utxo;
 use crate::query;
 
 #[derive(Clone)]
@@ -25,7 +24,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 20;
+    const SCHEMA_VERSION: u8 = 21;
 
     pub async fn new(url: &str, pool_size: u32) -> Result<KaspaDbClient, Error> {
         let url_cleaned = Regex::new(r"(postgres://postgres:)[^@]+(@)").expect("Failed to parse url").replace(url, "$1$2");
@@ -160,6 +159,17 @@ impl KaspaDbClient {
                             panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
                         }
                     }
+                    if version == 20 {
+                        let ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v20_to_v21.sql"));
+                        if upgrade_db {
+                            warn!("\n{ddl}\nUpgrading schema from v{version} to v{}. ^", version + 1);
+                            query::misc::execute_ddl(ddl, &self.pool).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            version += 1;
+                        } else {
+                            panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
+                        }
+                    }
                     trace!("Schema version is v{version}")
                 }
                 version = self.select_var("schema_version").await?.parse::<u8>().unwrap();
@@ -183,10 +193,6 @@ impl KaspaDbClient {
 
     pub async fn drop_schema(&self) -> Result<(), Error> {
         query::misc::execute_ddl(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/down.sql")), &self.pool).await
-    }
-
-    pub async fn truncate_utxos(&self) -> Result<(), Error> {
-        query::misc::truncate_table("utxos", &self.pool).await
     }
 
     pub async fn select_database_details(&self) -> Result<DatabaseDetails, Error> {
@@ -217,14 +223,6 @@ impl KaspaDbClient {
         query::insert::insert_subnetwork(subnetwork_id, &self.pool).await
     }
 
-    pub async fn insert_utxos(&self, utxos: &[Utxo]) -> Result<u64, Error> {
-        query::insert::insert_utxos(utxos, &self.pool).await
-    }
-
-    pub async fn insert_utxos_to_transactions(&self) -> Result<u64, Error> {
-        query::insert::insert_utxos_to_transactions(&self.pool).await
-    }
-
     pub async fn insert_blocks(&self, blocks: &[Block]) -> Result<u64, Error> {
         query::insert::insert_blocks(blocks, &self.pool).await
     }
@@ -233,8 +231,8 @@ impl KaspaDbClient {
         query::insert::insert_block_parents(block_parents, &self.pool).await
     }
 
-    pub async fn insert_transactions(&self, resolve_previous_outpoints: bool, transactions: &[Transaction]) -> Result<u64, Error> {
-        query::insert::insert_transactions(resolve_previous_outpoints, transactions, &self.pool).await
+    pub async fn insert_transactions(&self, transactions: &[Transaction], upsert_inputs: bool) -> Result<u64, Error> {
+        query::insert::insert_transactions(transactions, upsert_inputs, &self.pool).await
     }
 
     pub async fn insert_address_transactions(&self, address_transactions: &[AddressTransaction]) -> Result<u64, Error> {
@@ -243,14 +241,6 @@ impl KaspaDbClient {
 
     pub async fn insert_script_transactions(&self, script_transactions: &[ScriptTransaction]) -> Result<u64, Error> {
         query::insert::insert_script_transactions(script_transactions, &self.pool).await
-    }
-
-    pub async fn insert_address_transactions_from_inputs(&self, transaction_ids: &[Hash]) -> Result<u64, Error> {
-        query::insert::insert_address_transactions_from_inputs(transaction_ids, &self.pool).await
-    }
-
-    pub async fn insert_script_transactions_from_inputs(&self, transaction_ids: &[Hash]) -> Result<u64, Error> {
-        query::insert::insert_script_transactions_from_inputs(transaction_ids, &self.pool).await
     }
 
     pub async fn insert_block_transactions(&self, block_transactions: &[BlockTransaction]) -> Result<u64, Error> {
@@ -269,24 +259,28 @@ impl KaspaDbClient {
         query::delete::delete_transaction_acceptances(block_hashes, &self.pool).await
     }
 
-    pub async fn prune_block_parent(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_block_parent(block_time_lt, batch_size, &self.pool).await
+    pub async fn prune_block_parent(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_block_parent(blue_score_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_blocks_transactions_using_blocks(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_blocks_transactions_using_blocks(block_time_lt, batch_size, &self.pool).await
+    pub async fn prune_blocks_transactions_using_blocks(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_blocks_transactions_using_blocks(blue_score_lt, batch_size, &self.pool).await
     }
 
     pub async fn prune_blocks_transactions_using_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
         query::delete::prune_blocks_transactions_using_transactions(block_time_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_transactions_acceptances_using_blocks(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_transactions_acceptances_using_blocks(block_time_lt, batch_size, &self.pool).await
+    pub async fn prune_transactions_acceptances_using_blocks(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_transactions_acceptances_using_blocks(blue_score_lt, batch_size, &self.pool).await
     }
 
-    pub async fn prune_blocks(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_blocks(block_time_lt, batch_size, &self.pool).await
+    pub async fn prune_transactions_acceptances_using_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_transactions_acceptances_using_transactions(block_time_lt, batch_size, &self.pool).await
+    }
+
+    pub async fn prune_blocks(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
+        query::delete::prune_blocks(blue_score_lt, batch_size, &self.pool).await
     }
 
     pub async fn prune_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {

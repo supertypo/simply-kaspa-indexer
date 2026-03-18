@@ -7,59 +7,25 @@ use crate::models::block_transaction::BlockTransaction;
 use crate::models::script_transaction::ScriptTransaction;
 use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
-use crate::models::types::hash::Hash;
-use crate::models::utxo::Utxo;
 use crate::query::common::generate_placeholders;
 
 pub async fn insert_subnetwork(subnetwork_id: &String, pool: &Pool<Postgres>) -> Result<i32, Error> {
-    sqlx::query("INSERT INTO subnetworks (subnetwork_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING id")
-        .bind(subnetwork_id)
-        .fetch_one(pool)
-        .await?
-        .try_get(0)
-}
-
-pub async fn insert_utxos(utxos: &[Utxo], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    const COLS: usize = 5;
-    let sql = format!(
-        "INSERT INTO utxos (transaction_id, index, amount, script_public_key, script_public_key_address)
-        VALUES {} ON CONFLICT DO NOTHING",
-        generate_placeholders(utxos.len(), COLS)
-    );
-    let mut query = sqlx::query(&sql);
-    for utxo in utxos {
-        query = query.bind(&utxo.transaction_id);
-        query = query.bind(utxo.index);
-        query = query.bind(utxo.amount);
-        query = query.bind(&utxo.script_public_key);
-        query = query.bind(&utxo.script_public_key_address);
-    }
-    Ok(query.execute(pool).await?.rows_affected())
-}
-
-pub async fn insert_utxos_to_transactions(pool: &Pool<Postgres>) -> Result<u64, Error> {
     let mut tx = pool.begin().await?;
-    let sql = "
-        CREATE TEMP TABLE transactions_tmp ON COMMIT DROP AS
-        SELECT
-            transaction_id,
-            array_agg(ROW(index, amount, script_public_key, script_public_key_address)::transactions_outputs) AS outputs
-        FROM utxos
-        GROUP BY transaction_id;
-    ";
-    tx.execute(sqlx::query(sql)).await?;
-
-    let sql = "INSERT INTO transactions (transaction_id, outputs) SELECT transaction_id, outputs FROM transactions_tmp";
-    let rows_affected_txs = tx.execute(sqlx::query(sql)).await?.rows_affected();
-
-    let sql = "INSERT INTO transactions_acceptances (transaction_id) SELECT transaction_id FROM transactions_tmp";
-    let rows_affected_tas = tx.execute(sqlx::query(sql)).await?.rows_affected();
-
-    if rows_affected_txs != rows_affected_tas {
-        panic!("Mismatched number of rows while committing utxos to transactions");
-    }
+    sqlx::query("LOCK TABLE subnetworks IN EXCLUSIVE MODE").execute(tx.as_mut()).await?;
+    let id: i32 = match sqlx::query("SELECT id FROM subnetworks WHERE subnetwork_id = $1")
+        .bind(subnetwork_id)
+        .fetch_optional(tx.as_mut())
+        .await?
+    {
+        Some(row) => row.try_get(0)?,
+        None => sqlx::query("INSERT INTO subnetworks (subnetwork_id) VALUES ($1) RETURNING id")
+            .bind(subnetwork_id)
+            .fetch_one(tx.as_mut())
+            .await?
+            .try_get(0)?,
+    };
     tx.commit().await?;
-    Ok(rows_affected_txs)
+    Ok(id)
 }
 
 pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u64, Error> {
@@ -112,48 +78,17 @@ pub async fn insert_block_parents(block_parents: &[BlockParent], pool: &Pool<Pos
     Ok(query.execute(pool).await?.rows_affected())
 }
 
-pub async fn insert_transactions(
-    resolve_previous_outpoints: bool,
-    transactions: &[Transaction],
-    pool: &Pool<Postgres>,
-) -> Result<u64, Error> {
+pub async fn insert_transactions(transactions: &[Transaction], upsert_inputs: bool, pool: &Pool<Postgres>) -> Result<u64, Error> {
     const COLS: usize = 8;
-    let sql = if resolve_previous_outpoints {
-        format!(
-            "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
-             SELECT v.transaction_id, v.subnetwork_id, v.hash, v.mass, v.payload, v.block_time,
-               ARRAY(
-                 SELECT ROW(
-                   i.index,
-                   i.previous_outpoint_hash,
-                   i.previous_outpoint_index,
-                   i.signature_script,
-                   i.sig_op_count,
-                   COALESCE(i.previous_outpoint_script, o.script_public_key),
-                   COALESCE(i.previous_outpoint_amount, o.amount)
-                 )::transactions_inputs
-                 FROM UNNEST(v.inputs) i
-                 LEFT JOIN transactions output_t ON output_t.transaction_id = i.previous_outpoint_hash
-                 LEFT JOIN LATERAL (
-                   SELECT amount, script_public_key
-                   FROM UNNEST(output_t.outputs)
-                   WHERE index = i.previous_outpoint_index
-                   LIMIT 1
-                 ) o ON TRUE
-               ),
-               v.outputs
-             FROM (VALUES {}) v(transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
-             ON CONFLICT DO NOTHING",
-            generate_placeholders(transactions.len(), COLS)
-        )
-    } else {
-        format!(
-            "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
-             VALUES {}
-             ON CONFLICT DO NOTHING",
-            generate_placeholders(transactions.len(), COLS)
-        )
-    };
+    let on_conflict =
+        if upsert_inputs { "ON CONFLICT (transaction_id) DO UPDATE SET inputs = EXCLUDED.inputs" } else { "ON CONFLICT DO NOTHING" };
+    let sql = format!(
+        "INSERT INTO transactions (transaction_id, subnetwork_id, hash, mass, payload, block_time, inputs, outputs)
+         VALUES {}
+         {}",
+        generate_placeholders(transactions.len(), COLS),
+        on_conflict
+    );
 
     let mut query = sqlx::query(&sql);
     for tx in transactions {
@@ -199,38 +134,6 @@ pub async fn insert_script_transactions(script_transactions: &[ScriptTransaction
         query = query.bind(script_transaction.block_time);
     }
     Ok(query.execute(pool).await?.rows_affected())
-}
-
-pub async fn insert_address_transactions_from_inputs(transaction_ids: &[Hash], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let sql = "
-        INSERT INTO addresses_transactions (address, transaction_id, block_time)
-        SELECT
-            o.script_public_key_address,
-            t.transaction_id,
-            t.block_time
-        FROM transactions t
-        CROSS JOIN LATERAL UNNEST(t.inputs) i
-        JOIN transactions output_t  ON output_t.transaction_id = i.previous_outpoint_hash
-        JOIN LATERAL UNNEST(output_t.outputs) o ON o.index = i.previous_outpoint_index
-        WHERE t.transaction_id = ANY($1)
-        ON CONFLICT DO NOTHING";
-    Ok(sqlx::query(sql).bind(transaction_ids).execute(pool).await?.rows_affected())
-}
-
-pub async fn insert_script_transactions_from_inputs(transaction_ids: &[Hash], pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let sql = "
-        INSERT INTO scripts_transactions (script_public_key, transaction_id, block_time)
-        SELECT
-            o.script_public_key,
-            t.transaction_id,
-            t.block_time
-        FROM transactions t
-        CROSS JOIN LATERAL UNNEST(t.inputs) i
-        JOIN transactions output_t  ON output_t.transaction_id = i.previous_outpoint_hash
-        JOIN LATERAL UNNEST(output_t.outputs) o ON o.index = i.previous_outpoint_index
-        WHERE t.transaction_id = ANY($1)
-        ON CONFLICT DO NOTHING";
-    Ok(sqlx::query(sql).bind(transaction_ids).execute(pool).await?.rows_affected())
 }
 
 pub async fn insert_block_transactions(block_transactions: &[BlockTransaction], pool: &Pool<Postgres>) -> Result<u64, Error> {

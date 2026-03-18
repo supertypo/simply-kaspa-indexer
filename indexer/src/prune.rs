@@ -1,9 +1,10 @@
 use crate::return_on_shutdown;
+use crate::settings::Settings;
 use crate::web::model::metrics::{Metrics, MetricsComponentDbPrunerResult};
 use chrono::{DateTime, Timelike, Utc};
 use log::{error, info, warn};
 use serde_json::to_string_pretty;
-use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliField, PruningConfig};
+use simply_kaspa_cli::cli_args::{CliDisable, CliField, PruningConfig};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::collections::HashMap;
@@ -16,13 +17,13 @@ use tokio::time::{Duration, sleep};
 use tokio_cron_scheduler::{Job, JobScheduler};
 
 pub async fn pruner(
-    cli_args: CliArgs,
+    settings: Settings,
     signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     database: KaspaDbClient,
 ) -> Result<(), Box<dyn Error>> {
-    if let Some(cron) = cli_args.pruning.prune_db.clone() {
-        let pruning_config = cli_args.pruning.clone().resolved();
+    if let Some(cron) = settings.cli_args.pruning.prune_db.clone() {
+        let pruning_config = settings.cli_args.pruning.clone().resolved();
 
         info!("Database pruning enabled:\n{}", to_string_pretty(&pruning_config).unwrap());
         {
@@ -34,6 +35,8 @@ pub async fn pruner(
             retention.insert("block_parent".to_string(), format_duration(pruning_config.retention_block_parent));
             retention.insert("blocks_transactions".to_string(), format_duration(pruning_config.retention_blocks_transactions));
             retention.insert("blocks".to_string(), format_duration(pruning_config.retention_blocks));
+            retention
+                .insert("transactions_acceptances".to_string(), format_duration(pruning_config.retention_transactions_acceptances));
             retention.insert("transactions".to_string(), format_duration(pruning_config.retention_transactions));
             retention.insert("addresses_transactions".to_string(), format_duration(pruning_config.retention_addresses_transactions));
             metrics_rw.components.db_pruner.retention = Some(retention);
@@ -41,7 +44,7 @@ pub async fn pruner(
 
         let sh_clone = signal_handler.clone();
         let job = Job::new_async(format!("0 {}", cron), move |_, _| {
-            Box::pin(prune(cli_args.clone(), pruning_config.clone(), sh_clone.clone(), metrics.clone(), database.clone()))
+            Box::pin(prune(settings.clone(), pruning_config.clone(), sh_clone.clone(), metrics.clone(), database.clone()))
         })
         .unwrap();
         let scheduler = JobScheduler::new().await?;
@@ -57,32 +60,42 @@ pub async fn pruner(
 }
 
 pub async fn prune(
-    cli_args: CliArgs,
+    settings: Settings,
     pruning_config: PruningConfig,
     signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
     database: KaspaDbClient,
 ) {
-    info!("\x1b[33mDatabase pruning started\x1b[0m");
+    let cli_args = settings.cli_args.clone();
+    let batch_size = settings.cli_args.pruning.prune_batch_size;
     let common_start_time = now();
     let mut step_errors = 0;
-    {
+    let (net_bps, checkpoint_blue_score, checkpoint_time) = {
         let mut metrics_rw = metrics.write().await;
+        if metrics_rw.components.db_pruner.running == Some(true) {
+            warn!("Database pruning skipped: previous run still in progress");
+            return;
+        }
         metrics_rw.components.db_pruner.running = Some(true);
         metrics_rw.components.db_pruner.start_time = Some(common_start_time);
         metrics_rw.components.db_pruner.results = Some(HashMap::new());
-    }
+        let block = metrics_rw.checkpoint.block.as_ref().unwrap();
+        (settings.net_bps as u64, block.blue_score, block.date_time)
+    };
+    info!("\x1b[33mDatabase pruning started\x1b[0m");
 
     if let Some(retention) = pruning_config.retention_block_parent {
         let db = database.clone();
         let retention = retention.min(pruning_config.retention_blocks.unwrap_or(Duration::MAX));
-        let step_pruning_point = common_start_time.sub(retention);
+        let cutoff_blue_score = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
+        let cutoff_time = checkpoint_time.sub(retention);
         return_on_shutdown!(signal_handler.is_shutdown());
         step_errors += prune_step(
             "block_parent",
             metrics.clone(),
-            |step_pruning_point| async move { db.prune_block_parent(step_pruning_point, cli_args.pruning.prune_batch_size).await },
-            step_pruning_point,
+            |(blue_score, _)| async move { db.prune_block_parent(blue_score, batch_size).await },
+            cutoff_blue_score,
+            cutoff_time,
         )
         .await as i32;
     }
@@ -90,108 +103,113 @@ pub async fn prune(
     if let Some(retention) = pruning_config.retention_blocks_transactions {
         let db = database.clone();
         return_on_shutdown!(signal_handler.is_shutdown());
-        if !cli_args.is_disabled(CliDisable::BlocksTable) && !cli_args.is_excluded(CliField::BlockTimestamp) {
+        if !cli_args.is_disabled(CliDisable::BlocksTable) {
             let retention = retention.min(pruning_config.retention_blocks.unwrap_or(Duration::MAX));
-            let step_pruning_point = common_start_time.sub(retention);
+            let cutoff_blue_score = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
+            let cutoff_time = checkpoint_time.sub(retention);
             step_errors += prune_step(
                 "blocks_transactions (b)",
                 metrics.clone(),
-                |step_pruning_point| async move {
-                    db.prune_blocks_transactions_using_blocks(step_pruning_point, cli_args.pruning.prune_batch_size).await
-                },
-                step_pruning_point,
+                |(blue_score, _)| async move { db.prune_blocks_transactions_using_blocks(blue_score, batch_size).await },
+                cutoff_blue_score,
+                cutoff_time,
             )
             .await as i32;
         } else {
             let retention = retention.min(pruning_config.retention_transactions.unwrap_or(Duration::MAX));
-            let step_pruning_point = common_start_time.sub(retention);
+            let cutoff_time = checkpoint_time.sub(retention);
             step_errors += prune_step(
                 "blocks_transactions (t)",
                 metrics.clone(),
-                |step_pruning_point| async move {
-                    db.prune_blocks_transactions_using_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await
-                },
-                step_pruning_point,
+                |(_, time_ms)| async move { db.prune_blocks_transactions_using_transactions(time_ms, batch_size).await },
+                0,
+                cutoff_time,
+            )
+            .await as i32;
+        }
+    }
+
+    if let Some(retention) = pruning_config.retention_transactions_acceptances {
+        return_on_shutdown!(signal_handler.is_shutdown());
+        let db = database.clone();
+        if !cli_args.is_disabled(CliDisable::BlocksTable) {
+            let retention = retention.min(pruning_config.retention_blocks.unwrap_or(Duration::MAX));
+            let cutoff_blue_score = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
+            let cutoff_time = checkpoint_time.sub(retention);
+            step_errors += prune_step(
+                "transactions_acceptances (b)",
+                metrics.clone(),
+                |(blue_score, _)| async move { db.prune_transactions_acceptances_using_blocks(blue_score, batch_size).await },
+                cutoff_blue_score,
+                cutoff_time,
+            )
+            .await as i32;
+        } else if !cli_args.is_disabled(CliDisable::TransactionsTable)
+            && !cli_args.is_disabled(CliDisable::TransactionProcessing)
+            && !cli_args.is_disabled(CliDisable::TransactionAcceptance)
+        {
+            let retention = retention.min(pruning_config.retention_transactions.unwrap_or(Duration::MAX));
+            let cutoff_time = checkpoint_time.sub(retention);
+            step_errors += prune_step(
+                "transactions_acceptances (t)",
+                metrics.clone(),
+                |(_, time_ms)| async move { db.prune_transactions_acceptances_using_transactions(time_ms, batch_size).await },
+                0,
+                cutoff_time,
             )
             .await as i32;
         }
     }
 
     if let Some(retention) = pruning_config.retention_blocks {
-        let step_pruning_point = common_start_time.sub(retention);
+        let cutoff_blue_score = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
+        let cutoff_time = checkpoint_time.sub(retention);
         return_on_shutdown!(signal_handler.is_shutdown());
         let db = database.clone();
         step_errors += prune_step(
             "blocks",
             metrics.clone(),
-            |step_pruning_point| async move { db.prune_blocks(step_pruning_point, cli_args.pruning.prune_batch_size).await },
-            step_pruning_point,
+            |(blue_score, _)| async move { db.prune_blocks(blue_score, batch_size).await },
+            cutoff_blue_score,
+            cutoff_time,
         )
         .await as i32;
-
-        if cli_args.is_disabled(CliDisable::TransactionAcceptance)
-            && !cli_args.is_disabled(CliDisable::BlocksTable)
-            && !cli_args.is_excluded(CliField::BlockTimestamp)
-        {
-            return_on_shutdown!(signal_handler.is_shutdown());
-            let db = database.clone();
-            step_errors += prune_step(
-                "transactions_acceptances (b)",
-                metrics.clone(),
-                |step_pruning_point| async move {
-                    db.prune_transactions_acceptances_using_blocks(step_pruning_point, cli_args.pruning.prune_batch_size).await
-                },
-                step_pruning_point,
-            )
-            .await as i32;
-        }
     }
 
     if let Some(retention) = pruning_config.retention_transactions {
-        let step_pruning_point = common_start_time.sub(retention);
+        let cutoff_time = checkpoint_time.sub(retention);
         return_on_shutdown!(signal_handler.is_shutdown());
         let db = database.clone();
-
-        let pruning_point_is_passed = {
-            let metrics = metrics.read().await;
-            metrics.checkpoint.block.as_ref().map(|b| b.timestamp > step_pruning_point.timestamp_millis() as u64).unwrap_or(false)
-        };
-
-        if pruning_point_is_passed {
-            step_errors += prune_step(
-                "transactions",
-                metrics.clone(),
-                |step_pruning_point| async move { db.prune_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await },
-                step_pruning_point,
-            )
-            .await as i32;
-        } else {
-            warn!("Cannot prune transactions, pruning point is newer than last checkpoint")
-        }
+        step_errors += prune_step(
+            "transactions",
+            metrics.clone(),
+            |(_, time_ms)| async move { db.prune_transactions(time_ms, batch_size).await },
+            0,
+            cutoff_time,
+        )
+        .await as i32;
     }
 
     if let Some(retention) = pruning_config.retention_addresses_transactions {
-        let step_pruning_point = common_start_time.sub(retention);
+        let cutoff_time = checkpoint_time.sub(retention);
         return_on_shutdown!(signal_handler.is_shutdown());
         let db = database.clone();
         if !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress) {
             step_errors += prune_step(
                 "addresses_transactions",
                 metrics.clone(),
-                |step_pruning_point| async move {
-                    db.prune_addresses_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await
-                },
-                step_pruning_point,
+                |(_, time_ms)| async move { db.prune_addresses_transactions(time_ms, batch_size).await },
+                0,
+                cutoff_time,
             )
             .await as i32;
         } else {
             step_errors += prune_step(
                 "scripts_transactions",
                 metrics.clone(),
-                |step_pruning_point| async move {
-                    db.prune_scripts_transactions(step_pruning_point, cli_args.pruning.prune_batch_size).await
-                },
-                step_pruning_point,
+                |(_, time_ms)| async move { db.prune_scripts_transactions(time_ms, batch_size).await },
+                0,
+                cutoff_time,
             )
             .await as i32;
         }
@@ -212,14 +230,19 @@ pub async fn prune_step<F, Fut, E>(
     step_name: &'static str,
     metrics: Arc<RwLock<Metrics>>,
     db_call: F,
+    cutoff_blue_score: i64,
     cutoff_time: DateTime<Utc>,
 ) -> bool
 where
-    F: FnOnce(i64) -> Fut,
+    F: FnOnce((i64, i64)) -> Fut,
     Fut: Future<Output = Result<u64, E>> + Send + 'static,
     E: Error + Send + Sync + 'static,
 {
-    info!("Pruning {step_name} rows older than {cutoff_time}");
+    if cutoff_blue_score > 0 {
+        info!("Pruning {step_name} rows older than {cutoff_time} (bs: {cutoff_blue_score})");
+    } else {
+        info!("Pruning {step_name} rows older than {cutoff_time}");
+    }
     let start_time = now();
     let mut metrics_result =
         MetricsComponentDbPrunerResult { start_time, cutoff_time, duration: None, success: None, rows_deleted: None };
@@ -227,7 +250,7 @@ where
         let mut metrics_rw = metrics.write().await;
         metrics_rw.components.db_pruner.results.as_mut().unwrap().insert(step_name.to_string(), metrics_result.clone());
     }
-    let step_result = db_call(cutoff_time.timestamp_millis()).await;
+    let step_result = db_call((cutoff_blue_score, cutoff_time.timestamp_millis())).await;
 
     let success = step_result.is_ok();
     metrics_result.success = Some(success);

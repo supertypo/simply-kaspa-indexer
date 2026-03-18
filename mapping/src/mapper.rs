@@ -1,4 +1,4 @@
-use kaspa_rpc_core::{RpcBlock, RpcTransaction};
+use kaspa_rpc_core::{RpcBlock, RpcOptionalTransaction, RpcTransaction};
 use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliField};
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
 use simply_kaspa_database::models::block::Block as SqlBlock;
@@ -136,5 +136,41 @@ impl KaspaDbMapper {
 
     pub fn map_transaction_outputs_script(&self, transaction: &RpcTransaction) -> Vec<SqlScriptTransaction> {
         transactions::map_transaction_outputs_script(transaction)
+    }
+
+    pub fn map_optional_transaction(&self, transaction: &RpcOptionalTransaction, subnetwork_key: i32) -> SqlTransaction {
+        transactions::map_optional_transaction(
+            transaction,
+            subnetwork_key,
+            self.tx_subnetwork_id,
+            self.tx_hash,
+            self.tx_mass,
+            self.tx_payload,
+            self.tx_block_time,
+            self.tx_in,
+            self.tx_in_previous_outpoint,
+            self.tx_in_signature_script,
+            self.tx_in_sig_op_count,
+            self.tx_out,
+            self.tx_out_amount,
+            self.tx_out_script_public_key,
+            self.tx_out_script_public_key_address,
+        )
+    }
+
+    pub fn map_optional_transaction_inputs_address(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlAddressTransaction> {
+        transactions::map_optional_transaction_inputs_address(transaction)
+    }
+
+    pub fn map_optional_transaction_outputs_address(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlAddressTransaction> {
+        transactions::map_optional_transaction_outputs_address(transaction)
+    }
+
+    pub fn map_optional_transaction_inputs_script(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
+        transactions::map_optional_transaction_inputs_script(transaction)
+    }
+
+    pub fn map_optional_transaction_outputs_script(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
+        transactions::map_optional_transaction_outputs_script(transaction)
     }
 }

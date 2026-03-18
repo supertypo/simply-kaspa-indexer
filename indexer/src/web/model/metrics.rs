@@ -1,6 +1,5 @@
 use crate::checkpoint::CheckpointBlock;
 use crate::settings::Settings;
-use bigdecimal::ToPrimitive;
 use bytesize::ByteSize;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -126,7 +125,6 @@ impl MetricsCheckpoint {
 #[derive(ToSchema, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetricsComponent {
-    pub utxo_importer: MetricsComponentUtxoSetImporter,
     pub block_fetcher: MetricsComponentBlockFetcher,
     pub block_processor: MetricsComponentBlockProcessor,
     pub transaction_processor: MetricsComponentTransactionProcessor,
@@ -143,35 +141,12 @@ impl Default for MetricsComponent {
 impl MetricsComponent {
     pub fn new() -> Self {
         Self {
-            utxo_importer: MetricsComponentUtxoSetImporter::new(),
             block_fetcher: MetricsComponentBlockFetcher::new(),
             block_processor: MetricsComponentBlockProcessor::new(),
             transaction_processor: MetricsComponentTransactionProcessor::new(),
             virtual_chain_processor: MetricsComponentVirtualChainProcessor::new(),
             db_pruner: MetricsComponentDbPruner::new(),
         }
-    }
-}
-
-#[derive(ToSchema, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MetricsComponentUtxoSetImporter {
-    pub enabled: bool,
-    pub completed: Option<bool>,
-    pub utxos_imported: Option<u64>,
-    pub utxos_committed: Option<u64>,
-    pub transactions_committed: Option<u64>,
-}
-
-impl Default for MetricsComponentUtxoSetImporter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl MetricsComponentUtxoSetImporter {
-    pub fn new() -> Self {
-        Self { enabled: false, completed: None, utxos_imported: None, utxos_committed: None, transactions_committed: None }
     }
 }
 
@@ -381,12 +356,12 @@ impl From<DatabaseDetails> for MetricsDb {
         Self {
             database_name: Some(database_details.database_name),
             schema_name: Some(database_details.schema_name),
-            database_size: Some(database_details.database_size.to_u64().unwrap_or(0)),
-            database_size_pretty: Some(ByteSize(database_details.database_size.to_u64().unwrap_or(0)).to_string()),
-            active_queries: Some(database_details.active_queries.to_u64().unwrap_or(0)),
-            blocked_queries: Some(database_details.blocked_queries.to_u64().unwrap_or(0)),
-            active_connections: Some(database_details.active_connections.to_u64().unwrap_or(0)),
-            max_connections: Some(database_details.max_connections.to_u64().unwrap_or(0)),
+            database_size: Some(database_details.database_size as u64),
+            database_size_pretty: Some(ByteSize(database_details.database_size as u64).to_string()),
+            active_queries: Some(database_details.active_queries as u64),
+            blocked_queries: Some(database_details.blocked_queries as u64),
+            active_connections: Some(database_details.active_connections as u64),
+            max_connections: Some(database_details.max_connections as u64),
             tables: None,
         }
     }
@@ -413,11 +388,11 @@ impl From<TableDetails> for MetricsDbTable {
     fn from(table_details: TableDetails) -> Self {
         Self {
             name: table_details.name,
-            total_size: table_details.total_size.to_u64().unwrap_or(0),
-            total_size_pretty: ByteSize(table_details.total_size.to_u64().unwrap_or(0)).to_string(),
-            indexes_size: table_details.indexes_size.to_u64().unwrap_or(0),
-            indexes_size_pretty: ByteSize(table_details.indexes_size.to_u64().unwrap_or(0)).to_string(),
-            approximate_row_count: table_details.approximate_row_count.to_u64().unwrap_or(0),
+            total_size: table_details.total_size as u64,
+            total_size_pretty: ByteSize(table_details.total_size as u64).to_string(),
+            indexes_size: table_details.indexes_size as u64,
+            indexes_size_pretty: ByteSize(table_details.indexes_size as u64).to_string(),
+            approximate_row_count: table_details.approximate_row_count as u64,
         }
     }
 }

@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 #[clap(rename_all = "snake_case")]
 pub enum CliEnable {
     None,
-    /// Enables resolving transactions_inputs previous_outpoint
+    /// NO-OP - inputs are always resolved
     TransactionsInputsResolve,
 }
 
@@ -38,8 +38,10 @@ pub enum CliDisable {
     TransactionsOutputs,
     /// Disables the addresses_transactions (or scripts_transactions) table
     AddressesTransactionsTable,
-    /// Disables initial utxo set import
-    InitialUtxoImport,
+    /// Ignores all rejected transactions (improves performance)
+    RejectedTransactions,
+    /// Ignores rejected non-coinbase transactions (improves performance)
+    RejectedNonCbTransactions,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, ToSchema, Serialize, Deserialize)]
@@ -85,8 +87,6 @@ pub enum CliField {
 pub struct CliArgs {
     #[clap(short = 's', long, help = "RPC url to a kaspad instance, e.g 'ws://localhost:17110'. Leave empty to use the Kaspa PNN")]
     pub rpc_url: Option<String>,
-    #[clap(short = 'p', long, help = "P2P socket address to a kaspad instance, e.g 'localhost:16111'.")]
-    pub p2p_url: Option<String>,
     #[clap(short, long, default_value = "mainnet", help = "The network type and suffix, e.g. 'testnet-11'")]
     pub network: String,
     #[clap(short, long, default_value = "postgres://postgres:postgres@localhost:5432/postgres", help = "PostgreSQL url")]
@@ -157,7 +157,7 @@ impl CliArgs {
 #[derive(Debug, Clone, Args, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PruningConfig {
-    #[clap(long, default_missing_value = "0 4 * * *", num_args = 0..=1, help = "Enables db pruning. Optional cron expression. Default: '0 4 * * *' = daily 04:00 (UTC)")]
+    #[clap(long, default_missing_value = "0 * * * *", num_args = 0..=1, help = "Enables db pruning. Optional cron expression (UTC). Default: '0 * * * *' = hourly")]
     pub prune_db: Option<String>,
     #[clap(long, default_value = "100000", help = "Batch size for db pruning")]
     pub prune_batch_size: i32,
@@ -176,6 +176,9 @@ pub struct PruningConfig {
     #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for transactions_* tables")]
     #[serde(with = "humantime_serde")]
     pub retention_transactions: Option<Duration>,
+    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for transactions_acceptances table")]
+    #[serde(with = "humantime_serde")]
+    pub retention_transactions_acceptances: Option<Duration>,
     #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for addresses_transactions, scripts_transactions tables")]
     #[serde(with = "humantime_serde")]
     pub retention_addresses_transactions: Option<Duration>,
@@ -191,6 +194,7 @@ impl PruningConfig {
         self.retention_blocks_transactions = self.resolve(self.retention_blocks_transactions);
         self.retention_blocks = self.resolve(self.retention_blocks);
         self.retention_transactions = self.resolve(self.retention_transactions);
+        self.retention_transactions_acceptances = self.resolve(self.retention_transactions_acceptances);
         self.retention_addresses_transactions = self.resolve(self.retention_addresses_transactions);
         self
     }
