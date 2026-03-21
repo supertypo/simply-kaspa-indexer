@@ -100,6 +100,9 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     if let Some(exclude_fields) = &cli_args.exclude_fields {
         info!("Exclude fields is set, the following fields will be excluded: {:?}", exclude_fields);
     }
+    if let Some(exclude_addresses) = &cli_args.exclude_addresses {
+        info!("Exclude addresses is set, the following addresses are excluded: {:?}", exclude_addresses);
+    }
 
     let checkpoint: KaspaHash;
     if let Some(ignore_checkpoint) = cli_args.ignore_checkpoint.clone() {

@@ -7,6 +7,7 @@ use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlo
 use simply_kaspa_database::models::script_transaction::ScriptTransaction as SqlScriptTransaction;
 use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
 use simply_kaspa_database::models::types::hash::Hash as SqlHash;
+use std::collections::HashSet;
 
 use crate::{blocks, transactions};
 
@@ -39,6 +40,7 @@ pub struct KaspaDbMapper {
     tx_out_amount: bool,
     tx_out_script_public_key: bool,
     tx_out_script_public_key_address: bool,
+    address_blacklist: HashSet<String>,
 }
 
 impl KaspaDbMapper {
@@ -71,6 +73,7 @@ impl KaspaDbMapper {
             tx_out_amount: !cli_args.is_excluded(CliField::TxOutAmount),
             tx_out_script_public_key: !cli_args.is_excluded(CliField::TxOutScriptPublicKey),
             tx_out_script_public_key_address: !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress),
+            address_blacklist: cli_args.exclude_addresses.unwrap_or_default().into_iter().collect(),
         }
     }
 
@@ -130,11 +133,11 @@ impl KaspaDbMapper {
     }
 
     pub fn map_transaction_outputs_address(&self, transaction: &RpcTransaction) -> Vec<SqlAddressTransaction> {
-        transactions::map_transaction_outputs_address(transaction)
+        transactions::map_transaction_outputs_address(transaction, &self.address_blacklist)
     }
 
     pub fn map_transaction_outputs_script(&self, transaction: &RpcTransaction) -> Vec<SqlScriptTransaction> {
-        transactions::map_transaction_outputs_script(transaction)
+        transactions::map_transaction_outputs_script(transaction, &self.address_blacklist)
     }
 
     pub fn map_optional_transaction(&self, transaction: &RpcOptionalTransaction) -> SqlTransaction {
@@ -157,18 +160,18 @@ impl KaspaDbMapper {
     }
 
     pub fn map_optional_transaction_inputs_address(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlAddressTransaction> {
-        transactions::map_optional_transaction_inputs_address(transaction)
+        transactions::map_optional_transaction_inputs_address(transaction, &self.address_blacklist)
     }
 
     pub fn map_optional_transaction_outputs_address(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlAddressTransaction> {
-        transactions::map_optional_transaction_outputs_address(transaction)
+        transactions::map_optional_transaction_outputs_address(transaction, &self.address_blacklist)
     }
 
     pub fn map_optional_transaction_inputs_script(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
-        transactions::map_optional_transaction_inputs_script(transaction)
+        transactions::map_optional_transaction_inputs_script(transaction, &self.address_blacklist)
     }
 
     pub fn map_optional_transaction_outputs_script(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
-        transactions::map_optional_transaction_outputs_script(transaction)
+        transactions::map_optional_transaction_outputs_script(transaction, &self.address_blacklist)
     }
 }

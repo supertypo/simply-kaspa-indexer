@@ -79,7 +79,8 @@ pub async fn process_transactions(
                 blue_score: transaction_data.block_blue_score,
             });
             for transaction in transaction_data.transactions {
-                if !disable_rejected_transactions && (!disable_rejected_non_cb_transactions || transaction.subnetwork_id.is_builtin()) {
+                if !disable_rejected_transactions && (!disable_rejected_non_cb_transactions || transaction.subnetwork_id.is_builtin())
+                {
                     let transaction_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
                     if tx_id_cache.contains_key(&transaction_id) {
                         trace!("Known transaction_id {}, keeping block relation only", transaction_id);

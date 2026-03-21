@@ -130,6 +130,8 @@ pub struct CliArgs {
         use_value_delimiter = true
     )]
     pub exclude_fields: Option<Vec<CliField>>,
+    #[clap(long, help = "Exclude specific addresses (ex prefix) from addresses/scripts_transactions.", use_value_delimiter = true)]
+    pub exclude_addresses: Option<Vec<String>>,
 }
 
 impl CliArgs {
