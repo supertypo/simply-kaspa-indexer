@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     environment:
       KASPAD_WRPC_URL: ws://kaspad:17110
-      SQL_URI: postgresql+asyncpg://postgres:postgres@kaspa_db:5432/postgres
+      SQL_URI: postgresql+psycopg://postgres:postgres@kaspa_db:5432/postgres
       USE_SCRIPT_FOR_ADDRESS: true
       PREV_OUT_RESOLVED: true
     ports:
@@ -24,8 +24,9 @@ services:
       --prune-db="0 4 * * *"
       --retention=7d
       --enable=transactions_inputs_resolve
-      --disable=block_parent_table,blocks_transactions_table,addresses_transactions_table,vcp_wait_for_sync,initial_utxo_import
-      --exclude-fields=block_accepted_id_merkle_root,block_merge_set_blues_hashes,block_merge_set_reds_hashes,block_selected_parent_hash,block_bits,block_blue_work,block_daa_score,block_hash_merkle_root,block_nonce,block_pruning_point,block_utxo_commitment,block_version,tx_hash,tx_mass,tx_payload,tx_in_signature_script,tx_in_sig_op_count,tx_in_block_time,tx_out_script_public_key_address,tx_out_block_time
+      --disable=block_parent_table,blocks_transactions_table,addresses_transactions_table,rejected_transactions
+      --exclude-fields=block_accepted_id_merkle_root,block_merge_set_blues_hashes,block_merge_set_reds_hashes,block_selected_parent_hash,block_bits,block_blue_work,block_daa_score,block_hash_merkle_root,block_nonce,block_pruning_point,block_utxo_commitment,block_version,tx_hash,tx_mass,tx_payload,tx_in_signature_script,tx_in_sig_op_count,tx_out_script_public_key_address
+
     ports:
       - "8500:8500" # Indexer API (health + db metrics) - http://localhost:8500/api/ (swagger-ui)
 

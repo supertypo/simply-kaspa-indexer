@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
     environment:
       KASPAD_HOST_1: kaspad:16110
-      SQL_URI: postgresql+asyncpg://postgres:postgres@kaspa_db:5432/postgres
+      SQL_URI: postgresql+psycopg://postgres:postgres@kaspa_db:5432/postgres
     ports:
       - "127.0.0.1:8000:8000"
 
