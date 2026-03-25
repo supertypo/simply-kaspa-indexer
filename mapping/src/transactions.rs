@@ -2,7 +2,6 @@ use kaspa_rpc_core::{RpcOptionalTransaction, RpcTransaction};
 use std::collections::HashSet;
 
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
-use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
 use simply_kaspa_database::models::script_transaction::ScriptTransaction as SqlScriptTransaction;
 use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
 use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
@@ -23,6 +22,7 @@ pub fn map_transaction(
     include_hash: bool,
     include_mass: bool,
     include_payload: bool,
+    include_block_hash: bool,
     include_block_time: bool,
     include_in: bool,
     include_in_previous_outpoint: bool,
@@ -40,6 +40,7 @@ pub fn map_transaction(
         hash: include_hash.then_some(verbose_data.hash.into()),
         mass: (include_mass && verbose_data.compute_mass != 0).then_some(verbose_data.compute_mass as i32),
         payload: (include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
+        block_hash: include_block_hash.then_some(verbose_data.block_hash.into()),
         block_time: include_block_time.then_some(verbose_data.block_time as i64),
         version: (transaction.version != 0).then_some(transaction.version as i16),
         inputs: include_in
@@ -58,11 +59,6 @@ pub fn map_transaction(
             })
             .flatten(),
     }
-}
-
-pub fn map_block_transaction(transaction: &RpcTransaction) -> SqlBlockTransaction {
-    let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
-    SqlBlockTransaction { block_hash: verbose_data.block_hash.into(), transaction_id: verbose_data.transaction_id.into() }
 }
 
 pub fn map_transaction_inputs(
@@ -159,6 +155,7 @@ pub fn map_optional_transaction(
     include_hash: bool,
     include_mass: bool,
     include_payload: bool,
+    include_block_hash: bool,
     include_block_time: bool,
     include_in: bool,
     include_in_previous_outpoint: bool,
@@ -177,6 +174,7 @@ pub fn map_optional_transaction(
         mass: (include_mass && verbose_data.compute_mass.unwrap() != 0).then_some(verbose_data.compute_mass.unwrap() as i32),
         payload: (include_payload && !transaction.payload.as_ref().unwrap().is_empty())
             .then_some(transaction.payload.as_ref().unwrap().to_owned()),
+        block_hash: include_block_hash.then(|| verbose_data.block_hash.map(|h| h.into())).flatten(),
         block_time: include_block_time.then_some(verbose_data.block_time.unwrap() as i64),
         version: transaction.version.and_then(|v| (v != 0).then_some(v as i16)),
         inputs: include_in
@@ -222,7 +220,8 @@ fn map_optional_transaction_inputs(
                     previous_outpoint_index: include_previous_outpoint.then(|| outpoint.index.unwrap() as i16),
                     signature_script: include_signature_script.then(|| input.signature_script.clone().unwrap()),
                     sig_op_count: include_sig_op_count.then(|| input.sig_op_count.unwrap() as i16),
-                    previous_outpoint_script: include_previous_outpoint.then(|| utxo.script_public_key.as_ref().unwrap().script().to_vec()),
+                    previous_outpoint_script: include_previous_outpoint
+                        .then(|| utxo.script_public_key.as_ref().unwrap().script().to_vec()),
                     previous_outpoint_amount: include_previous_outpoint.then(|| utxo.amount.unwrap() as i64),
                 }
             })

@@ -10,6 +10,7 @@ pub struct Transaction {
     pub hash: Option<Hash>,
     pub mass: Option<i32>,
     pub payload: Option<Payload>,
+    pub block_hash: Option<Hash>,
     pub block_time: Option<i64>,
     pub version: Option<i16>,
     pub inputs: Option<Vec<TransactionInput>>,

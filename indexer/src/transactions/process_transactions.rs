@@ -11,7 +11,6 @@ use moka::sync::Cache;
 use simply_kaspa_cli::cli_args::{CliDisable, CliField};
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_database::models::address_transaction::AddressTransaction;
-use simply_kaspa_database::models::block_transaction::BlockTransaction;
 use simply_kaspa_database::models::script_transaction::ScriptTransaction;
 use simply_kaspa_database::models::transaction::Transaction;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
@@ -43,7 +42,6 @@ pub async fn process_transactions(
     let batch_size = (5000f64 * batch_scale) as usize;
 
     let disable_transactions = settings.cli_args.is_disabled(CliDisable::TransactionsTable);
-    let disable_blocks_transactions = settings.cli_args.is_disabled(CliDisable::BlocksTransactionsTable);
     let disable_address_transactions = settings.cli_args.is_disabled(CliDisable::AddressesTransactionsTable);
     let disable_rejected_transactions = settings.cli_args.is_disabled(CliDisable::RejectedTransactions);
     let disable_rejected_non_cb_transactions = settings.cli_args.is_disabled(CliDisable::RejectedNonCbTransactions);
@@ -51,7 +49,6 @@ pub async fn process_transactions(
     let exclude_tx_out_script_public_key = settings.cli_args.is_excluded(CliField::TxOutScriptPublicKey);
 
     let mut transactions = vec![];
-    let mut block_tx = vec![];
     let mut tx_address_transactions: IndexSet<_> = IndexSet::new();
     let mut tx_script_transactions: IndexSet<_> = IndexSet::new();
     let mut checkpoint_blocks = vec![];
@@ -83,7 +80,7 @@ pub async fn process_transactions(
                 {
                     let transaction_id = transaction.verbose_data.as_ref().unwrap().transaction_id;
                     if tx_id_cache.contains_key(&transaction_id) {
-                        trace!("Known transaction_id {}, keeping block relation only", transaction_id);
+                        trace!("Known transaction_id {}, skipping", transaction_id);
                     } else {
                         if !disable_transactions {
                             transactions.push(mapper.map_transaction(&transaction));
@@ -98,18 +95,17 @@ pub async fn process_transactions(
                         tx_id_cache.insert(transaction_id, ());
                     }
                 }
-                block_tx.push(mapper.map_block_transaction(&transaction));
             }
 
-            if block_tx.len() >= batch_size || (!block_tx.is_empty() && Instant::now().duration_since(last_commit_time).as_secs() > 2)
+            if transactions.len() >= batch_size
+                || (!transactions.is_empty() && Instant::now().duration_since(last_commit_time).as_secs() > 2)
             {
                 if !disable_rejected_transactions && start_vcp.load(Ordering::Relaxed) {
                     loop {
-                        if let Some(vcp) = &metrics.read().await.components.virtual_chain_processor.last_block {
-                            if vcp.daa_score.saturating_sub(checkpoint_blocks.last().unwrap().daa_score) >= 3 * settings.net_bps as u64
-                            {
-                                break;
-                            }
+                        if let Some(vcp) = &metrics.read().await.components.virtual_chain_processor.last_block
+                            && vcp.daa_score.saturating_sub(checkpoint_blocks.last().unwrap().daa_score) >= 3 * settings.net_bps as u64
+                        {
+                            break;
                         }
                         debug!("Transaction processor is waiting for virtual chain processor to catch up...");
                         sleep(Duration::from_millis(1000)).await;
@@ -121,11 +117,6 @@ pub async fn process_transactions(
                 let start_commit_time = Instant::now();
                 let transactions_len = transactions.len();
 
-                let blocks_txs_handle = if !disable_blocks_transactions {
-                    task::spawn(insert_block_txs(batch_scale, batch_concurrency, block_tx, database.clone()))
-                } else {
-                    task::spawn(async { 0 })
-                };
                 let tx_handle = task::spawn(insert_txs(batch_scale, batch_concurrency, transactions, false, database.clone()));
                 let tx_addr_handle = if !exclude_tx_out_script_public_key_address {
                     task::spawn(insert_tx_addr(
@@ -143,7 +134,6 @@ pub async fn process_transactions(
                     ))
                 };
                 let rows_affected_tx = tx_handle.await.unwrap();
-                let rows_affected_block_tx = blocks_txs_handle.await.unwrap();
                 let rows_affected_tx_addr = tx_addr_handle.await.unwrap();
 
                 let last_checkpoint = checkpoint_blocks.last().unwrap().clone();
@@ -162,16 +152,14 @@ pub async fn process_transactions(
                 let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                 let tps = transactions_len as f64 / commit_time as f64 * 1000f64;
                 info!(
-                    "Committed {} new txs in {}ms ({:.1} tps, {} blk_tx, {} adr_tx). Last tx: {}",
+                    "Committed {} new txs in {}ms ({:.1} tps, {} adr_tx). Last tx: {}",
                     rows_affected_tx,
                     commit_time,
                     tps,
-                    rows_affected_block_tx,
                     rows_affected_tx_addr,
                     chrono::DateTime::from_timestamp_millis(last_block_time as i64 / 1000 * 1000).unwrap()
                 );
                 transactions = vec![];
-                block_tx = vec![];
                 tx_address_transactions = IndexSet::new();
                 tx_script_transactions = IndexSet::new();
                 checkpoint_blocks = vec![];
@@ -243,25 +231,6 @@ pub async fn insert_tx_script(
     let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
         let db = database.clone();
         async move { db.insert_script_transactions(&chunk).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}")) }
-    }))
-    .buffer_unordered(batch_concurrency as usize)
-    .fold(0, |acc, rows| async move { acc + rows })
-    .await;
-    debug!("Committed {} {} in {}ms", rows_affected, key, start_time.elapsed().as_millis());
-    rows_affected
-}
-
-async fn insert_block_txs(batch_scale: f64, batch_concurrency: i8, values: Vec<BlockTransaction>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((1300f64 * batch_scale) as u16, 32000) as usize;
-    let key = "block/transaction mappings";
-    let start_time = Instant::now();
-    debug!("Processing {} {}", values.len(), key);
-    let mut values = values;
-    values.sort_by(|a, b| a.block_hash.cmp(&b.block_hash).then(a.transaction_id.cmp(&b.transaction_id)));
-    let chunks: Vec<Vec<_>> = values.chunks(batch_size).map(|c| c.to_vec()).collect();
-    let rows_affected = stream::iter(chunks.into_iter().map(|chunk| {
-        let db = database.clone();
-        async move { db.insert_block_transactions(&chunk).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}")) }
     }))
     .buffer_unordered(batch_concurrency as usize)
     .fold(0, |acc, rows| async move { acc + rows })

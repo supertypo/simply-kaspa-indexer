@@ -8,6 +8,7 @@ pub struct Block {
     pub merge_set_blues_hashes: Option<Vec<Hash>>,
     pub merge_set_reds_hashes: Option<Vec<Hash>>,
     pub selected_parent_hash: Option<Hash>,
+    pub transaction_ids: Option<Vec<Hash>>,
     pub bits: Option<i64>,
     pub blue_score: Option<i64>,
     pub blue_work: Option<BlueWork>,
