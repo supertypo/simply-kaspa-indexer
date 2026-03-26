@@ -95,9 +95,8 @@ CREATE TABLE addresses_transactions
     address        TEXT,
     transaction_id BYTEA,
     block_time     BIGINT,
-    PRIMARY KEY (address, transaction_id)
+    PRIMARY KEY (address, block_time, transaction_id)
 );
-CREATE INDEX ON addresses_transactions (address, block_time DESC);
 CREATE INDEX ON addresses_transactions (block_time DESC);
 
 
@@ -106,7 +105,6 @@ CREATE TABLE scripts_transactions
     script_public_key BYTEA,
     transaction_id    BYTEA,
     block_time        BIGINT,
-    PRIMARY KEY (script_public_key, transaction_id)
+    PRIMARY KEY (script_public_key, block_time, transaction_id)
 );
-CREATE INDEX ON scripts_transactions (script_public_key, block_time DESC);
 CREATE INDEX ON scripts_transactions (block_time DESC);
