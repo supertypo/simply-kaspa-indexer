@@ -2,7 +2,6 @@ use kaspa_rpc_core::RpcBlock;
 
 use simply_kaspa_database::models::block::Block as SqlBlock;
 use simply_kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
-use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 
 pub fn map_block(
     block: &RpcBlock,
@@ -10,6 +9,7 @@ pub fn map_block(
     include_merge_set_blues_hashes: bool,
     include_merge_set_reds_hashes: bool,
     include_selected_parent_hash: bool,
+    include_transaction_ids: bool,
     include_bits: bool,
     include_blue_work: bool,
     include_blue_score: bool,
@@ -30,6 +30,7 @@ pub fn map_block(
         merge_set_reds_hashes: (include_merge_set_reds_hashes && !verbose_data.merge_set_reds_hashes.is_empty())
             .then_some(verbose_data.merge_set_reds_hashes.iter().map(|v| v.to_owned().into()).collect()),
         selected_parent_hash: include_selected_parent_hash.then_some(verbose_data.selected_parent_hash.into()),
+        transaction_ids: include_transaction_ids.then_some(verbose_data.transaction_ids.iter().map(|t| t.to_owned().into()).collect()),
         bits: include_bits.then_some(block.header.bits as i64),
         blue_score: include_blue_score.then_some(block.header.blue_score as i64),
         blue_work: include_blue_work.then_some(block.header.blue_work.to_be_bytes_var()),
@@ -44,16 +45,11 @@ pub fn map_block(
 }
 
 pub fn map_block_parents(block: &RpcBlock) -> Vec<SqlBlockParent> {
-    if block.header.parents_by_level.len() == 0 {
+    if block.header.parents_by_level.is_empty() {
         return vec![];
     }
     block.header.parents_by_level[0]
         .iter()
         .map(|v| SqlBlockParent { block_hash: block.header.hash.into(), parent_hash: v.to_owned().into() })
         .collect()
-}
-
-pub fn map_block_transaction_ids(block: &RpcBlock) -> Vec<SqlHash> {
-    let verbose_data = block.verbose_data.as_ref().expect("Block verbose_data is missing");
-    verbose_data.transaction_ids.iter().map(|t| t.to_owned().into()).collect()
 }

@@ -117,7 +117,6 @@ This is the recommended starting point for exchanges and other 'light' integrato
 ```
 disable:
     block_parent_table,
-    blocks_transactions_table,
     addresses_transactions_table,
     rejected_transactions
 
@@ -126,6 +125,7 @@ exclude-fields:
     block_merge_set_blues_hashes,
     block_merge_set_reds_hashes,
     block_selected_parent_hash,
+    block_transaction_ids,
     block_bits,
     block_blue_work,
     block_daa_score,
@@ -137,6 +137,7 @@ exclude-fields:
     tx_hash,
     tx_mass,
     tx_payload,
+    tx_block_hash,
     tx_in_signature_script,
     tx_in_sig_op_count,
     tx_out_script_public_key_address
@@ -145,8 +146,8 @@ Example command arguments:
 ```
 -u -s ws://your-kaspad:17110 -d postgres://postgres:postgres@your-db:5432 -l 0.0.0.0:8500 \
 --prune-db --retention=7d \
---disable=block_parent_table,blocks_transactions_table,addresses_transactions_table,rejected_transactions \
---exclude-fields=block_accepted_id_merkle_root,block_merge_set_blues_hashes,block_merge_set_reds_hashes,block_selected_parent_hash,block_bits,block_blue_work,block_daa_score,block_hash_merkle_root,block_nonce,block_pruning_point,block_utxo_commitment,block_version,tx_hash,tx_mass,tx_payload,tx_in_signature_script,tx_in_sig_op_count,tx_out_script_public_key_address
+--disable=block_parent_table,addresses_transactions_table,rejected_transactions \
+--exclude-fields=block_accepted_id_merkle_root,block_merge_set_blues_hashes,block_merge_set_reds_hashes,block_selected_parent_hash,block_transaction_ids,block_bits,block_blue_work,block_daa_score,block_hash_merkle_root,block_nonce,block_pruning_point,block_utxo_commitment,block_version,tx_hash,tx_mass,tx_payload,tx_block_hash,tx_in_signature_script,tx_in_sig_op_count,tx_out_script_public_key_address
 ```
 
 ### Enable transactions_inputs_resolve
@@ -242,9 +243,6 @@ Options:
       --retention-block-parent <RETENTION_BLOCK_PARENT>
           Retention for block_parent table
 
-      --retention-blocks-transactions <RETENTION_BLOCKS_TRANSACTIONS>
-          Retention for blocks_transactions table
-
       --retention-blocks <RETENTION_BLOCKS>
           Retention for blocks table
 
@@ -274,7 +272,6 @@ Options:
           - transaction_processing:       Disables transaction processing / all transaction related tables
           - blocks_table:                 Disables the blocks table
           - block_parent_table:           Disables the block_parent table
-          - blocks_transactions_table:    Disables the blocks_transactions table
           - transactions_table:           Disables the transactions table
           - transactions_inputs:          Disables transactions inputs (array column)
           - transactions_outputs:         Disables transactions outputs (array column)
@@ -291,6 +288,7 @@ Options:
           - block_merge_set_blues_hashes
           - block_merge_set_reds_hashes
           - block_selected_parent_hash
+          - block_transaction_ids
           - block_bits
           - block_blue_work
           - block_blue_score:                 Used for sorting blocks
@@ -305,6 +303,7 @@ Options:
           - tx_hash
           - tx_mass
           - tx_payload
+          - tx_block_hash
           - tx_block_time:                    Used for sorting transactions
           - tx_in_previous_outpoint:          Used for identifying wallet address of sender
           - tx_in_signature_script
@@ -312,4 +311,7 @@ Options:
           - tx_out_amount
           - tx_out_script_public_key:         Excluding both this and script_public_key_address will disable adress-/scripts_transactions
           - tx_out_script_public_key_address: Excluding this, scripts_transactions to be populated instead of adresses_transactions
+
+      --exclude-addresses <EXCLUDE_ADDRESSES>
+          Exclude specific addresses (ex prefix) from addresses/scripts_transactions.
 ```

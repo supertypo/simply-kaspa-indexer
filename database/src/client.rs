@@ -8,7 +8,6 @@ use std::time::Duration;
 use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
 use crate::models::block_parent::BlockParent;
-use crate::models::block_transaction::BlockTransaction;
 use crate::models::query::database_details::DatabaseDetails;
 use crate::models::query::table_details::TableDetails;
 use crate::models::script_transaction::ScriptTransaction;
@@ -23,7 +22,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 21;
+    const SCHEMA_VERSION: u8 = 22;
 
     pub async fn new(url: &str, pool_size: u32) -> Result<KaspaDbClient, Error> {
         let url_cleaned = Regex::new(r"(postgres://postgres:)[^@]+(@)").expect("Failed to parse url").replace(url, "$1$2");
@@ -169,6 +168,17 @@ impl KaspaDbClient {
                             panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
                         }
                     }
+                    if version == 21 {
+                        let ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v21_to_v22.sql"));
+                        if upgrade_db {
+                            warn!("\n{ddl}\nUpgrading schema from v{version} to v{}, this will take a while. ^", version + 1);
+                            query::misc::execute_ddl(ddl, &self.pool).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            version += 1;
+                        } else {
+                            panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
+                        }
+                    }
                     trace!("Schema version is v{version}")
                 }
                 version = self.select_var("schema_version").await?.parse::<u8>().unwrap();
@@ -206,10 +216,6 @@ impl KaspaDbClient {
         query::select::select_var(key, &self.pool).await
     }
 
-    pub async fn select_tx_count(&self, block_hash: &Hash) -> Result<i64, Error> {
-        query::select::select_tx_count(block_hash, &self.pool).await
-    }
-
     pub async fn select_is_chain_block(&self, block_hash: &Hash) -> Result<bool, Error> {
         query::select::select_is_chain_block(block_hash, &self.pool).await
     }
@@ -234,10 +240,6 @@ impl KaspaDbClient {
         query::insert::insert_script_transactions(script_transactions, &self.pool).await
     }
 
-    pub async fn insert_block_transactions(&self, block_transactions: &[BlockTransaction]) -> Result<u64, Error> {
-        query::insert::insert_block_transactions(block_transactions, &self.pool).await
-    }
-
     pub async fn insert_transaction_acceptances(&self, transaction_acceptances: &[TransactionAcceptance]) -> Result<u64, Error> {
         query::insert::insert_transaction_acceptances(transaction_acceptances, &self.pool).await
     }
@@ -252,14 +254,6 @@ impl KaspaDbClient {
 
     pub async fn prune_block_parent(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
         query::delete::prune_block_parent(blue_score_lt, batch_size, &self.pool).await
-    }
-
-    pub async fn prune_blocks_transactions_using_blocks(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_blocks_transactions_using_blocks(blue_score_lt, batch_size, &self.pool).await
-    }
-
-    pub async fn prune_blocks_transactions_using_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_blocks_transactions_using_transactions(block_time_lt, batch_size, &self.pool).await
     }
 
     pub async fn prune_transactions_acceptances_using_blocks(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
