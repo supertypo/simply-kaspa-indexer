@@ -216,14 +216,6 @@ impl KaspaDbClient {
         query::select::select_var(key, &self.pool).await
     }
 
-    pub async fn select_tx_count(&self, block_hash: &Hash) -> Result<i64, Error> {
-        query::select::select_tx_count(block_hash, &self.pool).await
-    }
-
-    pub async fn select_is_chain_block(&self, block_hash: &Hash) -> Result<bool, Error> {
-        query::select::select_is_chain_block(block_hash, &self.pool).await
-    }
-
     pub async fn insert_blocks(&self, blocks: &[Block]) -> Result<u64, Error> {
         query::insert::insert_blocks(blocks, &self.pool).await
     }
