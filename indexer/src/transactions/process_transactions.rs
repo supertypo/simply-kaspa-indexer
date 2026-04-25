@@ -39,7 +39,7 @@ pub async fn process_transactions(
 
     let batch_scale = settings.cli_args.batch_scale;
     let batch_concurrency = settings.cli_args.batch_concurrency;
-    let batch_size = (5000f64 * batch_scale) as usize;
+    let batch_size = (500f64 * batch_scale) as usize;
 
     let disable_transactions = settings.cli_args.is_disabled(CliDisable::TransactionsTable);
     let disable_address_transactions = settings.cli_args.is_disabled(CliDisable::AddressesTransactionsTable);
@@ -97,7 +97,7 @@ pub async fn process_transactions(
                 }
             }
 
-            if transactions.len() >= batch_size || (!transactions.is_empty() && Instant::now().duration_since(last_commit_time).as_secs() > 2)
+            if checkpoint_blocks.len() >= batch_size || (!checkpoint_blocks.is_empty() && Instant::now().duration_since(last_commit_time).as_secs() > 1)
             {
                 if !disable_rejected_transactions && start_vcp.load(Ordering::Relaxed) {
                     loop {
