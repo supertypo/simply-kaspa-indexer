@@ -4,13 +4,14 @@ CREATE TABLE vars
     value TEXT NOT NULL
 );
 INSERT INTO vars (key, value)
-VALUES ('schema_version', '21');
+VALUES ('schema_version', '22');
 
 
 CREATE TABLE blocks
 (
     hash                    BYTEA PRIMARY KEY,
     accepted_id_merkle_root BYTEA,
+    transaction_ids         BYTEA[],
     merge_set_blues_hashes  BYTEA[],
     merge_set_reds_hashes   BYTEA[],
     selected_parent_hash    BYTEA,
@@ -68,7 +69,8 @@ CREATE TABLE transactions
     block_time     BIGINT,
     version        SMALLINT,
     inputs         transactions_inputs[],
-    outputs        transactions_outputs[]
+    outputs        transactions_outputs[],
+    block_hash     BYTEA
 );
 CREATE INDEX ON transactions (block_time DESC);
 
@@ -79,15 +81,6 @@ CREATE TABLE transactions_acceptances
     block_hash     BYTEA
 );
 CREATE INDEX ON transactions_acceptances (block_hash);
-
-
-CREATE TABLE blocks_transactions
-(
-    block_hash     BYTEA,
-    transaction_id BYTEA,
-    PRIMARY KEY (block_hash, transaction_id)
-);
-CREATE INDEX ON blocks_transactions (transaction_id);
 
 
 CREATE TABLE addresses_transactions

@@ -44,7 +44,11 @@ pub async fn select_var(key: &str, pool: &Pool<Postgres>) -> Result<String, Erro
 }
 
 pub async fn select_tx_count(block_hash: &Hash, pool: &Pool<Postgres>) -> Result<i64, Error> {
-    sqlx::query("SELECT COUNT(*) FROM blocks_transactions WHERE block_hash = $1").bind(block_hash).fetch_one(pool).await?.try_get(0)
+    sqlx::query("SELECT COALESCE(array_length(transaction_ids, 1), 0) FROM blocks WHERE hash = $1")
+        .bind(block_hash)
+        .fetch_one(pool)
+        .await?
+        .try_get(0)
 }
 
 pub async fn select_is_chain_block(block_hash: &Hash, pool: &Pool<Postgres>) -> Result<bool, Error> {

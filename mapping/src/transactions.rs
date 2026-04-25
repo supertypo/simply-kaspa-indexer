@@ -2,7 +2,6 @@ use kaspa_rpc_core::{RpcOptionalTransaction, RpcTransaction};
 use std::collections::HashSet;
 
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
-use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
 use simply_kaspa_database::models::script_transaction::ScriptTransaction as SqlScriptTransaction;
 use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
 use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
@@ -32,6 +31,7 @@ pub fn map_transaction(
     include_out_amount: bool,
     include_out_script_public_key: bool,
     include_out_script_public_key_address: bool,
+    include_block_hash: bool,
 ) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
     SqlTransaction {
@@ -57,12 +57,8 @@ pub fn map_transaction(
                 )
             })
             .flatten(),
+        block_hash: include_block_hash.then_some(verbose_data.block_hash.into()),
     }
-}
-
-pub fn map_block_transaction(transaction: &RpcTransaction) -> SqlBlockTransaction {
-    let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
-    SqlBlockTransaction { block_hash: verbose_data.block_hash.into(), transaction_id: verbose_data.transaction_id.into() }
 }
 
 pub fn map_transaction_inputs(
@@ -168,6 +164,7 @@ pub fn map_optional_transaction(
     include_out_amount: bool,
     include_out_script_public_key: bool,
     include_out_script_public_key_address: bool,
+    include_block_hash: bool,
 ) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
     SqlTransaction {
@@ -199,6 +196,7 @@ pub fn map_optional_transaction(
                 )
             })
             .flatten(),
+        block_hash: include_block_hash.then_some(verbose_data.block_hash.unwrap().into()),
     }
 }
 

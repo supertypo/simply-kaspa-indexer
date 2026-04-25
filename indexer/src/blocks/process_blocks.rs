@@ -130,7 +130,7 @@ pub async fn process_blocks(
 }
 
 async fn insert_blocks(batch_scale: f64, values: Vec<Block>, database: KaspaDbClient) -> u64 {
-    let batch_size = min((550f64 * batch_scale) as usize, 4000); // 15 cols: 4000*15=60000 < 65535
+    let batch_size = min((550f64 * batch_scale) as usize, 4000); // 16 cols: 4000*16=64000 < 65535
     let key = "blocks";
     let start_time = Instant::now();
     debug!("Processing {} {}", values.len(), key);

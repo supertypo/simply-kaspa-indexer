@@ -14,6 +14,7 @@ pub struct Transaction {
     pub version: Option<i16>,
     pub inputs: Option<Vec<TransactionInput>>,
     pub outputs: Option<Vec<TransactionOutput>>,
+    pub block_hash: Option<Hash>,
 }
 
 impl Eq for Transaction {}

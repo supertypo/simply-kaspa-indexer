@@ -3,10 +3,8 @@ use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliField};
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
 use simply_kaspa_database::models::block::Block as SqlBlock;
 use simply_kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
-use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
 use simply_kaspa_database::models::script_transaction::ScriptTransaction as SqlScriptTransaction;
 use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
-use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 use std::collections::HashSet;
 
 use crate::{blocks, transactions};
@@ -14,6 +12,7 @@ use crate::{blocks, transactions};
 #[derive(Clone)]
 pub struct KaspaDbMapper {
     block_accepted_id_merkle_root: bool,
+    block_transaction_ids: bool,
     block_merge_set_blues_hashes: bool,
     block_merge_set_reds_hashes: bool,
     block_selected_parent_hash: bool,
@@ -40,6 +39,7 @@ pub struct KaspaDbMapper {
     tx_out_amount: bool,
     tx_out_script_public_key: bool,
     tx_out_script_public_key_address: bool,
+    tx_block_hash: bool,
     address_blacklist: HashSet<String>,
 }
 
@@ -47,6 +47,7 @@ impl KaspaDbMapper {
     pub fn new(cli_args: CliArgs) -> KaspaDbMapper {
         KaspaDbMapper {
             block_accepted_id_merkle_root: !cli_args.is_excluded(CliField::BlockAcceptedIdMerkleRoot),
+            block_transaction_ids: !cli_args.is_excluded(CliField::BlockTransactionIds),
             block_merge_set_blues_hashes: !cli_args.is_excluded(CliField::BlockMergeSetBluesHashes),
             block_merge_set_reds_hashes: !cli_args.is_excluded(CliField::BlockMergeSetRedsHashes),
             block_selected_parent_hash: !cli_args.is_excluded(CliField::BlockSelectedParentHash),
@@ -73,6 +74,7 @@ impl KaspaDbMapper {
             tx_out_amount: !cli_args.is_excluded(CliField::TxOutAmount),
             tx_out_script_public_key: !cli_args.is_excluded(CliField::TxOutScriptPublicKey),
             tx_out_script_public_key_address: !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress),
+            tx_block_hash: !cli_args.is_excluded(CliField::TxBlockHash),
             address_blacklist: cli_args.exclude_addresses.unwrap_or_default().into_iter().collect(),
         }
     }
@@ -81,6 +83,7 @@ impl KaspaDbMapper {
         blocks::map_block(
             block,
             self.block_accepted_id_merkle_root,
+            self.block_transaction_ids,
             self.block_merge_set_blues_hashes,
             self.block_merge_set_reds_hashes,
             self.block_selected_parent_hash,
@@ -101,14 +104,6 @@ impl KaspaDbMapper {
         blocks::map_block_parents(block)
     }
 
-    pub fn map_block_transaction_ids(&self, block: &RpcBlock) -> Vec<SqlHash> {
-        blocks::map_block_transaction_ids(block)
-    }
-
-    pub fn count_block_transactions(&self, block: &RpcBlock) -> usize {
-        block.verbose_data.as_ref().expect("Block verbose_data is missing").transaction_ids.len()
-    }
-
     pub fn map_transaction(&self, transaction: &RpcTransaction) -> SqlTransaction {
         transactions::map_transaction(
             transaction,
@@ -125,11 +120,8 @@ impl KaspaDbMapper {
             self.tx_out_amount,
             self.tx_out_script_public_key,
             self.tx_out_script_public_key_address,
+            self.tx_block_hash,
         )
-    }
-
-    pub fn map_block_transaction(&self, transaction: &RpcTransaction) -> SqlBlockTransaction {
-        transactions::map_block_transaction(transaction)
     }
 
     pub fn map_transaction_outputs_address(&self, transaction: &RpcTransaction) -> Vec<SqlAddressTransaction> {
@@ -156,6 +148,7 @@ impl KaspaDbMapper {
             self.tx_out_amount,
             self.tx_out_script_public_key,
             self.tx_out_script_public_key_address,
+            self.tx_block_hash,
         )
     }
 

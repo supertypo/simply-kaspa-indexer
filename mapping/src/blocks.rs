@@ -2,11 +2,11 @@ use kaspa_rpc_core::RpcBlock;
 
 use simply_kaspa_database::models::block::Block as SqlBlock;
 use simply_kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
-use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 
 pub fn map_block(
     block: &RpcBlock,
     include_accepted_id_merkle_root: bool,
+    include_transaction_ids: bool,
     include_merge_set_blues_hashes: bool,
     include_merge_set_reds_hashes: bool,
     include_selected_parent_hash: bool,
@@ -25,6 +25,8 @@ pub fn map_block(
     SqlBlock {
         hash: block.header.hash.into(),
         accepted_id_merkle_root: include_accepted_id_merkle_root.then_some(block.header.accepted_id_merkle_root.into()),
+        transaction_ids: (include_transaction_ids && !verbose_data.transaction_ids.is_empty())
+            .then_some(verbose_data.transaction_ids.iter().map(|t| t.to_owned().into()).collect()),
         merge_set_blues_hashes: (include_merge_set_blues_hashes && !verbose_data.merge_set_blues_hashes.is_empty())
             .then_some(verbose_data.merge_set_blues_hashes.iter().map(|v| v.to_owned().into()).collect()),
         merge_set_reds_hashes: (include_merge_set_reds_hashes && !verbose_data.merge_set_reds_hashes.is_empty())
@@ -53,7 +55,3 @@ pub fn map_block_parents(block: &RpcBlock) -> Vec<SqlBlockParent> {
         .collect()
 }
 
-pub fn map_block_transaction_ids(block: &RpcBlock) -> Vec<SqlHash> {
-    let verbose_data = block.verbose_data.as_ref().expect("Block verbose_data is missing");
-    verbose_data.transaction_ids.iter().map(|t| t.to_owned().into()).collect()
-}

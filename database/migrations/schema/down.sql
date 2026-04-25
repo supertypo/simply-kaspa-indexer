@@ -1,6 +1,5 @@
 DROP TABLE IF EXISTS scripts_transactions;
 DROP TABLE IF EXISTS addresses_transactions;
-DROP TABLE IF EXISTS blocks_transactions;
 DROP TABLE IF EXISTS transactions_acceptances;
 DROP TABLE IF EXISTS transactions;
 DROP TYPE IF EXISTS transactions_inputs;
