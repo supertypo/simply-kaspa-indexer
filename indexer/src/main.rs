@@ -81,13 +81,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         tokio::time::sleep(Duration::from_secs(5)).await;
     };
 
-    let net_bps = match block_dag_info.network {
-        NetworkId { network_type: NetworkType::Mainnet, suffix: None } => 10,
-        _ => 10,
-    };
-    let net_tps_max = net_bps as u16 * 300;
-    info!("Assuming {} block(s) per second for cache sizes", net_bps);
-
     if let Some(enable) = &cli_args.enable {
         info!("Enable functionality is set, the following functionality will be enabled: {:?}", enable);
     }
@@ -100,6 +93,19 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     if let Some(exclude_fields) = &cli_args.exclude_fields {
         info!("Exclude fields is set, the following fields will be excluded: {:?}", exclude_fields);
     }
+    if let Some(ignore_self_sends) = &cli_args.ignore_self_sends {
+        for group in ignore_self_sends.iter() {
+            info!("Ignoring self-sends for group: {}", group);
+        }
+    }
+
+    let net_bps = match block_dag_info.network {
+        NetworkId { network_type: NetworkType::Mainnet, suffix: None } => 10,
+        _ => 10,
+    };
+    let net_tps_max = net_bps as u16 * 300;
+    info!("Assuming {} block(s) per second for cache sizes", net_bps);
+
     let checkpoint: KaspaHash;
     if let Some(ignore_checkpoint) = cli_args.ignore_checkpoint.clone() {
         warn!("Checkpoint ignored due to user request (-i). This might lead to inconsistencies.");
