@@ -76,6 +76,9 @@ pub async fn process_transactions(
                 blue_score: transaction_data.block_blue_score,
             });
             for transaction in transaction_data.transactions {
+                if mapper.is_self_send_outputs_only(&transaction) {
+                    continue;
+                }
                 if !disable_rejected_transactions && (!disable_rejected_non_cb_transactions || transaction.subnetwork_id.is_builtin())
                 {
                     let transaction_id = transaction.verbose_data.as_ref().unwrap().transaction_id;

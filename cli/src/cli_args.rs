@@ -132,6 +132,14 @@ pub struct CliArgs {
     pub exclude_fields: Option<Vec<CliField>>,
     #[clap(long, help = "Exclude specific addresses (ex prefix) from addresses/scripts_transactions.", use_value_delimiter = true)]
     pub exclude_addresses: Option<Vec<String>>,
+    #[clap(
+        long,
+        value_name = "ADDRESSES",
+        action = clap::ArgAction::Append,
+        help = "Ignore self-send transactions within an address group. Specify once per group with comma-separated addresses.\n\
+        Example: --ignore-self-sends=kaspa:abc,kaspa:def --ignore-self-sends=kaspa:xyz,kaspa:uvw"
+    )]
+    pub ignore_self_sends: Option<Vec<String>>,
 }
 
 impl CliArgs {

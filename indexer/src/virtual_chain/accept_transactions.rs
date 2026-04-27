@@ -44,6 +44,9 @@ pub async fn accept_transactions(
         let block_hash: SqlHash = chain_block.chain_block_header.hash.unwrap().into();
 
         for transaction in &chain_block.accepted_transactions {
+            if mapper.is_self_send_full(transaction) {
+                continue;
+            }
             let transaction_id = transaction.verbose_data.as_ref().unwrap().transaction_id.unwrap();
             accepted_transactions
                 .push(TransactionAcceptance { transaction_id: Some(transaction_id.into()), block_hash: Some(block_hash.clone()) });

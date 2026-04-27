@@ -41,6 +41,7 @@ pub struct KaspaDbMapper {
     tx_out_script_public_key_address: bool,
     tx_block_hash: bool,
     address_blacklist: HashSet<String>,
+    ignore_self_sends_groups: Vec<HashSet<String>>,
 }
 
 impl KaspaDbMapper {
@@ -76,6 +77,13 @@ impl KaspaDbMapper {
             tx_out_script_public_key_address: !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress),
             tx_block_hash: !cli_args.is_excluded(CliField::TxBlockHash),
             address_blacklist: cli_args.exclude_addresses.unwrap_or_default().into_iter().collect(),
+            ignore_self_sends_groups: cli_args
+                .ignore_self_sends
+                .unwrap_or_default()
+                .into_iter()
+                .map(|s| s.split(',').filter(|a| !a.is_empty()).map(str::to_owned).collect::<HashSet<String>>())
+                .filter(|g| !g.is_empty())
+                .collect(),
         }
     }
 
@@ -166,5 +174,56 @@ impl KaspaDbMapper {
 
     pub fn map_optional_transaction_outputs_script(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
         transactions::map_optional_transaction_outputs_script(transaction, &self.address_blacklist)
+    }
+
+    /// Returns `true` if all outputs of this transaction belong to a single ignore-self-sends group.
+    /// Used in the rejected-transactions phase where input addresses are unavailable.
+    /// Coinbase transactions are never filtered.
+    pub fn is_self_send_outputs_only(&self, transaction: &RpcTransaction) -> bool {
+        if self.ignore_self_sends_groups.is_empty() || transaction.outputs.is_empty() {
+            return false;
+        }
+        if transaction.subnetwork_id.is_builtin() {
+            return false;
+        }
+        let output_addrs: Vec<String> = transaction
+            .outputs
+            .iter()
+            .map(|o| o.verbose_data.as_ref().unwrap().script_public_key_address.address_to_string())
+            .collect();
+        self.ignore_self_sends_groups.iter().any(|group| output_addrs.iter().all(|a| group.contains(a)))
+    }
+
+    /// Returns `true` if all inputs and outputs of this transaction belong to a single ignore-self-sends group.
+    /// Used in the virtual-chain acceptance phase where both sides are available.
+    /// Coinbase transactions are never filtered.
+    pub fn is_self_send_full(&self, transaction: &RpcOptionalTransaction) -> bool {
+        if self.ignore_self_sends_groups.is_empty() || transaction.outputs.is_empty() {
+            return false;
+        }
+        if transaction.subnetwork_id.as_ref().unwrap().is_builtin() {
+            return false;
+        }
+        let all_addrs: Vec<String> = transaction
+            .outputs
+            .iter()
+            .map(|o| o.verbose_data.as_ref().unwrap().script_public_key_address.as_ref().unwrap().address_to_string())
+            .chain(transaction.inputs.iter().map(|i| {
+                i.verbose_data
+                    .as_ref()
+                    .unwrap()
+                    .utxo_entry
+                    .as_ref()
+                    .unwrap()
+                    .verbose_data
+                    .as_ref()
+                    .unwrap()
+                    .script_public_key_address
+                    .as_ref()
+                    .unwrap()
+                    .address_to_string()
+            }))
+            .collect();
+        self.ignore_self_sends_groups.iter().any(|group| all_addrs.iter().all(|a| group.contains(a)))
     }
 }
