@@ -220,7 +220,8 @@ fn map_optional_transaction_inputs(
                     previous_outpoint_index: include_previous_outpoint.then(|| outpoint.index.unwrap() as i16),
                     signature_script: include_signature_script.then(|| input.signature_script.clone().unwrap()),
                     sig_op_count: include_sig_op_count.then(|| input.sig_op_count.unwrap() as i16),
-                    previous_outpoint_script: include_previous_outpoint.then(|| utxo.script_public_key.as_ref().unwrap().script().to_vec()),
+                    previous_outpoint_script: include_previous_outpoint
+                        .then(|| utxo.script_public_key.as_ref().unwrap().script().to_vec()),
                     previous_outpoint_amount: include_previous_outpoint.then(|| utxo.amount.unwrap() as i64),
                 }
             })

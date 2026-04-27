@@ -97,7 +97,8 @@ pub async fn process_transactions(
                 }
             }
 
-            if checkpoint_blocks.len() >= batch_size || (!checkpoint_blocks.is_empty() && Instant::now().duration_since(last_commit_time).as_secs() > 1)
+            if checkpoint_blocks.len() >= batch_size
+                || (!checkpoint_blocks.is_empty() && Instant::now().duration_since(last_commit_time).as_secs() > 1)
             {
                 if !disable_rejected_transactions && start_vcp.load(Ordering::Relaxed) {
                     loop {

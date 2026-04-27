@@ -54,4 +54,3 @@ pub fn map_block_parents(block: &RpcBlock) -> Vec<SqlBlockParent> {
         .map(|v| SqlBlockParent { block_hash: block.header.hash.into(), parent_hash: v.to_owned().into() })
         .collect()
 }
-
