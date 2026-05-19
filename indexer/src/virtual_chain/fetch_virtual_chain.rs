@@ -8,7 +8,6 @@ use mpsc::Sender;
 use simply_kaspa_kaspad::manager::KaspadManager;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
@@ -18,24 +17,17 @@ pub async fn fetch_virtual_chain(
     settings: Settings,
     signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
-    start_vcp: Arc<AtomicBool>,
     kaspad_pool: Pool<KaspadManager, Object<KaspadManager>>,
     sender: Sender<GetVirtualChainFromBlockV2Response>,
 ) {
     let poll_interval = Duration::from_millis(settings.cli_args.vcp_interval);
     let err_delay = Duration::from_secs(5);
 
-    let mut start_hash = settings.checkpoint;
+    let mut start_hash = settings.vcp_checkpoint;
 
     loop {
         if signal_handler.is_shutdown() {
             return;
-        }
-
-        if !start_vcp.load(Ordering::Relaxed) {
-            debug!("Virtual chain processor waiting for start notification");
-            sleep(err_delay).await;
-            continue;
         }
 
         debug!("Getting virtual chain from start_hash {}", start_hash);

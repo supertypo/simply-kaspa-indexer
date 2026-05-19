@@ -14,7 +14,7 @@ use simply_kaspa_indexer::checkpoint::{CheckpointBlock, CheckpointOrigin, proces
 use simply_kaspa_indexer::prune::pruner;
 use simply_kaspa_indexer::settings::Settings;
 use simply_kaspa_indexer::transactions::process_transactions::process_transactions;
-use simply_kaspa_indexer::vars::load_block_checkpoint;
+use simply_kaspa_indexer::vars::{load_block_checkpoint, load_vcp_checkpoint};
 use simply_kaspa_indexer::virtual_chain::fetch_virtual_chain::fetch_virtual_chain;
 use simply_kaspa_indexer::virtual_chain::process_virtual_chain::process_virtual_chain;
 use simply_kaspa_indexer::web::model::metrics::Metrics;
@@ -25,7 +25,6 @@ use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use tokio::sync::{RwLock, mpsc};
 use tokio::task;
@@ -106,29 +105,40 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     let net_tps_max = net_bps as u16 * 300;
     info!("Assuming {} block(s) per second for cache sizes", net_bps);
 
-    let checkpoint: KaspaHash;
+    let block_checkpoint: KaspaHash;
     if let Some(ignore_checkpoint) = cli_args.ignore_checkpoint.clone() {
         warn!("Checkpoint ignored due to user request (-i). This might lead to inconsistencies.");
         if ignore_checkpoint == "p" {
-            checkpoint = block_dag_info.pruning_point_hash;
-            info!("Starting from pruning_point {}", checkpoint);
+            block_checkpoint = block_dag_info.pruning_point_hash;
+            info!("Starting from pruning_point {}", block_checkpoint);
         } else if ignore_checkpoint == "v" {
-            checkpoint = *block_dag_info.virtual_parent_hashes.first().expect("Virtual parent not found");
-            info!("Starting from virtual_parent {}", checkpoint);
+            block_checkpoint = *block_dag_info.virtual_parent_hashes.first().expect("Virtual parent not found");
+            info!("Starting from virtual_parent {}", block_checkpoint);
         } else {
-            checkpoint = KaspaHash::from_str(ignore_checkpoint.as_str()).expect("Supplied block hash is invalid");
-            info!("Starting from user supplied block {}", checkpoint);
+            block_checkpoint = KaspaHash::from_str(ignore_checkpoint.as_str()).expect("Supplied block hash is invalid");
+            info!("Starting from user supplied block {}", block_checkpoint);
         }
     } else if let Ok(saved_block_checkpoint) = load_block_checkpoint(&database).await {
-        checkpoint = KaspaHash::from_str(saved_block_checkpoint.as_str()).expect("Saved checkpoint is invalid!");
-        info!("Starting from checkpoint {}", checkpoint);
+        block_checkpoint = KaspaHash::from_str(saved_block_checkpoint.as_str()).expect("Saved block_checkpoint is invalid!");
+        info!("Starting from block_checkpoint {}", block_checkpoint);
     } else {
-        checkpoint = block_dag_info.pruning_point_hash;
-        warn!("Checkpoint not found, starting from pruning_point {}", checkpoint);
+        block_checkpoint = block_dag_info.pruning_point_hash;
+        warn!("block_checkpoint not found, starting from pruning_point {}", block_checkpoint);
     }
 
-    let checkpoint_block = {
-        let block = kaspad_pool.get().await.unwrap().get_block(checkpoint, false).await.expect(
+    let vcp_checkpoint: KaspaHash;
+    if cli_args.ignore_checkpoint.is_some() {
+        vcp_checkpoint = block_checkpoint;
+    } else if let Ok(saved_vcp_checkpoint) = load_vcp_checkpoint(&database).await {
+        vcp_checkpoint = KaspaHash::from_str(saved_vcp_checkpoint.as_str()).expect("Saved vcp_checkpoint is invalid!");
+        info!("VCP starting from vcp_checkpoint {}", vcp_checkpoint);
+    } else {
+        vcp_checkpoint = block_checkpoint;
+        info!("vcp_checkpoint not found, VCP starting from block_checkpoint {}", vcp_checkpoint);
+    }
+
+    let fetch_checkpoint_block = async |hash: KaspaHash| -> CheckpointBlock {
+        let block = kaspad_pool.get().await.unwrap().get_block(hash, false).await.expect(
             "Failed to fetch checkpoint block from kaspad. \
                 The block may have been pruned. Connect to an archive node, \
                 or use --ignore-checkpoint=p to resume from the current pruning point",
@@ -141,6 +151,8 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             blue_score: block.header.blue_score,
         }
     };
+    let block_checkpoint_block = fetch_checkpoint_block(block_checkpoint).await;
+    let vcp_checkpoint_block = fetch_checkpoint_block(vcp_checkpoint).await;
 
     let queue_capacity = (cli_args.batch_scale * 1000f64) as usize;
     let blocks_queue = Arc::new(ArrayQueue::new(queue_capacity));
@@ -149,8 +161,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
 
     let mapper = KaspaDbMapper::new(cli_args.clone());
 
-    let settings = Settings { cli_args: cli_args.clone(), net_bps, net_tps_max, checkpoint };
-    let start_vcp = Arc::new(AtomicBool::new(false));
+    let settings = Settings { cli_args: cli_args.clone(), net_bps, net_tps_max, block_checkpoint, vcp_checkpoint };
 
     let mut metrics = Metrics::new(env!("CARGO_PKG_NAME").to_string(), cli_args.version(), cli_args.commit_id());
     let mut settings_clone = settings.clone();
@@ -159,8 +170,10 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
     metrics.settings = Some(settings_clone);
     metrics.queues.blocks_capacity = blocks_queue.capacity() as u64;
     metrics.queues.transactions_capacity = txs_queue.capacity() as u64;
-    metrics.checkpoint.origin = Some(format!("{:?}", checkpoint_block.origin));
-    metrics.checkpoint.block = Some(checkpoint_block.into());
+    metrics.block_checkpoint.origin = Some(format!("{:?}", block_checkpoint_block.origin));
+    metrics.block_checkpoint.block = Some(block_checkpoint_block.into());
+    metrics.vcp_checkpoint.origin = Some(format!("{:?}", vcp_checkpoint_block.origin));
+    metrics.vcp_checkpoint.block = Some(vcp_checkpoint_block.into());
     metrics.components.transaction_processor.enabled = !settings.cli_args.is_disabled(CliDisable::TransactionProcessing);
     metrics.components.virtual_chain_processor.enabled = !settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing);
     metrics.components.virtual_chain_processor.only_blocks = settings.cli_args.is_disabled(CliDisable::TransactionAcceptance);
@@ -186,7 +199,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             settings.clone(),
             signal_handler.clone(),
             metrics.clone(),
-            start_vcp.clone(),
             blocks_queue.clone(),
             checkpoint_queue.clone(),
             database.clone(),
@@ -205,7 +217,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             settings.clone(),
             signal_handler.clone(),
             metrics.clone(),
-            start_vcp.clone(),
             txs_queue.clone(),
             checkpoint_queue.clone(),
             database.clone(),
@@ -218,7 +229,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             settings.clone(),
             signal_handler.clone(),
             metrics.clone(),
-            start_vcp.clone(),
             kaspad_pool.clone(),
             vcp_sender,
         )));
@@ -226,7 +236,6 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
             settings.clone(),
             signal_handler.clone(),
             metrics.clone(),
-            checkpoint_queue.clone(),
             database.clone(),
             mapper.clone(),
             vcp_receiver,

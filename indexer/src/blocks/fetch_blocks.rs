@@ -72,7 +72,7 @@ impl KaspaBlocksFetcher {
             kaspad_pool,
             blocks_queue,
             txs_queue,
-            low_hash: settings.checkpoint,
+            low_hash: settings.block_checkpoint,
             last_sync_check: Instant::now() - Self::SYNC_CHECK_INTERVAL,
             synced: false,
             lag_count: 0,
