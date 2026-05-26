@@ -12,7 +12,8 @@ pub async fn select_database_details(pool: &Pool<Postgres>) -> Result<DatabaseDe
             (SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND pid <> pg_backend_pid()) active_queries,
             (SELECT count(*) FROM pg_locks WHERE NOT granted) blocked_queries,
             (SELECT count(*) FROM pg_stat_activity) active_connections,
-            (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') max_connections;
+            (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') max_connections,
+            (SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()) deadlocks;
     ",
     )
     .fetch_one(pool)
