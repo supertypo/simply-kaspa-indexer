@@ -48,6 +48,7 @@ regex = "1.12.3"
 indexmap = "2.13.0"
 env_logger = "0.11.9"
 log = "0.4.29"
+rand = "0.8"
 vergen-git2 = "1.0.7"
 clap = { version = "4.5.60", features = ["cargo", "derive"] }
 axum = { version = "0.8.8", features = ["http1", "ws", "json", "tokio"]}

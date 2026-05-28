@@ -1,7 +1,9 @@
 use log::{LevelFilter, debug, info, trace, warn};
+use rand::Rng;
 use regex::Regex;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Error, Pool, Postgres};
+use std::future::Future;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -15,6 +17,8 @@ use crate::models::transaction::Transaction;
 use crate::models::transaction_acceptance::TransactionAcceptance;
 use crate::models::types::hash::Hash;
 use crate::query;
+
+const DEADLOCK_MAX_ATTEMPTS: u32 = 3;
 
 #[derive(Clone)]
 pub struct KaspaDbClient {
@@ -217,27 +221,31 @@ impl KaspaDbClient {
     }
 
     pub async fn insert_blocks(&self, blocks: &[Block]) -> Result<u64, Error> {
-        query::insert::insert_blocks(blocks, &self.pool).await
+        retry_on_deadlock("blocks", || query::insert::insert_blocks(blocks, &self.pool)).await
     }
 
     pub async fn insert_block_parents(&self, block_parents: &[BlockParent]) -> Result<u64, Error> {
-        query::insert::insert_block_parents(block_parents, &self.pool).await
+        retry_on_deadlock("block_parents", || query::insert::insert_block_parents(block_parents, &self.pool)).await
     }
 
     pub async fn insert_transactions(&self, transactions: &[Transaction], upsert_inputs: bool) -> Result<u64, Error> {
-        query::insert::insert_transactions(transactions, upsert_inputs, &self.pool).await
+        retry_on_deadlock("transactions", || query::insert::insert_transactions(transactions, upsert_inputs, &self.pool)).await
     }
 
     pub async fn insert_address_transactions(&self, address_transactions: &[AddressTransaction]) -> Result<u64, Error> {
-        query::insert::insert_address_transactions(address_transactions, &self.pool).await
+        retry_on_deadlock("addresses_transactions", || query::insert::insert_address_transactions(address_transactions, &self.pool))
+            .await
     }
 
     pub async fn insert_script_transactions(&self, script_transactions: &[ScriptTransaction]) -> Result<u64, Error> {
-        query::insert::insert_script_transactions(script_transactions, &self.pool).await
+        retry_on_deadlock("scripts_transactions", || query::insert::insert_script_transactions(script_transactions, &self.pool)).await
     }
 
     pub async fn insert_transaction_acceptances(&self, transaction_acceptances: &[TransactionAcceptance]) -> Result<u64, Error> {
-        query::insert::insert_transaction_acceptances(transaction_acceptances, &self.pool).await
+        retry_on_deadlock("transactions_acceptances", || {
+            query::insert::insert_transaction_acceptances(transaction_acceptances, &self.pool)
+        })
+        .await
     }
 
     pub async fn upsert_var(&self, key: &str, value: &String) -> Result<u64, Error> {
@@ -245,34 +253,69 @@ impl KaspaDbClient {
     }
 
     pub async fn delete_transaction_acceptances(&self, block_hashes: &[Hash]) -> Result<u64, Error> {
-        query::delete::delete_transaction_acceptances(block_hashes, &self.pool).await
+        retry_on_deadlock("transactions_acceptances", || query::delete::delete_transaction_acceptances(block_hashes, &self.pool)).await
     }
 
     pub async fn prune_block_parent(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_block_parent(blue_score_lt, batch_size, &self.pool).await
+        retry_on_deadlock("block_parents (prune)", || query::delete::prune_block_parent(blue_score_lt, batch_size, &self.pool)).await
     }
 
     pub async fn prune_transactions_acceptances_using_blocks(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_transactions_acceptances_using_blocks(blue_score_lt, batch_size, &self.pool).await
+        retry_on_deadlock("transactions_acceptances (prune by blocks)", || {
+            query::delete::prune_transactions_acceptances_using_blocks(blue_score_lt, batch_size, &self.pool)
+        })
+        .await
     }
 
     pub async fn prune_transactions_acceptances_using_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_transactions_acceptances_using_transactions(block_time_lt, batch_size, &self.pool).await
+        retry_on_deadlock("transactions_acceptances (prune by transactions)", || {
+            query::delete::prune_transactions_acceptances_using_transactions(block_time_lt, batch_size, &self.pool)
+        })
+        .await
     }
 
     pub async fn prune_blocks(&self, blue_score_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_blocks(blue_score_lt, batch_size, &self.pool).await
+        retry_on_deadlock("blocks (prune)", || query::delete::prune_blocks(blue_score_lt, batch_size, &self.pool)).await
     }
 
     pub async fn prune_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_transactions(block_time_lt, batch_size, &self.pool).await
+        retry_on_deadlock("transactions (prune)", || query::delete::prune_transactions(block_time_lt, batch_size, &self.pool)).await
     }
 
     pub async fn prune_addresses_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_addresses_transactions(block_time_lt, batch_size, &self.pool).await
+        retry_on_deadlock("addresses_transactions (prune)", || {
+            query::delete::prune_addresses_transactions(block_time_lt, batch_size, &self.pool)
+        })
+        .await
     }
 
     pub async fn prune_scripts_transactions(&self, block_time_lt: i64, batch_size: i32) -> Result<u64, Error> {
-        query::delete::prune_scripts_transactions(block_time_lt, batch_size, &self.pool).await
+        retry_on_deadlock("scripts_transactions (prune)", || {
+            query::delete::prune_scripts_transactions(block_time_lt, batch_size, &self.pool)
+        })
+        .await
     }
+}
+
+async fn retry_on_deadlock<F, Fut>(key: &str, mut f: F) -> Result<u64, Error>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<u64, Error>>,
+{
+    for attempt in 1..=DEADLOCK_MAX_ATTEMPTS {
+        match f().await {
+            Ok(n) => return Ok(n),
+            Err(e) if is_deadlock(&e) && attempt < DEADLOCK_MAX_ATTEMPTS => {
+                let backoff_ms = rand::thread_rng().gen_range(10..=50);
+                warn!("Deadlock on {key} (attempt {attempt}/{DEADLOCK_MAX_ATTEMPTS}), retrying after {backoff_ms}ms: {e}");
+                tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!()
+}
+
+fn is_deadlock(e: &Error) -> bool {
+    matches!(e, Error::Database(db) if db.code().as_deref() == Some("40P01"))
 }
