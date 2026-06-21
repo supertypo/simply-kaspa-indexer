@@ -1,6 +1,6 @@
-use sqlx::{Error, Pool, Postgres};
+use sqlx::{AssertSqlSafe, Error, Pool, Postgres};
 
 pub async fn execute_ddl(ddl: &str, pool: &Pool<Postgres>) -> Result<(), Error> {
-    sqlx::raw_sql(ddl).execute(pool).await?;
+    sqlx::raw_sql(AssertSqlSafe(ddl)).execute(pool).await?;
     Ok(())
 }
