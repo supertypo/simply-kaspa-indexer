@@ -4,7 +4,7 @@ CREATE TABLE vars
     value TEXT NOT NULL
 );
 INSERT INTO vars (key, value)
-VALUES ('schema_version', '21');
+VALUES ('schema_version', '22');
 
 
 CREATE TABLE blocks
@@ -45,16 +45,20 @@ CREATE TYPE transactions_inputs AS
     signature_script         BYTEA,
     sig_op_count             SMALLINT,
     previous_outpoint_script BYTEA,
-    previous_outpoint_amount BIGINT
+    previous_outpoint_amount BIGINT,
+    compute_budget           SMALLINT,
+    covenant_id              BYTEA
 );
 
 
 CREATE TYPE transactions_outputs AS
 (
-    index                     SMALLINT,
-    amount                    BIGINT,
-    script_public_key         BYTEA,
-    script_public_key_address TEXT
+    index                      SMALLINT,
+    amount                     BIGINT,
+    script_public_key          BYTEA,
+    script_public_key_address  TEXT,
+    covenant_authorizing_input SMALLINT,
+    covenant_id                BYTEA
 );
 
 
