@@ -1,5 +1,5 @@
 use log::{LevelFilter, debug, info, trace, warn};
-use rand::Rng;
+use rand::RngExt;
 use regex::Regex;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, Error, Pool, Postgres};
@@ -317,7 +317,7 @@ where
         match f().await {
             Ok(n) => return Ok(n),
             Err(e) if is_deadlock(&e) && attempt < DEADLOCK_MAX_ATTEMPTS => {
-                let backoff_ms = rand::thread_rng().gen_range(10..=50);
+                let backoff_ms = rand::rng().random_range(10..=50);
                 warn!("Deadlock on {key} (attempt {attempt}/{DEADLOCK_MAX_ATTEMPTS}), retrying after {backoff_ms}ms: {e}");
                 tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
             }
