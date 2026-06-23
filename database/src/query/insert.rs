@@ -1,4 +1,4 @@
-use sqlx::{Error, Executor, Pool, Postgres};
+use sqlx::{AssertSqlSafe, Error, Executor, Pool, Postgres};
 
 use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
@@ -20,7 +20,7 @@ pub async fn insert_blocks(blocks: &[Block], pool: &Pool<Postgres>) -> Result<u6
         generate_placeholders(blocks.len(), COLS)
     );
 
-    let mut query = sqlx::query(&sql);
+    let mut query = sqlx::query(AssertSqlSafe(sql));
     for block in blocks {
         query = query.bind(&block.hash);
         query = query.bind(&block.accepted_id_merkle_root);
@@ -51,7 +51,7 @@ pub async fn insert_block_parents(block_parents: &[BlockParent], pool: &Pool<Pos
         VALUES {} ON CONFLICT DO NOTHING",
         generate_placeholders(block_parents.len(), COLS)
     );
-    let mut query = sqlx::query(&sql);
+    let mut query = sqlx::query(AssertSqlSafe(sql));
     for block_transaction in block_parents {
         query = query.bind(&block_transaction.block_hash);
         query = query.bind(&block_transaction.parent_hash);
@@ -71,7 +71,7 @@ pub async fn insert_transactions(transactions: &[Transaction], upsert_inputs: bo
         on_conflict
     );
 
-    let mut query = sqlx::query(&sql);
+    let mut query = sqlx::query(AssertSqlSafe(sql));
     for tx in transactions {
         query = query.bind(&tx.transaction_id);
         query = query.bind(&tx.subnetwork_id);
@@ -94,7 +94,7 @@ pub async fn insert_address_transactions(address_transactions: &[AddressTransact
         VALUES {} ON CONFLICT DO NOTHING",
         generate_placeholders(address_transactions.len(), COLS)
     );
-    let mut query = sqlx::query(&sql);
+    let mut query = sqlx::query(AssertSqlSafe(sql));
     for address_transaction in address_transactions {
         query = query.bind(&address_transaction.address);
         query = query.bind(&address_transaction.transaction_id);
@@ -110,7 +110,7 @@ pub async fn insert_script_transactions(script_transactions: &[ScriptTransaction
         VALUES {} ON CONFLICT DO NOTHING",
         generate_placeholders(script_transactions.len(), COLS)
     );
-    let mut query = sqlx::query(&sql);
+    let mut query = sqlx::query(AssertSqlSafe(sql));
     for script_transaction in script_transactions {
         query = query.bind(&script_transaction.script_public_key);
         query = query.bind(&script_transaction.transaction_id);
@@ -125,7 +125,7 @@ pub async fn insert_transaction_acceptances(tx_acceptances: &[TransactionAccepta
         "INSERT INTO transactions_acceptances (transaction_id, block_hash) VALUES {} ON CONFLICT DO NOTHING",
         generate_placeholders(tx_acceptances.len(), COLS)
     );
-    let mut query = sqlx::query(&sql);
+    let mut query = sqlx::query(AssertSqlSafe(sql));
     for ta in tx_acceptances {
         query = query.bind(&ta.transaction_id);
         query = query.bind(&ta.block_hash);

@@ -22,15 +22,18 @@ pub fn map_transaction(
     include_mass: bool,
     include_payload: bool,
     include_block_time: bool,
+    include_block_hash: bool,
     include_in: bool,
     include_in_previous_outpoint: bool,
     include_in_signature_script: bool,
     include_in_sig_op_count: bool,
+    include_in_compute_budget: bool,
     include_out: bool,
     include_out_amount: bool,
     include_out_script_public_key: bool,
     include_out_script_public_key_address: bool,
-    include_block_hash: bool,
+    include_out_covenant_authorizing_input: bool,
+    include_out_covenant_id: bool,
 ) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
     SqlTransaction {
@@ -40,10 +43,17 @@ pub fn map_transaction(
         mass: (include_mass && verbose_data.compute_mass != 0).then_some(verbose_data.compute_mass as i32),
         payload: (include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time as i64),
+        block_hash: include_block_hash.then_some(verbose_data.block_hash.into()),
         version: (transaction.version != 0).then_some(transaction.version as i16),
         inputs: include_in
             .then(|| {
-                map_transaction_inputs(transaction, include_in_previous_outpoint, include_in_signature_script, include_in_sig_op_count)
+                map_transaction_inputs(
+                    transaction,
+                    include_in_previous_outpoint,
+                    include_in_signature_script,
+                    include_in_sig_op_count,
+                    include_in_compute_budget,
+                )
             })
             .flatten(),
         outputs: include_out
@@ -53,10 +63,11 @@ pub fn map_transaction(
                     include_out_amount,
                     include_out_script_public_key,
                     include_out_script_public_key_address,
+                    include_out_covenant_authorizing_input,
+                    include_out_covenant_id,
                 )
             })
             .flatten(),
-        block_hash: include_block_hash.then_some(verbose_data.block_hash.into()),
     }
 }
 
@@ -65,6 +76,7 @@ pub fn map_transaction_inputs(
     include_previous_outpoint: bool,
     include_signature_script: bool,
     include_sig_op_count: bool,
+    include_compute_budget: bool,
 ) -> Option<Vec<SqlTransactionInput>> {
     (!transaction.inputs.is_empty()).then(|| {
         transaction
@@ -76,9 +88,11 @@ pub fn map_transaction_inputs(
                 previous_outpoint_hash: include_previous_outpoint.then_some(input.previous_outpoint.transaction_id.into()),
                 previous_outpoint_index: include_previous_outpoint.then_some(input.previous_outpoint.index as i16),
                 signature_script: include_signature_script.then_some(input.signature_script.clone()),
-                sig_op_count: include_sig_op_count.then_some(input.sig_op_count as i16),
+                sig_op_count: (include_sig_op_count && input.sig_op_count != 0).then(|| input.sig_op_count as i16),
                 previous_outpoint_script: None,
                 previous_outpoint_amount: None,
+                compute_budget: (include_compute_budget && input.compute_budget != 0).then(|| input.compute_budget as i16),
+                covenant_id: None,
             })
             .collect()
     })
@@ -89,6 +103,8 @@ pub fn map_transaction_outputs(
     include_amount: bool,
     include_script_public_key: bool,
     include_script_public_key_address: bool,
+    include_covenant_authorizing_input: bool,
+    include_covenant_id: bool,
 ) -> Option<Vec<SqlTransactionOutput>> {
     (!transaction.outputs.is_empty()).then(|| {
         transaction
@@ -96,13 +112,17 @@ pub fn map_transaction_outputs(
             .iter()
             .enumerate()
             .map(|(i, output)| {
-                let verbose_data = output.verbose_data.as_ref().expect("Transaction output verbose_data is missing");
+                let covenant = output.covenant.as_ref().map(|n| n.0);
                 SqlTransactionOutput {
                     index: i as i16,
                     amount: include_amount.then_some(output.value as i64),
                     script_public_key: include_script_public_key.then_some(output.script_public_key.script().to_vec()),
                     script_public_key_address: include_script_public_key_address
-                        .then_some(verbose_data.script_public_key_address.payload_to_string()),
+                        .then(|| output.verbose_data.as_ref().unwrap().script_public_key_address.payload_to_string()),
+                    covenant_authorizing_input: include_covenant_authorizing_input
+                        .then(|| covenant.map(|v| v.authorizing_input as i16))
+                        .flatten(),
+                    covenant_id: include_covenant_id.then(|| covenant.map(|v| v.covenant_id.into())).flatten(),
                 }
             })
             .collect()
@@ -145,15 +165,19 @@ pub fn map_optional_transaction(
     include_mass: bool,
     include_payload: bool,
     include_block_time: bool,
+    include_block_hash: bool,
     include_in: bool,
     include_in_previous_outpoint: bool,
     include_in_signature_script: bool,
     include_in_sig_op_count: bool,
+    include_in_compute_budget: bool,
+    include_in_covenant_id: bool,
     include_out: bool,
     include_out_amount: bool,
     include_out_script_public_key: bool,
     include_out_script_public_key_address: bool,
-    include_block_hash: bool,
+    include_out_covenant_authorizing_input: bool,
+    include_out_covenant_id: bool,
 ) -> SqlTransaction {
     let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
     SqlTransaction {
@@ -164,6 +188,7 @@ pub fn map_optional_transaction(
         payload: (include_payload && !transaction.payload.as_ref().unwrap().is_empty())
             .then_some(transaction.payload.as_ref().unwrap().to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time.unwrap() as i64),
+        block_hash: include_block_hash.then_some(verbose_data.block_hash.unwrap().into()),
         version: transaction.version.and_then(|v| (v != 0).then_some(v as i16)),
         inputs: include_in
             .then(|| {
@@ -172,6 +197,8 @@ pub fn map_optional_transaction(
                     include_in_previous_outpoint,
                     include_in_signature_script,
                     include_in_sig_op_count,
+                    include_in_compute_budget,
+                    include_in_covenant_id,
                 )
             })
             .flatten(),
@@ -182,10 +209,11 @@ pub fn map_optional_transaction(
                     include_out_amount,
                     include_out_script_public_key,
                     include_out_script_public_key_address,
+                    include_out_covenant_authorizing_input,
+                    include_out_covenant_id,
                 )
             })
             .flatten(),
-        block_hash: include_block_hash.then_some(verbose_data.block_hash.unwrap().into()),
     }
 }
 
@@ -194,6 +222,8 @@ fn map_optional_transaction_inputs(
     include_previous_outpoint: bool,
     include_signature_script: bool,
     include_sig_op_count: bool,
+    include_compute_budget: bool,
+    include_covenant_id: bool,
 ) -> Option<Vec<SqlTransactionInput>> {
     (!transaction.inputs.is_empty()).then(|| {
         transaction
@@ -208,10 +238,13 @@ fn map_optional_transaction_inputs(
                     previous_outpoint_hash: include_previous_outpoint.then(|| outpoint.transaction_id.unwrap().into()),
                     previous_outpoint_index: include_previous_outpoint.then(|| outpoint.index.unwrap() as i16),
                     signature_script: include_signature_script.then(|| input.signature_script.clone().unwrap()),
-                    sig_op_count: include_sig_op_count.then(|| input.sig_op_count.unwrap() as i16),
+                    sig_op_count: (include_sig_op_count && input.sig_op_count != Some(0)).then(|| input.sig_op_count.unwrap() as i16),
                     previous_outpoint_script: include_previous_outpoint
                         .then(|| utxo.script_public_key.as_ref().unwrap().script().to_vec()),
                     previous_outpoint_amount: include_previous_outpoint.then(|| utxo.amount.unwrap() as i64),
+                    compute_budget: (include_compute_budget && input.compute_budget != Some(0))
+                        .then(|| input.compute_budget.unwrap() as i16),
+                    covenant_id: include_covenant_id.then(|| utxo.covenant_id.map(|v| v.into())).flatten(),
                 }
             })
             .collect()
@@ -223,18 +256,28 @@ fn map_optional_transaction_outputs(
     include_amount: bool,
     include_script_public_key: bool,
     include_script_public_key_address: bool,
+    include_covenant_authorizing_input: bool,
+    include_covenant_id: bool,
 ) -> Option<Vec<SqlTransactionOutput>> {
     (!transaction.outputs.is_empty()).then(|| {
         transaction
             .outputs
             .iter()
             .enumerate()
-            .map(|(i, output)| SqlTransactionOutput {
-                index: i as i16,
-                amount: include_amount.then(|| output.value.unwrap() as i64),
-                script_public_key: include_script_public_key.then(|| output.script_public_key.as_ref().unwrap().script().to_vec()),
-                script_public_key_address: include_script_public_key_address
-                    .then(|| output.verbose_data.as_ref().unwrap().script_public_key_address.as_ref().unwrap().payload_to_string()),
+            .map(|(i, output)| {
+                let covenant = output.covenant.as_ref().map(|n| n.0.map(|c| c.0)).flatten();
+                SqlTransactionOutput {
+                    index: i as i16,
+                    amount: include_amount.then(|| output.value.unwrap() as i64),
+                    script_public_key: include_script_public_key.then(|| output.script_public_key.as_ref().unwrap().script().to_vec()),
+                    script_public_key_address: include_script_public_key_address.then(|| {
+                        output.verbose_data.as_ref().unwrap().script_public_key_address.as_ref().unwrap().payload_to_string()
+                    }),
+                    covenant_authorizing_input: include_covenant_authorizing_input
+                        .then(|| covenant.map(|v| v.authorizing_input as i16))
+                        .flatten(),
+                    covenant_id: include_covenant_id.then(|| covenant.map(|v| v.covenant_id.into())).flatten(),
+                }
             })
             .collect()
     })

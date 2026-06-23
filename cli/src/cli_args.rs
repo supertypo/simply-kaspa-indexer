@@ -72,13 +72,20 @@ pub enum CliField {
     /// Used for identifying wallet address of sender
     TxInPreviousOutpoint,
     TxInSignatureScript,
+    /// Used for v0 transactions
     TxInSigOpCount,
+    /// Used for v>=1 transactions
+    TxInComputeBudget,
+    /// The spent UTXOs covenant_id if any
+    TxInCovenantId,
     TxOutAmount,
     /// Excluding both this and script_public_key_address will disable adress-/scripts_transactions
     TxOutScriptPublicKey,
     /// Excluding this, scripts_transactions to be populated instead of adresses_transactions
     TxOutScriptPublicKeyAddress,
     TxBlockHash,
+    TxOutCovenantAuthorizingInput,
+    TxOutCovenantId,
 }
 
 #[derive(Parser, Clone, Debug, ToSchema, Serialize, Deserialize)]
