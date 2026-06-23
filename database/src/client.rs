@@ -23,7 +23,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 21;
+    const SCHEMA_VERSION: u8 = 22;
 
     pub async fn new(url: &str, pool_size: u32) -> Result<KaspaDbClient, Error> {
         let url_cleaned = Regex::new(r"(postgres://postgres:)[^@]+(@)").expect("Failed to parse url").replace(url, "$1$2");
@@ -160,6 +160,17 @@ impl KaspaDbClient {
                     }
                     if version == 20 {
                         let ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v20_to_v21.sql"));
+                        if upgrade_db {
+                            warn!("\n{ddl}\nUpgrading schema from v{version} to v{}. ^", version + 1);
+                            query::misc::execute_ddl(ddl, &self.pool).await?;
+                            info!("\x1b[32mSchema upgrade completed successfully\x1b[0m");
+                            version += 1;
+                        } else {
+                            panic!("\n{ddl}\nFound outdated schema v{version}. Set flag '-u' to upgrade, or apply manually ^")
+                        }
+                    }
+                    if version == 21 {
+                        let ddl = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations/schema/v21_to_v22.sql"));
                         if upgrade_db {
                             warn!("\n{ddl}\nUpgrading schema from v{version} to v{}. ^", version + 1);
                             query::misc::execute_ddl(ddl, &self.pool).await?;

@@ -11,4 +11,6 @@ pub struct TransactionInput {
     pub sig_op_count: Option<i16>,
     pub previous_outpoint_script: Option<Vec<u8>>,
     pub previous_outpoint_amount: Option<i64>,
+    pub compute_budget: Option<i16>,
+    pub covenant_id: Option<Hash>,
 }

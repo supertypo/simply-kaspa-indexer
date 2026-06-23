@@ -139,14 +139,18 @@ exclude-fields:
     tx_payload,
     tx_in_signature_script,
     tx_in_sig_op_count,
-    tx_out_script_public_key_address
+    tx_in_compute_budget,
+    tx_in_covenant_id,
+    tx_out_script_public_key_address,
+    tx_out_covenant_authorizing_input,
+    tx_out_covenant_id
 ```
 Example command arguments:
 ```
 -u -s ws://your-kaspad:17110 -d postgres://postgres:postgres@your-db:5432 -l 0.0.0.0:8500 \
 --prune-db --retention=7d \
 --disable=block_parent_table,blocks_transactions_table,addresses_transactions_table,rejected_transactions \
---exclude-fields=block_accepted_id_merkle_root,block_merge_set_blues_hashes,block_merge_set_reds_hashes,block_selected_parent_hash,block_bits,block_blue_work,block_daa_score,block_hash_merkle_root,block_nonce,block_pruning_point,block_utxo_commitment,block_version,tx_hash,tx_mass,tx_payload,tx_in_signature_script,tx_in_sig_op_count,tx_out_script_public_key_address
+--exclude-fields=block_accepted_id_merkle_root,block_merge_set_blues_hashes,block_merge_set_reds_hashes,block_selected_parent_hash,block_bits,block_blue_work,block_daa_score,block_hash_merkle_root,block_nonce,block_pruning_point,block_utxo_commitment,block_version,tx_hash,tx_mass,tx_payload,tx_in_signature_script,tx_in_sig_op_count,tx_in_compute_budget,tx_in_covenant_id,tx_out_script_public_key_address,tx_out_covenant_authorizing_input,tx_out_covenant_id
 ```
 
 ### Enable transactions_inputs_resolve
@@ -293,7 +297,7 @@ Options:
           - block_selected_parent_hash
           - block_bits
           - block_blue_work
-          - block_blue_score:                 Used for sorting blocks
+          - block_blue_score:                  Used for sorting blocks
           - block_daa_score
           - block_hash_merkle_root
           - block_nonce
@@ -301,15 +305,19 @@ Options:
           - block_timestamp
           - block_utxo_commitment
           - block_version
-          - tx_subnetwork_id:                 Used for identifying tx type (coinbase/regular)
+          - tx_subnetwork_id:                  Used for identifying tx type (coinbase/regular)
           - tx_hash
           - tx_mass
           - tx_payload
-          - tx_block_time:                    Used for sorting transactions
-          - tx_in_previous_outpoint:          Used for identifying wallet address of sender
+          - tx_block_time:                     Used for sorting transactions
+          - tx_in_previous_outpoint:           Used for identifying wallet address of sender
           - tx_in_signature_script
-          - tx_in_sig_op_count
+          - tx_in_sig_op_count:                Used for v0 transactions
+          - tx_in_compute_budget:              Used for v>=1 transactions
+          - tx_in_covenant_id:                 The spent UTXOs covenant_id if any
           - tx_out_amount
-          - tx_out_script_public_key:         Excluding both this and script_public_key_address will disable adress-/scripts_transactions
-          - tx_out_script_public_key_address: Excluding this, scripts_transactions to be populated instead of adresses_transactions
+          - tx_out_script_public_key:          Excluding both this and script_public_key_address will disable adress-/scripts_transactions
+          - tx_out_script_public_key_address:  Excluding this, scripts_transactions to be populated instead of adresses_transactions
+          - tx_out_covenant_authorizing_input
+          - tx_out_covenant_id
 ```
