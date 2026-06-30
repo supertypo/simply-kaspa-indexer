@@ -291,70 +291,16 @@ pub async fn select_search(query: &str, limit: i64, pool: &Pool<Postgres>) -> Re
 pub async fn select_toccata_metrics(pool: &Pool<Postgres>) -> Result<ApiToccataMetrics, Error> {
     let aggregate = sqlx::query(
         "
-        WITH recent_transactions AS (
-            SELECT *
-            FROM transactions
-            WHERE block_time >= (
-                SELECT COALESCE(MAX(block_time) - 3600000, 0)
-                FROM transactions
-            )
-        )
         SELECT
-            (SELECT COUNT(*) FROM recent_transactions WHERE version >= 1)::BIGINT AS tx_v1_count,
-            0::BIGINT AS block_v2_count,
-            (
-                SELECT COUNT(DISTINCT transaction_id)
-                FROM (
-                    SELECT t.transaction_id
-                    FROM recent_transactions t
-                    CROSS JOIN LATERAL unnest(t.inputs) AS i
-                    WHERE (i).covenant_id IS NOT NULL
-                    UNION
-                    SELECT t.transaction_id
-                    FROM recent_transactions t
-                    CROSS JOIN LATERAL unnest(t.outputs) AS o
-                    WHERE (o).covenant_id IS NOT NULL
-                ) covenant_txs
-            )::BIGINT AS covenant_tx_count,
-            (
-                SELECT COUNT(*)
-                FROM recent_transactions t
-                CROSS JOIN LATERAL unnest(t.inputs) AS i
-                WHERE (i).covenant_id IS NOT NULL
-            )::BIGINT AS covenant_input_count,
-            (
-                SELECT COUNT(*)
-                FROM recent_transactions t
-                CROSS JOIN LATERAL unnest(t.outputs) AS o
-                WHERE (o).covenant_id IS NOT NULL
-            )::BIGINT AS covenant_output_count,
-            (
-                SELECT COUNT(DISTINCT covenant_id)
-                FROM (
-                    SELECT (i).covenant_id
-                    FROM recent_transactions t
-                    CROSS JOIN LATERAL unnest(t.inputs) AS i
-                    WHERE (i).covenant_id IS NOT NULL
-                    UNION
-                    SELECT (o).covenant_id
-                    FROM recent_transactions t
-                    CROSS JOIN LATERAL unnest(t.outputs) AS o
-                    WHERE (o).covenant_id IS NOT NULL
-                ) covenant_ids
-            )::BIGINT AS covenant_id_count,
-            (
-                SELECT COUNT(*)
-                FROM recent_transactions
-                WHERE subnetwork_id IS NOT NULL
-                  AND octet_length(subnetwork_id) BETWEEN 1 AND 4
-            )::BIGINT AS user_lane_tx_count,
-            (
-                SELECT COUNT(DISTINCT subnetwork_id)
-                FROM recent_transactions
-                WHERE subnetwork_id IS NOT NULL
-                  AND octet_length(subnetwork_id) BETWEEN 1 AND 4
-            )::BIGINT AS active_user_lanes,
-            0::BIGINT AS seq_commit_block_count
+            COALESCE((SELECT value FROM toccata_metrics WHERE key = 'tx_v1_count'), 0)::BIGINT AS tx_v1_count,
+            COALESCE((SELECT value FROM toccata_metrics WHERE key = 'block_v2_count'), 0)::BIGINT AS block_v2_count,
+            COALESCE((SELECT value FROM toccata_metrics WHERE key = 'covenant_tx_count'), 0)::BIGINT AS covenant_tx_count,
+            COALESCE((SELECT value FROM toccata_metrics WHERE key = 'covenant_input_count'), 0)::BIGINT AS covenant_input_count,
+            COALESCE((SELECT value FROM toccata_metrics WHERE key = 'covenant_output_count'), 0)::BIGINT AS covenant_output_count,
+            (SELECT COUNT(*) FROM toccata_covenants)::BIGINT AS covenant_id_count,
+            COALESCE((SELECT value FROM toccata_metrics WHERE key = 'user_lane_tx_count'), 0)::BIGINT AS user_lane_tx_count,
+            (SELECT COUNT(*) FROM toccata_lanes)::BIGINT AS active_user_lanes,
+            COALESCE((SELECT value FROM toccata_metrics WHERE key = 'seq_commit_block_count'), 0)::BIGINT AS seq_commit_block_count
         ",
     )
     .fetch_one(pool)
@@ -362,43 +308,13 @@ pub async fn select_toccata_metrics(pool: &Pool<Postgres>) -> Result<ApiToccataM
 
     let top_covenants = sqlx::query(
         "
-        WITH covenant_events AS (
-            WITH recent_transactions AS (
-                SELECT *
-                FROM transactions
-                WHERE block_time >= (
-                    SELECT COALESCE(MAX(block_time) - 3600000, 0)
-                    FROM transactions
-                )
-            )
-            SELECT
-                t.transaction_id,
-                t.block_time,
-                (i).covenant_id,
-                1::BIGINT AS input_count,
-                0::BIGINT AS output_count
-            FROM recent_transactions t
-            CROSS JOIN LATERAL unnest(t.inputs) AS i
-            WHERE (i).covenant_id IS NOT NULL
-            UNION ALL
-            SELECT
-                t.transaction_id,
-                t.block_time,
-                (o).covenant_id,
-                0::BIGINT AS input_count,
-                1::BIGINT AS output_count
-            FROM recent_transactions t
-            CROSS JOIN LATERAL unnest(t.outputs) AS o
-            WHERE (o).covenant_id IS NOT NULL
-        )
         SELECT
             encode(covenant_id, 'hex') AS covenant_id,
-            COUNT(DISTINCT transaction_id)::BIGINT AS tx_count,
-            SUM(input_count)::BIGINT AS input_count,
-            SUM(output_count)::BIGINT AS output_count,
-            (array_agg(transaction_id ORDER BY block_time DESC NULLS LAST))[1] AS latest_tx_id
-        FROM covenant_events
-        GROUP BY covenant_id
+            tx_count,
+            input_count,
+            output_count,
+            latest_tx_id
+        FROM toccata_covenants
         ORDER BY tx_count DESC, output_count DESC
         LIMIT 20
         ",
@@ -420,17 +336,10 @@ pub async fn select_toccata_metrics(pool: &Pool<Postgres>) -> Result<ApiToccataM
     let top_lanes = sqlx::query(
         "
         SELECT
-            encode(subnetwork_id, 'hex') AS lane_key,
-            COUNT(*)::BIGINT AS tx_count,
-            (array_agg(transaction_id ORDER BY block_time DESC NULLS LAST))[1] AS latest_tx_id
-        FROM transactions
-        WHERE block_time >= (
-            SELECT COALESCE(MAX(block_time) - 3600000, 0)
-            FROM transactions
-        )
-          AND subnetwork_id IS NOT NULL
-          AND octet_length(subnetwork_id) BETWEEN 1 AND 4
-        GROUP BY subnetwork_id
+            encode(lane_key, 'hex') AS lane_key,
+            tx_count,
+            latest_tx_id
+        FROM toccata_lanes
         ORDER BY tx_count DESC
         LIMIT 20
         ",
