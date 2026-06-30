@@ -292,6 +292,7 @@ pub async fn select_toccata_metrics(pool: &Pool<Postgres>) -> Result<ApiToccataM
     let aggregate = sqlx::query(
         "
         SELECT
+            (SELECT MAX(updated_at) FROM toccata_metrics)::BIGINT AS rollup_updated_at,
             COALESCE((SELECT value FROM toccata_metrics WHERE key = 'tx_v1_count'), 0)::BIGINT AS tx_v1_count,
             COALESCE((SELECT value FROM toccata_metrics WHERE key = 'block_v2_count'), 0)::BIGINT AS block_v2_count,
             COALESCE((SELECT value FROM toccata_metrics WHERE key = 'covenant_tx_count'), 0)::BIGINT AS covenant_tx_count,
@@ -357,6 +358,7 @@ pub async fn select_toccata_metrics(pool: &Pool<Postgres>) -> Result<ApiToccataM
     .collect::<Result<Vec<_>, Error>>()?;
 
     Ok(ApiToccataMetrics {
+        rollup_updated_at: aggregate.try_get("rollup_updated_at")?,
         tx_v1_count: aggregate.try_get("tx_v1_count")?,
         block_v2_count: aggregate.try_get("block_v2_count")?,
         covenant_tx_count: aggregate.try_get("covenant_tx_count")?,

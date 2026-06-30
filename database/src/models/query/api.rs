@@ -46,6 +46,7 @@ pub struct ApiSearchResult {
 }
 
 pub struct ApiToccataMetrics {
+    pub rollup_updated_at: Option<i64>,
     pub tx_v1_count: i64,
     pub block_v2_count: i64,
     pub covenant_tx_count: i64,

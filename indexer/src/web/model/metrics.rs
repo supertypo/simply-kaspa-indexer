@@ -48,6 +48,7 @@ impl Metrics {
 #[derive(ToSchema, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetricsToccata {
+    pub rollup_updated_at: Option<i64>,
     pub tx_version_1: bool,
     pub storage_mass: bool,
     pub compute_budget: bool,
@@ -107,6 +108,7 @@ impl MetricsToccata {
             gas: false,
             get_block_reward_info: false,
             get_seq_commit_lane_proof: false,
+            rollup_updated_at: None,
             minimum_relay_fee_sompi_per_gram: 100,
             tx_v1_count: 0,
             block_v2_count: 0,
@@ -141,6 +143,7 @@ impl MetricsToccata {
     }
 
     pub fn update_from_indexer(&mut self, metrics: ApiToccataMetrics) {
+        self.rollup_updated_at = metrics.rollup_updated_at;
         self.tx_v1_count = metrics.tx_v1_count.max(0) as u64;
         self.block_v2_count = metrics.block_v2_count.max(0) as u64;
         self.covenant_tx_count = metrics.covenant_tx_count.max(0) as u64;

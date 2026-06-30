@@ -4,7 +4,7 @@ CREATE TABLE vars
     value TEXT NOT NULL
 );
 INSERT INTO vars (key, value)
-VALUES ('schema_version', '23');
+VALUES ('schema_version', '24');
 
 
 CREATE TABLE blocks
@@ -117,7 +117,8 @@ CREATE INDEX ON scripts_transactions (block_time DESC);
 CREATE TABLE toccata_metrics
 (
     key   TEXT PRIMARY KEY,
-    value BIGINT NOT NULL DEFAULT 0
+    value BIGINT NOT NULL DEFAULT 0,
+    updated_at BIGINT
 );
 
 INSERT INTO toccata_metrics (key, value)
@@ -150,15 +151,18 @@ CREATE TABLE toccata_lanes
 
 CREATE OR REPLACE FUNCTION bump_toccata_metric(metric_key TEXT, delta BIGINT)
 RETURNS VOID AS $$
+DECLARE
+    now_ms BIGINT := (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT;
 BEGIN
     IF delta = 0 THEN
         RETURN;
     END IF;
 
-    INSERT INTO toccata_metrics (key, value)
-    VALUES (metric_key, delta)
+    INSERT INTO toccata_metrics (key, value, updated_at)
+    VALUES (metric_key, delta, now_ms)
     ON CONFLICT (key) DO UPDATE
-    SET value = toccata_metrics.value + EXCLUDED.value;
+    SET value = toccata_metrics.value + EXCLUDED.value,
+        updated_at = EXCLUDED.updated_at;
 END;
 $$ LANGUAGE plpgsql;
 
