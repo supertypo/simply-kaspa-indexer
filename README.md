@@ -105,9 +105,40 @@ cargo run -- -s ws://<kaspad_host>:17110 -d postgres://postgres:postgres@<postgr
 ```
 
 ## API
-There is a simple api available at http://localhost:8500/api (by default), it currently provides the following endpoints:
-- health
-- metrics
+There is a REST API available at http://localhost:8500/api (by default).
+An operator dashboard is available at http://localhost:8500/admin.
+
+Operational endpoints:
+- `GET /api/health`
+- `GET /api/metrics`
+- `GET /api/status`
+
+`/api/metrics` includes a `toccata` section for post-Toccata monitoring. The
+current schema exposes transaction/block version and user-lane counters from the
+existing database columns, and marks not-yet-indexed fields such as
+`storageMass`, `computeBudget`, covenant bindings, gas, ZK proofs, and lane
+proof RPCs as unsupported until the underlying schema stores them.
+
+Explorer/indexer endpoints:
+- `GET /api/blocks/recent?limit=50`
+- `GET /api/blocks/{hash}`
+- `GET /api/transactions/{transaction_id}`
+- `GET /api/addresses/{address}/transactions?limit=50`
+- `GET /api/addresses/{address}/balance`
+- `GET /api/addresses/{address}/utxos?limit=100`
+- `GET /api/search?q={hash-or-address}`
+
+The address balance and UTXO endpoints are read-only projections over the
+indexed transaction outputs and inputs. For high-volume explorer deployments,
+keep `transactions`, `transactions.inputs`, `transactions.outputs`, and
+`addresses_transactions` enabled.
+
+Example:
+```shell
+curl "http://localhost:8500/api/status"
+curl "http://localhost:8500/api/blocks/recent?limit=10"
+curl "http://localhost:8500/api/addresses/kaspa:q.../balance"
+```
 
 ## Configuration examples
 

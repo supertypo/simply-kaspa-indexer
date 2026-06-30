@@ -61,6 +61,10 @@ pub async fn update_metrics(metrics: Arc<RwLock<Metrics>>, system: Arc<RwLock<Sy
         Ok(all_table_details) => metrics.database.tables = Some(all_table_details.into_iter().map(|td| td.into()).collect()),
         Err(e) => warn!("Failed to select all table details: {:?}", e),
     }
+    match database_client.select_toccata_metrics().await {
+        Ok(toccata_metrics) => metrics.toccata.update_from_indexer(toccata_metrics),
+        Err(e) => warn!("Failed to select Toccata metrics: {:?}", e),
+    }
     metrics.clone()
 }
 

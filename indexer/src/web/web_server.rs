@@ -1,6 +1,6 @@
 use crate::settings::Settings;
 use crate::web::endpoint;
-use crate::web::endpoint::{health, metrics};
+use crate::web::endpoint::{admin, api, health, metrics};
 use crate::web::model::metrics::Metrics;
 use axum::body::{Body, to_bytes};
 use axum::http::{HeaderValue, Request, header};
@@ -35,6 +35,14 @@ pub const INFO_TAG: &str = "info";
     paths(
         endpoint::health::get_health,
         endpoint::metrics::get_metrics,
+        endpoint::api::get_recent_blocks,
+        endpoint::api::get_block,
+        endpoint::api::get_transaction,
+        endpoint::api::get_address_transactions,
+        endpoint::api::get_address_balance,
+        endpoint::api::get_address_utxos,
+        endpoint::api::get_search,
+        endpoint::api::get_status,
     ),
     tags(
         (name = INFO_TAG, description = "Info API endpoints"),
@@ -69,6 +77,15 @@ impl WebServer {
         let (api_router, api) = OpenApiRouter::with_openapi(set_server_path(base_path))
             .route(&format!("{}{}", base_path, health::PATH), get(health::get_health))
             .route(&format!("{}{}", base_path, metrics::PATH), get(metrics::get_metrics))
+            .route(&format!("{}{}", base_path, api::RECENT_BLOCKS_PATH), get(api::get_recent_blocks))
+            .route(&format!("{}{}", base_path, api::BLOCK_PATH), get(api::get_block))
+            .route(&format!("{}{}", base_path, api::TRANSACTION_PATH), get(api::get_transaction))
+            .route(&format!("{}{}", base_path, api::ADDRESS_TRANSACTIONS_PATH), get(api::get_address_transactions))
+            .route(&format!("{}{}", base_path, api::ADDRESS_BALANCE_PATH), get(api::get_address_balance))
+            .route(&format!("{}{}", base_path, api::ADDRESS_UTXOS_PATH), get(api::get_address_utxos))
+            .route(&format!("{}{}", base_path, api::SEARCH_PATH), get(api::get_search))
+            .route(&format!("{}{}", base_path, api::STATUS_PATH), get(api::get_status))
+            .route(&format!("{}{}", base_path, admin::PATH), get(admin::get_admin))
             .split_for_parts();
         let swagger_config = Config::default().use_base_layout().try_it_out_enabled(true).display_request_duration(true);
         let swagger =

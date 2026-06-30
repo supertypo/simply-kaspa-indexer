@@ -1,0 +1,6 @@
+.git
+target
+docker/.work
+**/.DS_Store
+**/*.log
+**/*.tmp

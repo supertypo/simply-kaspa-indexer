@@ -9,6 +9,9 @@ use crate::models::address_transaction::AddressTransaction;
 use crate::models::block::Block;
 use crate::models::block_parent::BlockParent;
 use crate::models::block_transaction::BlockTransaction;
+use crate::models::query::api::{
+    ApiAddressBalance, ApiAddressTransaction, ApiAddressUtxo, ApiBlock, ApiSearchResult, ApiToccataMetrics, ApiTransaction,
+};
 use crate::models::query::database_details::DatabaseDetails;
 use crate::models::query::table_details::TableDetails;
 use crate::models::script_transaction::ScriptTransaction;
@@ -23,7 +26,7 @@ pub struct KaspaDbClient {
 }
 
 impl KaspaDbClient {
-    const SCHEMA_VERSION: u8 = 22;
+    pub const SCHEMA_VERSION: u8 = 22;
 
     pub async fn new(url: &str, pool_size: u32) -> Result<KaspaDbClient, Error> {
         let url_cleaned = Regex::new(r"(postgres://postgres:)[^@]+(@)").expect("Failed to parse url").replace(url, "$1$2");
@@ -223,6 +226,38 @@ impl KaspaDbClient {
 
     pub async fn select_is_chain_block(&self, block_hash: &Hash) -> Result<bool, Error> {
         query::select::select_is_chain_block(block_hash, &self.pool).await
+    }
+
+    pub async fn select_recent_blocks(&self, limit: i64) -> Result<Vec<ApiBlock>, Error> {
+        query::select::select_recent_blocks(limit, &self.pool).await
+    }
+
+    pub async fn select_block(&self, hash: &Hash) -> Result<Option<ApiBlock>, Error> {
+        query::select::select_block(hash, &self.pool).await
+    }
+
+    pub async fn select_transaction(&self, transaction_id: &Hash) -> Result<Option<ApiTransaction>, Error> {
+        query::select::select_transaction(transaction_id, &self.pool).await
+    }
+
+    pub async fn select_address_transactions(&self, address: &str, limit: i64) -> Result<Vec<ApiAddressTransaction>, Error> {
+        query::select::select_address_transactions(address, limit, &self.pool).await
+    }
+
+    pub async fn select_address_balance(&self, address: &str) -> Result<ApiAddressBalance, Error> {
+        query::select::select_address_balance(address, &self.pool).await
+    }
+
+    pub async fn select_address_utxos(&self, address: &str, limit: i64) -> Result<Vec<ApiAddressUtxo>, Error> {
+        query::select::select_address_utxos(address, limit, &self.pool).await
+    }
+
+    pub async fn select_search(&self, query: &str, limit: i64) -> Result<Vec<ApiSearchResult>, Error> {
+        query::select::select_search(query, limit, &self.pool).await
+    }
+
+    pub async fn select_toccata_metrics(&self) -> Result<ApiToccataMetrics, Error> {
+        query::select::select_toccata_metrics(&self.pool).await
     }
 
     pub async fn insert_blocks(&self, blocks: &[Block]) -> Result<u64, Error> {
