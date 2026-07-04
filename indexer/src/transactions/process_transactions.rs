@@ -103,45 +103,62 @@ pub async fn process_transactions(
             if checkpoint_blocks.len() >= batch_size
                 || (!checkpoint_blocks.is_empty() && Instant::now().duration_since(last_commit_time).as_secs() > 1)
             {
-                if !disable_rejected_transactions && start_vcp.load(Ordering::Relaxed) {
-                    loop {
-                        if let Some(vcp) = &metrics.read().await.components.virtual_chain_processor.last_block {
-                            if vcp.daa_score.saturating_sub(checkpoint_blocks.last().unwrap().daa_score) >= 3 * settings.net_bps as u64
-                            {
-                                break;
-                            }
-                        }
-                        debug!("Transaction processor is waiting for virtual chain processor to catch up...");
-                        sleep(Duration::from_millis(1000)).await;
-                        if signal_handler.is_shutdown() {
-                            return;
-                        }
-                    }
-                }
-                let start_commit_time = Instant::now();
-                let transactions_len = transactions.len();
-
-                let tx_handle = task::spawn(insert_txs(batch_scale, batch_concurrency, transactions, false, database.clone()));
-                let tx_addr_handle = if !exclude_tx_out_script_public_key_address {
-                    task::spawn(insert_tx_addr(
-                        batch_scale,
-                        batch_concurrency,
-                        tx_address_transactions.into_iter().collect(),
-                        database.clone(),
-                    ))
-                } else {
-                    task::spawn(insert_tx_script(
-                        batch_scale,
-                        batch_concurrency,
-                        tx_script_transactions.into_iter().collect(),
-                        database.clone(),
-                    ))
-                };
-                let rows_affected_tx = tx_handle.await.unwrap();
-                let rows_affected_tx_addr = tx_addr_handle.await.unwrap();
-
                 let last_checkpoint = checkpoint_blocks.last().unwrap().clone();
                 let last_block_time = last_checkpoint.timestamp;
+
+                if !disable_rejected_transactions {
+                    if start_vcp.load(Ordering::Relaxed) {
+                        loop {
+                            if let Some(vcp) = &metrics.read().await.components.virtual_chain_processor.last_block {
+                                if vcp.daa_score.saturating_sub(checkpoint_blocks.last().unwrap().daa_score)
+                                    >= 3 * settings.net_bps as u64
+                                {
+                                    break;
+                                }
+                            }
+                            debug!("Transaction processor is waiting for virtual chain processor to catch up...");
+                            sleep(Duration::from_millis(1000)).await;
+                            if signal_handler.is_shutdown() {
+                                return;
+                            }
+                        }
+                    }
+                    let start_commit_time = Instant::now();
+                    let transactions_len = transactions.len();
+
+                    let tx_handle = task::spawn(insert_txs(batch_scale, batch_concurrency, transactions, false, database.clone()));
+                    let tx_addr_handle = if !exclude_tx_out_script_public_key_address {
+                        task::spawn(insert_tx_addr(
+                            batch_scale,
+                            batch_concurrency,
+                            tx_address_transactions.into_iter().collect(),
+                            database.clone(),
+                        ))
+                    } else {
+                        task::spawn(insert_tx_script(
+                            batch_scale,
+                            batch_concurrency,
+                            tx_script_transactions.into_iter().collect(),
+                            database.clone(),
+                        ))
+                    };
+                    let rows_affected_tx = tx_handle.await.unwrap();
+                    let rows_affected_tx_addr = tx_addr_handle.await.unwrap();
+
+                    let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
+                    let tps = if commit_time > 0 { transactions_len as f64 / commit_time as f64 * 1000f64 } else { 0.0 };
+                    info!(
+                        "Committed {} new txs in {}ms ({:.1} tps, {} adr_tx). Last tx: {}",
+                        rows_affected_tx,
+                        commit_time,
+                        tps,
+                        rows_affected_tx_addr,
+                        chrono::DateTime::from_timestamp_millis(last_block_time as i64 / 1000 * 1000).unwrap()
+                    );
+                    transactions = vec![];
+                    tx_address_transactions = IndexSet::new();
+                    tx_script_transactions = IndexSet::new();
+                }
 
                 let mut metrics = metrics.write().await;
                 metrics.components.transaction_processor.update_last_block(last_checkpoint.into());
@@ -153,19 +170,6 @@ pub async fn process_transactions(
                         sleep(Duration::from_secs(1)).await;
                     }
                 }
-                let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
-                let tps = transactions_len as f64 / commit_time as f64 * 1000f64;
-                info!(
-                    "Committed {} new txs in {}ms ({:.1} tps, {} adr_tx). Last tx: {}",
-                    rows_affected_tx,
-                    commit_time,
-                    tps,
-                    rows_affected_tx_addr,
-                    chrono::DateTime::from_timestamp_millis(last_block_time as i64 / 1000 * 1000).unwrap()
-                );
-                transactions = vec![];
-                tx_address_transactions = IndexSet::new();
-                tx_script_transactions = IndexSet::new();
                 checkpoint_blocks = vec![];
                 last_commit_time = Instant::now();
             }
