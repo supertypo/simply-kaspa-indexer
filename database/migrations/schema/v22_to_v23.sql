@@ -1,5 +1,5 @@
 --------------------------------------------------------------
--- v22: Denormalize blocks_transactions
+-- v23: Denormalize blocks_transactions
 --------------------------------------------------------------
 
 -- Consider adjusting work_mem and max_parallel_workers_per_gather first
@@ -14,7 +14,7 @@ SELECT DISTINCT ON (bt.transaction_id)
     bt.transaction_id,
     bt.block_hash
 FROM blocks_transactions bt
-         JOIN blocks b ON b.hash = bt.block_hash
+JOIN blocks b ON b.hash = bt.block_hash
 ORDER BY bt.transaction_id, b.blue_score ASC NULLS LAST;
 
 -- Update planner stats
@@ -34,7 +34,7 @@ SELECT
     t.outputs,
     d.block_hash
 FROM transactions t
-         LEFT JOIN blocks_transactions_dedup d USING (transaction_id);
+LEFT JOIN blocks_transactions_dedup d USING (transaction_id);
 
 -- Replace old transactions table
 DROP TABLE transactions;
@@ -74,7 +74,7 @@ SELECT
     b.utxo_commitment,
     b.version
 FROM blocks b
-         LEFT JOIN (
+LEFT JOIN (
     SELECT block_hash, array_agg(transaction_id) AS transaction_ids
     FROM blocks_transactions
     GROUP BY block_hash
