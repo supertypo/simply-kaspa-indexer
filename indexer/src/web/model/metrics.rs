@@ -3,6 +3,8 @@ use crate::settings::Settings;
 use bytesize::ByteSize;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use simply_kaspa_database::client::KaspaDbClient;
+use simply_kaspa_database::models::query::api::{ApiToccataCovenantMetrics, ApiToccataLaneMetrics, ApiToccataMetrics};
 use simply_kaspa_database::models::query::database_details::DatabaseDetails;
 use simply_kaspa_database::models::query::table_details::TableDetails;
 use std::collections::HashMap;
@@ -14,6 +16,7 @@ use utoipa::ToSchema;
 pub struct Metrics {
     pub name: String,
     pub version: String,
+    pub schema_version: u8,
     pub commit_id: String,
     pub settings: Option<Settings>,
     pub process: MetricsProcess,
@@ -21,6 +24,7 @@ pub struct Metrics {
     pub checkpoint: MetricsCheckpoint,
     pub components: MetricsComponent,
     pub database: MetricsDb,
+    pub toccata: MetricsToccata,
 }
 
 impl Metrics {
@@ -28,6 +32,7 @@ impl Metrics {
         Self {
             name,
             version,
+            schema_version: KaspaDbClient::SCHEMA_VERSION,
             commit_id,
             settings: None,
             process: MetricsProcess::new(),
@@ -35,8 +40,197 @@ impl Metrics {
             checkpoint: MetricsCheckpoint::new(),
             components: MetricsComponent::new(),
             database: MetricsDb::new(),
+            toccata: MetricsToccata::new(),
         }
     }
+}
+
+#[derive(ToSchema, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsToccata {
+    pub rollup_updated_at: Option<i64>,
+    pub tx_version_1: bool,
+    pub storage_mass: bool,
+    pub compute_budget: bool,
+    pub covenant_binding: bool,
+    pub utxo_covenant_id: bool,
+    pub subnetwork_id: bool,
+    pub gas: bool,
+    pub get_block_reward_info: bool,
+    pub get_seq_commit_lane_proof: bool,
+    pub minimum_relay_fee_sompi_per_gram: u64,
+    pub tx_v1_count: u64,
+    pub block_v2_count: u64,
+    pub covenant_tx_count: u64,
+    pub covenant_input_count: u64,
+    pub covenant_output_count: u64,
+    pub covenant_utxo_count: u64,
+    pub covenant_id_count: u64,
+    pub active_user_lanes: u64,
+    pub user_lane_tx_count: u64,
+    pub gas_total: u64,
+    pub seq_commit_block_count: u64,
+    pub storage_mass_max: u64,
+    pub storage_mass_avg: u64,
+    pub compute_mass_max: u64,
+    pub transient_mass_max: u64,
+    pub low_fee_rejections: u64,
+    pub zk_precompile_tx_count: u64,
+    pub groth16_tx_count: u64,
+    pub risc0_tx_count: u64,
+    pub zk_proof_failures: u64,
+    pub bridge_lockbox_count: u64,
+    pub bridge_unlock_count: u64,
+    pub token_candidate_count: u64,
+    pub nft_candidate_count: u64,
+    pub lane_proof_failures: u64,
+    pub top_covenants: Vec<MetricsToccataCovenant>,
+    pub top_lanes: Vec<MetricsToccataLane>,
+    pub top_zk_proofs: Vec<MetricsToccataZkProof>,
+    pub bridge_lockboxes: Vec<MetricsToccataBridgeLockbox>,
+}
+
+impl Default for MetricsToccata {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetricsToccata {
+    pub fn new() -> Self {
+        Self {
+            tx_version_1: true,
+            storage_mass: false,
+            compute_budget: true,
+            covenant_binding: true,
+            utxo_covenant_id: true,
+            subnetwork_id: true,
+            gas: false,
+            get_block_reward_info: false,
+            get_seq_commit_lane_proof: false,
+            rollup_updated_at: None,
+            minimum_relay_fee_sompi_per_gram: 100,
+            tx_v1_count: 0,
+            block_v2_count: 0,
+            covenant_tx_count: 0,
+            covenant_input_count: 0,
+            covenant_output_count: 0,
+            covenant_utxo_count: 0,
+            covenant_id_count: 0,
+            active_user_lanes: 0,
+            user_lane_tx_count: 0,
+            gas_total: 0,
+            seq_commit_block_count: 0,
+            storage_mass_max: 0,
+            storage_mass_avg: 0,
+            compute_mass_max: 0,
+            transient_mass_max: 0,
+            low_fee_rejections: 0,
+            zk_precompile_tx_count: 0,
+            groth16_tx_count: 0,
+            risc0_tx_count: 0,
+            zk_proof_failures: 0,
+            bridge_lockbox_count: 0,
+            bridge_unlock_count: 0,
+            token_candidate_count: 0,
+            nft_candidate_count: 0,
+            lane_proof_failures: 0,
+            top_covenants: Vec::new(),
+            top_lanes: Vec::new(),
+            top_zk_proofs: Vec::new(),
+            bridge_lockboxes: Vec::new(),
+        }
+    }
+
+    pub fn update_from_indexer(&mut self, metrics: ApiToccataMetrics) {
+        self.rollup_updated_at = metrics.rollup_updated_at;
+        self.tx_v1_count = metrics.tx_v1_count.max(0) as u64;
+        self.block_v2_count = metrics.block_v2_count.max(0) as u64;
+        self.covenant_tx_count = metrics.covenant_tx_count.max(0) as u64;
+        self.covenant_input_count = metrics.covenant_input_count.max(0) as u64;
+        self.covenant_output_count = metrics.covenant_output_count.max(0) as u64;
+        self.covenant_utxo_count = metrics.covenant_output_count.max(0) as u64;
+        self.covenant_id_count = metrics.covenant_id_count.max(0) as u64;
+        self.user_lane_tx_count = metrics.user_lane_tx_count.max(0) as u64;
+        self.active_user_lanes = metrics.active_user_lanes.max(0) as u64;
+        self.seq_commit_block_count = metrics.seq_commit_block_count.max(0) as u64;
+        self.top_covenants = metrics.top_covenants.into_iter().map(MetricsToccataCovenant::from).collect();
+        self.top_lanes = metrics.top_lanes.into_iter().map(MetricsToccataLane::from).collect();
+    }
+}
+
+#[derive(ToSchema, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsToccataCovenant {
+    pub covenant_id: String,
+    pub tx_count: u64,
+    pub utxo_count: u64,
+    pub input_count: u64,
+    pub output_count: u64,
+    pub token_like: bool,
+    pub nft_like: bool,
+    pub latest_tx_id: Option<String>,
+}
+
+impl From<ApiToccataCovenantMetrics> for MetricsToccataCovenant {
+    fn from(covenant: ApiToccataCovenantMetrics) -> Self {
+        Self {
+            covenant_id: covenant.covenant_id,
+            tx_count: covenant.tx_count.max(0) as u64,
+            utxo_count: covenant.output_count.max(0) as u64,
+            input_count: covenant.input_count.max(0) as u64,
+            output_count: covenant.output_count.max(0) as u64,
+            token_like: false,
+            nft_like: covenant.output_count == 1,
+            latest_tx_id: covenant.latest_tx_id.map(|tx_id| tx_id.to_string()),
+        }
+    }
+}
+
+#[derive(ToSchema, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsToccataLane {
+    pub lane_key: String,
+    pub tx_count: u64,
+    pub gas_total: u64,
+    pub seq_commit_block_count: u64,
+    pub lane_proof_ok: bool,
+    pub latest_block_hash: Option<String>,
+    pub latest_tx_id: Option<String>,
+}
+
+impl From<ApiToccataLaneMetrics> for MetricsToccataLane {
+    fn from(lane: ApiToccataLaneMetrics) -> Self {
+        Self {
+            lane_key: lane.lane_key,
+            tx_count: lane.tx_count.max(0) as u64,
+            gas_total: 0,
+            seq_commit_block_count: 0,
+            lane_proof_ok: false,
+            latest_block_hash: None,
+            latest_tx_id: lane.latest_tx_id.map(|tx_id| tx_id.to_string()),
+        }
+    }
+}
+
+#[derive(ToSchema, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsToccataZkProof {
+    pub proof_type: String,
+    pub tx_count: u64,
+    pub failure_count: u64,
+    pub latest_tx_id: Option<String>,
+}
+
+#[derive(ToSchema, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsToccataBridgeLockbox {
+    pub label: String,
+    pub covenant_id: Option<String>,
+    pub locked_amount_sompi: u64,
+    pub unlock_tx_count: u64,
+    pub proof_type: String,
+    pub latest_tx_id: Option<String>,
 }
 
 #[derive(ToSchema, Clone, Serialize, Deserialize)]

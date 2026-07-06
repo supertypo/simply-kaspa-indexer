@@ -1,124 +1,11 @@
-CREATE TABLE vars
-(
-    key   VARCHAR(255) PRIMARY KEY,
-    value TEXT NOT NULL
-);
-INSERT INTO vars (key, value)
-VALUES ('schema_version', '24');
-
-
-CREATE TABLE blocks
-(
-    hash                    BYTEA PRIMARY KEY,
-    accepted_id_merkle_root BYTEA,
-    merge_set_blues_hashes  BYTEA[],
-    merge_set_reds_hashes   BYTEA[],
-    selected_parent_hash    BYTEA,
-    bits                    BIGINT,
-    blue_score              BIGINT,
-    blue_work               BYTEA,
-    daa_score               BIGINT,
-    hash_merkle_root        BYTEA,
-    nonce                   BYTEA,
-    pruning_point           BYTEA,
-    "timestamp"             BIGINT,
-    utxo_commitment         BYTEA,
-    version                 SMALLINT
-);
-CREATE INDEX ON blocks (blue_score);
-
-
-CREATE TABLE block_parent
-(
-    block_hash  BYTEA,
-    parent_hash BYTEA,
-    PRIMARY KEY (block_hash, parent_hash)
-);
-CREATE INDEX ON block_parent (parent_hash);
-
-
-CREATE TYPE transactions_inputs AS
-(
-    index                    SMALLINT,
-    previous_outpoint_hash   BYTEA,
-    previous_outpoint_index  SMALLINT,
-    signature_script         BYTEA,
-    sig_op_count             SMALLINT,
-    previous_outpoint_script BYTEA,
-    previous_outpoint_amount BIGINT,
-    compute_budget           SMALLINT,
-    covenant_id              BYTEA
-);
-
-
-CREATE TYPE transactions_outputs AS
-(
-    index                      SMALLINT,
-    amount                     BIGINT,
-    script_public_key          BYTEA,
-    script_public_key_address  TEXT,
-    covenant_authorizing_input SMALLINT,
-    covenant_id                BYTEA
-);
-
-
-CREATE TABLE transactions
-(
-    transaction_id BYTEA PRIMARY KEY,
-    subnetwork_id  BYTEA,
-    hash           BYTEA,
-    mass           INTEGER,
-    payload        BYTEA,
-    block_time     BIGINT,
-    version        SMALLINT,
-    inputs         transactions_inputs[],
-    outputs        transactions_outputs[]
-);
-CREATE INDEX ON transactions (block_time DESC);
-
-
-CREATE TABLE transactions_acceptances
-(
-    transaction_id BYTEA UNIQUE,
-    block_hash     BYTEA
-);
-CREATE INDEX ON transactions_acceptances (block_hash);
-
-
-CREATE TABLE blocks_transactions
-(
-    block_hash     BYTEA,
-    transaction_id BYTEA,
-    PRIMARY KEY (block_hash, transaction_id)
-);
-CREATE INDEX ON blocks_transactions (transaction_id);
-
-
-CREATE TABLE addresses_transactions
-(
-    address        TEXT,
-    transaction_id BYTEA,
-    block_time     BIGINT,
-    PRIMARY KEY (address, block_time, transaction_id)
-);
-CREATE INDEX ON addresses_transactions (block_time DESC);
-
-
-CREATE TABLE scripts_transactions
-(
-    script_public_key BYTEA,
-    transaction_id    BYTEA,
-    block_time        BIGINT,
-    PRIMARY KEY (script_public_key, block_time, transaction_id)
-);
-CREATE INDEX ON scripts_transactions (block_time DESC);
-
+--------------------------------------------------------------
+-- v23: Toccata metrics rollups
+--------------------------------------------------------------
 
 CREATE TABLE toccata_metrics
 (
     key   TEXT PRIMARY KEY,
-    value BIGINT NOT NULL DEFAULT 0,
-    updated_at BIGINT
+    value BIGINT NOT NULL DEFAULT 0
 );
 
 INSERT INTO toccata_metrics (key, value)
@@ -151,18 +38,15 @@ CREATE TABLE toccata_lanes
 
 CREATE OR REPLACE FUNCTION bump_toccata_metric(metric_key TEXT, delta BIGINT)
 RETURNS VOID AS $$
-DECLARE
-    now_ms BIGINT := (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT;
 BEGIN
     IF delta = 0 THEN
         RETURN;
     END IF;
 
-    INSERT INTO toccata_metrics (key, value, updated_at)
-    VALUES (metric_key, delta, now_ms)
+    INSERT INTO toccata_metrics (key, value)
+    VALUES (metric_key, delta)
     ON CONFLICT (key) DO UPDATE
-    SET value = toccata_metrics.value + EXCLUDED.value,
-        updated_at = EXCLUDED.updated_at;
+    SET value = toccata_metrics.value + EXCLUDED.value;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -266,3 +150,6 @@ CREATE TRIGGER transactions_toccata_metrics_insert
 AFTER INSERT ON transactions
 FOR EACH ROW
 EXECUTE FUNCTION update_toccata_transaction_metrics();
+
+-- Update schema_version
+UPDATE vars SET value = '23' WHERE key = 'schema_version';
