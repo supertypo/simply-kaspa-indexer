@@ -2,7 +2,6 @@
 -- v23: Denormalize blocks_transactions
 --------------------------------------------------------------
 
--- Consider adjusting work_mem and max_parallel_workers_per_gather first
 SET synchronous_commit = off;
 
 --
