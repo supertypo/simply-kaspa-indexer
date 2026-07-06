@@ -3,10 +3,8 @@ use simply_kaspa_cli::cli_args::{CliArgs, CliDisable, CliField};
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
 use simply_kaspa_database::models::block::Block as SqlBlock;
 use simply_kaspa_database::models::block_parent::BlockParent as SqlBlockParent;
-use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
 use simply_kaspa_database::models::script_transaction::ScriptTransaction as SqlScriptTransaction;
 use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
-use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 use std::collections::HashSet;
 
 use crate::{blocks, transactions};
@@ -14,6 +12,7 @@ use crate::{blocks, transactions};
 #[derive(Clone)]
 pub struct KaspaDbMapper {
     block_accepted_id_merkle_root: bool,
+    block_transaction_ids: bool,
     block_merge_set_blues_hashes: bool,
     block_merge_set_reds_hashes: bool,
     block_selected_parent_hash: bool,
@@ -32,6 +31,7 @@ pub struct KaspaDbMapper {
     tx_mass: bool,
     tx_payload: bool,
     tx_block_time: bool,
+    tx_block_hash: bool,
     tx_in: bool,
     tx_in_previous_outpoint: bool,
     tx_in_signature_script: bool,
@@ -44,13 +44,14 @@ pub struct KaspaDbMapper {
     tx_out_script_public_key_address: bool,
     tx_out_covenant_authorizing_input: bool,
     tx_out_covenant_id: bool,
-    address_blacklist: HashSet<String>,
+    ignore_self_sends_groups: Vec<HashSet<String>>,
 }
 
 impl KaspaDbMapper {
     pub fn new(cli_args: CliArgs) -> KaspaDbMapper {
         KaspaDbMapper {
             block_accepted_id_merkle_root: !cli_args.is_excluded(CliField::BlockAcceptedIdMerkleRoot),
+            block_transaction_ids: !cli_args.is_excluded(CliField::BlockTransactionIds),
             block_merge_set_blues_hashes: !cli_args.is_excluded(CliField::BlockMergeSetBluesHashes),
             block_merge_set_reds_hashes: !cli_args.is_excluded(CliField::BlockMergeSetRedsHashes),
             block_selected_parent_hash: !cli_args.is_excluded(CliField::BlockSelectedParentHash),
@@ -69,6 +70,7 @@ impl KaspaDbMapper {
             tx_mass: !cli_args.is_excluded(CliField::TxMass),
             tx_payload: !cli_args.is_excluded(CliField::TxPayload),
             tx_block_time: !cli_args.is_excluded(CliField::TxBlockTime),
+            tx_block_hash: !cli_args.is_excluded(CliField::TxBlockHash),
             tx_in: !cli_args.is_disabled(CliDisable::TransactionsInputs),
             tx_in_previous_outpoint: !cli_args.is_excluded(CliField::TxInPreviousOutpoint),
             tx_in_signature_script: !cli_args.is_excluded(CliField::TxInSignatureScript),
@@ -81,7 +83,13 @@ impl KaspaDbMapper {
             tx_out_script_public_key_address: !cli_args.is_excluded(CliField::TxOutScriptPublicKeyAddress),
             tx_out_covenant_authorizing_input: !cli_args.is_excluded(CliField::TxOutCovenantAuthorizingInput),
             tx_out_covenant_id: !cli_args.is_excluded(CliField::TxOutCovenantId),
-            address_blacklist: cli_args.exclude_addresses.unwrap_or_default().into_iter().collect(),
+            ignore_self_sends_groups: cli_args
+                .ignore_self_sends
+                .unwrap_or_default()
+                .into_iter()
+                .map(|s| s.split(',').filter(|a| !a.is_empty()).map(str::to_owned).collect::<HashSet<String>>())
+                .filter(|g| !g.is_empty())
+                .collect(),
         }
     }
 
@@ -89,6 +97,7 @@ impl KaspaDbMapper {
         blocks::map_block(
             block,
             self.block_accepted_id_merkle_root,
+            self.block_transaction_ids,
             self.block_merge_set_blues_hashes,
             self.block_merge_set_reds_hashes,
             self.block_selected_parent_hash,
@@ -109,14 +118,6 @@ impl KaspaDbMapper {
         blocks::map_block_parents(block)
     }
 
-    pub fn map_block_transaction_ids(&self, block: &RpcBlock) -> Vec<SqlHash> {
-        blocks::map_block_transaction_ids(block)
-    }
-
-    pub fn count_block_transactions(&self, block: &RpcBlock) -> usize {
-        block.verbose_data.as_ref().expect("Block verbose_data is missing").transaction_ids.len()
-    }
-
     pub fn map_transaction(&self, transaction: &RpcTransaction) -> SqlTransaction {
         transactions::map_transaction(
             transaction,
@@ -125,6 +126,7 @@ impl KaspaDbMapper {
             self.tx_mass,
             self.tx_payload,
             self.tx_block_time,
+            self.tx_block_hash,
             self.tx_in,
             self.tx_in_previous_outpoint,
             self.tx_in_signature_script,
@@ -139,16 +141,12 @@ impl KaspaDbMapper {
         )
     }
 
-    pub fn map_block_transaction(&self, transaction: &RpcTransaction) -> SqlBlockTransaction {
-        transactions::map_block_transaction(transaction)
-    }
-
     pub fn map_transaction_outputs_address(&self, transaction: &RpcTransaction) -> Vec<SqlAddressTransaction> {
-        transactions::map_transaction_outputs_address(transaction, &self.address_blacklist)
+        transactions::map_transaction_outputs_address(transaction)
     }
 
     pub fn map_transaction_outputs_script(&self, transaction: &RpcTransaction) -> Vec<SqlScriptTransaction> {
-        transactions::map_transaction_outputs_script(transaction, &self.address_blacklist)
+        transactions::map_transaction_outputs_script(transaction)
     }
 
     pub fn map_optional_transaction(&self, transaction: &RpcOptionalTransaction) -> SqlTransaction {
@@ -159,6 +157,7 @@ impl KaspaDbMapper {
             self.tx_mass,
             self.tx_payload,
             self.tx_block_time,
+            self.tx_block_hash,
             self.tx_in,
             self.tx_in_previous_outpoint,
             self.tx_in_signature_script,
@@ -175,18 +174,69 @@ impl KaspaDbMapper {
     }
 
     pub fn map_optional_transaction_inputs_address(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlAddressTransaction> {
-        transactions::map_optional_transaction_inputs_address(transaction, &self.address_blacklist)
+        transactions::map_optional_transaction_inputs_address(transaction)
     }
 
     pub fn map_optional_transaction_outputs_address(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlAddressTransaction> {
-        transactions::map_optional_transaction_outputs_address(transaction, &self.address_blacklist)
+        transactions::map_optional_transaction_outputs_address(transaction)
     }
 
     pub fn map_optional_transaction_inputs_script(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
-        transactions::map_optional_transaction_inputs_script(transaction, &self.address_blacklist)
+        transactions::map_optional_transaction_inputs_script(transaction)
     }
 
     pub fn map_optional_transaction_outputs_script(&self, transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
-        transactions::map_optional_transaction_outputs_script(transaction, &self.address_blacklist)
+        transactions::map_optional_transaction_outputs_script(transaction)
+    }
+
+    /// Returns `true` if all outputs of this transaction belong to a single ignore-self-sends group.
+    /// Used in the rejected-transactions phase where input addresses are unavailable.
+    /// Coinbase transactions are never filtered.
+    pub fn is_self_send_outputs_only(&self, transaction: &RpcTransaction) -> bool {
+        if self.ignore_self_sends_groups.is_empty() || transaction.outputs.is_empty() {
+            return false;
+        }
+        if transaction.subnetwork_id.is_builtin() {
+            return false;
+        }
+        let output_addrs: Vec<String> = transaction
+            .outputs
+            .iter()
+            .map(|o| o.verbose_data.as_ref().unwrap().script_public_key_address.address_to_string())
+            .collect();
+        self.ignore_self_sends_groups.iter().any(|group| output_addrs.iter().all(|a| group.contains(a)))
+    }
+
+    /// Returns `true` if all inputs and outputs of this transaction belong to a single ignore-self-sends group.
+    /// Used in the virtual-chain acceptance phase where both sides are available.
+    /// Coinbase transactions are never filtered.
+    pub fn is_self_send_full(&self, transaction: &RpcOptionalTransaction) -> bool {
+        if self.ignore_self_sends_groups.is_empty() || transaction.outputs.is_empty() {
+            return false;
+        }
+        if transaction.subnetwork_id.as_ref().unwrap().is_builtin() {
+            return false;
+        }
+        let all_addrs: Vec<String> = transaction
+            .outputs
+            .iter()
+            .map(|o| o.verbose_data.as_ref().unwrap().script_public_key_address.as_ref().unwrap().address_to_string())
+            .chain(transaction.inputs.iter().map(|i| {
+                i.verbose_data
+                    .as_ref()
+                    .unwrap()
+                    .utxo_entry
+                    .as_ref()
+                    .unwrap()
+                    .verbose_data
+                    .as_ref()
+                    .unwrap()
+                    .script_public_key_address
+                    .as_ref()
+                    .unwrap()
+                    .address_to_string()
+            }))
+            .collect();
+        self.ignore_self_sends_groups.iter().any(|group| all_addrs.iter().all(|a| group.contains(a)))
     }
 }

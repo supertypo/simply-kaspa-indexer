@@ -1,8 +1,6 @@
 use kaspa_rpc_core::{RpcOptionalTransaction, RpcTransaction};
-use std::collections::HashSet;
 
 use simply_kaspa_database::models::address_transaction::AddressTransaction as SqlAddressTransaction;
-use simply_kaspa_database::models::block_transaction::BlockTransaction as SqlBlockTransaction;
 use simply_kaspa_database::models::script_transaction::ScriptTransaction as SqlScriptTransaction;
 use simply_kaspa_database::models::transaction::Transaction as SqlTransaction;
 use simply_kaspa_database::models::transaction_input::TransactionInput as SqlTransactionInput;
@@ -24,6 +22,7 @@ pub fn map_transaction(
     include_mass: bool,
     include_payload: bool,
     include_block_time: bool,
+    include_block_hash: bool,
     include_in: bool,
     include_in_previous_outpoint: bool,
     include_in_signature_script: bool,
@@ -44,6 +43,7 @@ pub fn map_transaction(
         mass: (include_mass && verbose_data.compute_mass != 0).then_some(verbose_data.compute_mass as i32),
         payload: (include_payload && !transaction.payload.is_empty()).then_some(transaction.payload.to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time as i64),
+        block_hash: include_block_hash.then_some(verbose_data.block_hash.into()),
         version: (transaction.version != 0).then_some(transaction.version as i16),
         inputs: include_in
             .then(|| {
@@ -69,11 +69,6 @@ pub fn map_transaction(
             })
             .flatten(),
     }
-}
-
-pub fn map_block_transaction(transaction: &RpcTransaction) -> SqlBlockTransaction {
-    let verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
-    SqlBlockTransaction { block_hash: verbose_data.block_hash.into(), transaction_id: verbose_data.transaction_id.into() }
 }
 
 pub fn map_transaction_inputs(
@@ -134,41 +129,31 @@ pub fn map_transaction_outputs(
     })
 }
 
-pub fn map_transaction_outputs_address(transaction: &RpcTransaction, blacklist: &HashSet<String>) -> Vec<SqlAddressTransaction> {
+pub fn map_transaction_outputs_address(transaction: &RpcTransaction) -> Vec<SqlAddressTransaction> {
     let tx_verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
     transaction
         .outputs
         .iter()
-        .filter_map(|output| {
+        .map(|output| {
             let verbose_data = output.verbose_data.as_ref().expect("Transaction output verbose_data is missing");
-            let address = verbose_data.script_public_key_address.payload_to_string();
-            if blacklist.contains(&address) {
-                return None;
-            }
-            Some(SqlAddressTransaction {
-                address,
+            SqlAddressTransaction {
+                address: verbose_data.script_public_key_address.payload_to_string(),
                 transaction_id: tx_verbose_data.transaction_id.into(),
                 block_time: tx_verbose_data.block_time as i64,
-            })
+            }
         })
         .collect()
 }
 
-pub fn map_transaction_outputs_script(transaction: &RpcTransaction, blacklist: &HashSet<String>) -> Vec<SqlScriptTransaction> {
+pub fn map_transaction_outputs_script(transaction: &RpcTransaction) -> Vec<SqlScriptTransaction> {
     let tx_verbose_data = transaction.verbose_data.as_ref().expect("Transaction verbose_data is missing");
     transaction
         .outputs
         .iter()
-        .filter_map(|output| {
-            let verbose_data = output.verbose_data.as_ref().expect("Transaction output verbose_data is missing");
-            if blacklist.contains(&verbose_data.script_public_key_address.payload_to_string()) {
-                return None;
-            }
-            Some(SqlScriptTransaction {
-                script_public_key: output.script_public_key.script().to_vec(),
-                transaction_id: tx_verbose_data.transaction_id.into(),
-                block_time: tx_verbose_data.block_time as i64,
-            })
+        .map(|output| SqlScriptTransaction {
+            script_public_key: output.script_public_key.script().to_vec(),
+            transaction_id: tx_verbose_data.transaction_id.into(),
+            block_time: tx_verbose_data.block_time as i64,
         })
         .collect()
 }
@@ -180,6 +165,7 @@ pub fn map_optional_transaction(
     include_mass: bool,
     include_payload: bool,
     include_block_time: bool,
+    include_block_hash: bool,
     include_in: bool,
     include_in_previous_outpoint: bool,
     include_in_signature_script: bool,
@@ -202,6 +188,7 @@ pub fn map_optional_transaction(
         payload: (include_payload && !transaction.payload.as_ref().unwrap().is_empty())
             .then_some(transaction.payload.as_ref().unwrap().to_owned()),
         block_time: include_block_time.then_some(verbose_data.block_time.unwrap() as i64),
+        block_hash: include_block_hash.then_some(verbose_data.block_hash.unwrap().into()),
         version: transaction.version.and_then(|v| (v != 0).then_some(v as i16)),
         inputs: include_in
             .then(|| {
@@ -296,18 +283,15 @@ fn map_optional_transaction_outputs(
     })
 }
 
-pub fn map_optional_transaction_inputs_address(
-    transaction: &RpcOptionalTransaction,
-    blacklist: &HashSet<String>,
-) -> Vec<SqlAddressTransaction> {
+pub fn map_optional_transaction_inputs_address(transaction: &RpcOptionalTransaction) -> Vec<SqlAddressTransaction> {
     let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
     let tx_id: SqlHash = verbose_data.transaction_id.expect("transaction_id missing in verbose data").into();
     let block_time = verbose_data.block_time.unwrap() as i64;
     transaction
         .inputs
         .iter()
-        .filter_map(|input| {
-            let address = input
+        .map(|input| SqlAddressTransaction {
+            address: input
                 .verbose_data
                 .as_ref()
                 .unwrap()
@@ -320,74 +304,65 @@ pub fn map_optional_transaction_inputs_address(
                 .script_public_key_address
                 .as_ref()
                 .unwrap()
-                .payload_to_string();
-            if blacklist.contains(&address) {
-                return None;
-            }
-            Some(SqlAddressTransaction { address, transaction_id: tx_id.clone(), block_time })
+                .payload_to_string(),
+            transaction_id: tx_id.clone(),
+            block_time,
         })
         .collect()
 }
 
-pub fn map_optional_transaction_inputs_script(
-    transaction: &RpcOptionalTransaction,
-    blacklist: &HashSet<String>,
-) -> Vec<SqlScriptTransaction> {
+pub fn map_optional_transaction_inputs_script(transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
     let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
     let tx_id: SqlHash = verbose_data.transaction_id.expect("transaction_id missing in verbose data").into();
     let block_time = verbose_data.block_time.unwrap() as i64;
     transaction
         .inputs
         .iter()
-        .filter_map(|input| {
-            let utxo = input.verbose_data.as_ref().unwrap().utxo_entry.as_ref().unwrap();
-            let address = utxo.verbose_data.as_ref().unwrap().script_public_key_address.as_ref().unwrap().payload_to_string();
-            if blacklist.contains(&address) {
-                return None;
-            }
-            let script_public_key = utxo.script_public_key.as_ref().unwrap().script().to_vec();
-            Some(SqlScriptTransaction { script_public_key, transaction_id: tx_id.clone(), block_time })
+        .map(|input| SqlScriptTransaction {
+            script_public_key: input
+                .verbose_data
+                .as_ref()
+                .unwrap()
+                .utxo_entry
+                .as_ref()
+                .unwrap()
+                .script_public_key
+                .as_ref()
+                .unwrap()
+                .script()
+                .to_vec(),
+            transaction_id: tx_id.clone(),
+            block_time,
         })
         .collect()
 }
 
-pub fn map_optional_transaction_outputs_address(
-    transaction: &RpcOptionalTransaction,
-    blacklist: &HashSet<String>,
-) -> Vec<SqlAddressTransaction> {
+pub fn map_optional_transaction_outputs_address(transaction: &RpcOptionalTransaction) -> Vec<SqlAddressTransaction> {
     let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
     let tx_id: SqlHash = verbose_data.transaction_id.expect("transaction_id missing in verbose data").into();
     let block_time = verbose_data.block_time.unwrap() as i64;
     transaction
         .outputs
         .iter()
-        .filter_map(|output| {
-            let address = output.verbose_data.as_ref().unwrap().script_public_key_address.as_ref().unwrap().payload_to_string();
-            if blacklist.contains(&address) {
-                return None;
-            }
-            Some(SqlAddressTransaction { address, transaction_id: tx_id.clone(), block_time })
+        .map(|output| SqlAddressTransaction {
+            address: output.verbose_data.as_ref().unwrap().script_public_key_address.as_ref().unwrap().payload_to_string(),
+            transaction_id: tx_id.clone(),
+            block_time,
         })
         .collect()
 }
 
-pub fn map_optional_transaction_outputs_script(
-    transaction: &RpcOptionalTransaction,
-    blacklist: &HashSet<String>,
-) -> Vec<SqlScriptTransaction> {
+pub fn map_optional_transaction_outputs_script(transaction: &RpcOptionalTransaction) -> Vec<SqlScriptTransaction> {
     let verbose_data = transaction.verbose_data.as_ref().expect("Optional transaction verbose_data is missing");
     let tx_id: SqlHash = verbose_data.transaction_id.expect("transaction_id missing in verbose data").into();
     let block_time = verbose_data.block_time.unwrap() as i64;
     transaction
         .outputs
         .iter()
-        .filter_map(|output| {
-            let address = output.verbose_data.as_ref().unwrap().script_public_key_address.as_ref().unwrap().payload_to_string();
-            if blacklist.contains(&address) {
-                return None;
-            }
-            let script_public_key = output.script_public_key.as_ref().unwrap().script().to_vec();
-            Some(SqlScriptTransaction { script_public_key, transaction_id: tx_id.clone(), block_time })
+        .map(|output| SqlScriptTransaction {
+            script_public_key: output.script_public_key.as_ref().unwrap().script().to_vec(),
+            transaction_id: tx_id.clone(),
+            block_time,
         })
         .collect()
 }

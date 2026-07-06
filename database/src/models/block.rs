@@ -5,6 +5,7 @@ use crate::models::types::nonce::Nonce;
 pub struct Block {
     pub hash: Hash,
     pub accepted_id_merkle_root: Option<Hash>,
+    pub transaction_ids: Option<Vec<Hash>>,
     pub merge_set_blues_hashes: Option<Vec<Hash>>,
     pub merge_set_reds_hashes: Option<Vec<Hash>>,
     pub selected_parent_hash: Option<Hash>,

@@ -33,56 +33,6 @@ pub async fn prune_block_parent(blue_score_lt: i64, batch_size: i32, pool: &Pool
     Ok(total_rows_affected)
 }
 
-pub async fn prune_blocks_transactions_using_blocks(blue_score_lt: i64, batch_size: i32, pool: &Pool<Postgres>) -> Result<u64, Error> {
-    let sql = r#"
-        DELETE FROM blocks_transactions
-        WHERE ctid IN (
-            SELECT bt.ctid
-            FROM blocks_transactions bt
-            JOIN blocks b ON bt.block_hash = b.hash
-            WHERE b.blue_score < $1
-            LIMIT $2
-        )
-    "#;
-    let mut total_rows_affected: u64 = 0;
-    loop {
-        let rows_affected = sqlx::query(sql).bind(blue_score_lt).bind(batch_size).execute(pool).await?.rows_affected();
-        if rows_affected == 0 {
-            break;
-        }
-        debug!("prune_blocks_transactions_using_blocks: Deleted {rows_affected} expired blocks_transactions rows");
-        total_rows_affected += rows_affected;
-    }
-    Ok(total_rows_affected)
-}
-
-pub async fn prune_blocks_transactions_using_transactions(
-    block_time_lt: i64,
-    batch_size: i32,
-    pool: &Pool<Postgres>,
-) -> Result<u64, Error> {
-    let sql = r#"
-        DELETE FROM blocks_transactions
-        WHERE ctid IN (
-            SELECT bt.ctid
-            FROM blocks_transactions bt
-            JOIN transactions t ON bt.transaction_id = t.transaction_id
-            WHERE t.block_time < $1
-            LIMIT $2
-        )
-    "#;
-    let mut total_rows_affected: u64 = 0;
-    loop {
-        let rows_affected = sqlx::query(sql).bind(block_time_lt).bind(batch_size).execute(pool).await?.rows_affected();
-        if rows_affected == 0 {
-            break;
-        }
-        debug!("prune_blocks_transactions_using_transactions: Deleted {rows_affected} expired blocks_transactions rows");
-        total_rows_affected += rows_affected;
-    }
-    Ok(total_rows_affected)
-}
-
 pub async fn prune_transactions_acceptances_using_blocks(
     blue_score_lt: i64,
     batch_size: i32,

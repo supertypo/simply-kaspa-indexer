@@ -326,6 +326,8 @@ pub struct MetricsDb {
     pub active_connections: Option<u64>,
     #[schema(example = "100")]
     pub max_connections: Option<u64>,
+    #[schema(example = "0")]
+    pub deadlocks: Option<u64>,
     pub tables: Option<Vec<MetricsDbTable>>,
 }
 
@@ -346,6 +348,7 @@ impl MetricsDb {
             blocked_queries: None,
             active_connections: None,
             max_connections: None,
+            deadlocks: None,
             tables: None,
         }
     }
@@ -362,6 +365,7 @@ impl From<DatabaseDetails> for MetricsDb {
             blocked_queries: Some(database_details.blocked_queries as u64),
             active_connections: Some(database_details.active_connections as u64),
             max_connections: Some(database_details.max_connections as u64),
+            deadlocks: Some(database_details.deadlocks as u64),
             tables: None,
         }
     }

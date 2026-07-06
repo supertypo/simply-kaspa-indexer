@@ -28,8 +28,6 @@ pub enum CliDisable {
     BlocksTable,
     /// Disables the block_parent table
     BlockParentTable,
-    /// Disables the blocks_transactions table
-    BlocksTransactionsTable,
     /// Disables the transactions table
     TransactionsTable,
     /// Disables transactions inputs (array column)
@@ -49,6 +47,7 @@ pub enum CliDisable {
 pub enum CliField {
     None,
     BlockAcceptedIdMerkleRoot,
+    BlockTransactionIds,
     BlockMergeSetBluesHashes,
     BlockMergeSetRedsHashes,
     BlockSelectedParentHash,
@@ -84,6 +83,7 @@ pub enum CliField {
     TxOutScriptPublicKey,
     /// Excluding this, scripts_transactions to be populated instead of adresses_transactions
     TxOutScriptPublicKeyAddress,
+    TxBlockHash,
     TxOutCovenantAuthorizingInput,
     TxOutCovenantId,
 }
@@ -137,8 +137,14 @@ pub struct CliArgs {
         use_value_delimiter = true
     )]
     pub exclude_fields: Option<Vec<CliField>>,
-    #[clap(long, help = "Exclude specific addresses (ex prefix) from addresses/scripts_transactions.", use_value_delimiter = true)]
-    pub exclude_addresses: Option<Vec<String>>,
+    #[clap(
+        long,
+        value_name = "ADDRESSES",
+        action = clap::ArgAction::Append,
+        help = "Ignore self-send transactions within an address group. Specify once per group with comma-separated addresses.\n\
+        Example: --ignore-self-sends=kaspa:abc,kaspa:def --ignore-self-sends=kaspa:xyz,kaspa:uvw"
+    )]
+    pub ignore_self_sends: Option<Vec<String>>,
 }
 
 impl CliArgs {
@@ -176,9 +182,6 @@ pub struct PruningConfig {
     #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for block_parent table")]
     #[serde(with = "humantime_serde")]
     pub retention_block_parent: Option<Duration>,
-    #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for blocks_transactions table")]
-    #[serde(with = "humantime_serde")]
-    pub retention_blocks_transactions: Option<Duration>,
     #[clap(long, value_parser = HumantimeDurationParser, help = "Retention for blocks table")]
     #[serde(with = "humantime_serde")]
     pub retention_blocks: Option<Duration>,
@@ -200,7 +203,6 @@ impl PruningConfig {
 
     pub fn resolved(mut self) -> Self {
         self.retention_block_parent = self.resolve(self.retention_block_parent);
-        self.retention_blocks_transactions = self.resolve(self.retention_blocks_transactions);
         self.retention_blocks = self.resolve(self.retention_blocks);
         self.retention_transactions = self.resolve(self.retention_transactions);
         self.retention_transactions_acceptances = self.resolve(self.retention_transactions_acceptances);

@@ -7,4 +7,5 @@ pub struct DatabaseDetails {
     pub blocked_queries: i64,
     pub active_connections: i64,
     pub max_connections: i32,
+    pub deadlocks: i64,
 }

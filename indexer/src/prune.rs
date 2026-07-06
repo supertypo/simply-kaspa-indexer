@@ -33,7 +33,6 @@ pub async fn pruner(
 
             let mut retention = HashMap::new();
             retention.insert("block_parent".to_string(), format_duration(pruning_config.retention_block_parent));
-            retention.insert("blocks_transactions".to_string(), format_duration(pruning_config.retention_blocks_transactions));
             retention.insert("blocks".to_string(), format_duration(pruning_config.retention_blocks));
             retention
                 .insert("transactions_acceptances".to_string(), format_duration(pruning_config.retention_transactions_acceptances));
@@ -98,35 +97,6 @@ pub async fn prune(
             cutoff_time,
         )
         .await as i32;
-    }
-
-    if let Some(retention) = pruning_config.retention_blocks_transactions {
-        let db = database.clone();
-        return_on_shutdown!(signal_handler.is_shutdown());
-        if !cli_args.is_disabled(CliDisable::BlocksTable) {
-            let retention = retention.min(pruning_config.retention_blocks.unwrap_or(Duration::MAX));
-            let cutoff_blue_score = checkpoint_blue_score.saturating_sub(retention.as_secs() * net_bps) as i64;
-            let cutoff_time = checkpoint_time.sub(retention);
-            step_errors += prune_step(
-                "blocks_transactions (b)",
-                metrics.clone(),
-                |(blue_score, _)| async move { db.prune_blocks_transactions_using_blocks(blue_score, batch_size).await },
-                cutoff_blue_score,
-                cutoff_time,
-            )
-            .await as i32;
-        } else {
-            let retention = retention.min(pruning_config.retention_transactions.unwrap_or(Duration::MAX));
-            let cutoff_time = checkpoint_time.sub(retention);
-            step_errors += prune_step(
-                "blocks_transactions (t)",
-                metrics.clone(),
-                |(_, time_ms)| async move { db.prune_blocks_transactions_using_transactions(time_ms, batch_size).await },
-                0,
-                cutoff_time,
-            )
-            .await as i32;
-        }
     }
 
     if let Some(retention) = pruning_config.retention_transactions_acceptances {

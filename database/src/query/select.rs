@@ -1,6 +1,5 @@
 use crate::models::query::database_details::DatabaseDetails;
 use crate::models::query::table_details::TableDetails;
-use crate::models::types::hash::Hash;
 use sqlx::{Error, Pool, Postgres, Row};
 
 pub async fn select_database_details(pool: &Pool<Postgres>) -> Result<DatabaseDetails, Error> {
@@ -13,7 +12,8 @@ pub async fn select_database_details(pool: &Pool<Postgres>) -> Result<DatabaseDe
             (SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND pid <> pg_backend_pid()) active_queries,
             (SELECT count(*) FROM pg_locks WHERE NOT granted) blocked_queries,
             (SELECT count(*) FROM pg_stat_activity) active_connections,
-            (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') max_connections;
+            (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') max_connections,
+            (SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()) deadlocks;
     ",
     )
     .fetch_one(pool)
@@ -41,16 +41,4 @@ pub async fn select_all_table_details(pool: &Pool<Postgres>) -> Result<Vec<Table
 
 pub async fn select_var(key: &str, pool: &Pool<Postgres>) -> Result<String, Error> {
     sqlx::query("SELECT value FROM vars WHERE key = $1").bind(key).fetch_one(pool).await?.try_get(0)
-}
-
-pub async fn select_tx_count(block_hash: &Hash, pool: &Pool<Postgres>) -> Result<i64, Error> {
-    sqlx::query("SELECT COUNT(*) FROM blocks_transactions WHERE block_hash = $1").bind(block_hash).fetch_one(pool).await?.try_get(0)
-}
-
-pub async fn select_is_chain_block(block_hash: &Hash, pool: &Pool<Postgres>) -> Result<bool, Error> {
-    sqlx::query("SELECT EXISTS(SELECT 1 FROM transactions_acceptances WHERE block_hash = $1)")
-        .bind(block_hash)
-        .fetch_one(pool)
-        .await?
-        .try_get(0)
 }
