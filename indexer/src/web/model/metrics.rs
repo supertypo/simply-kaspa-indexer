@@ -18,7 +18,8 @@ pub struct Metrics {
     pub settings: Option<Settings>,
     pub process: MetricsProcess,
     pub queues: MetricsQueues,
-    pub checkpoint: MetricsCheckpoint,
+    pub block_checkpoint: MetricsCheckpoint,
+    pub vcp_checkpoint: MetricsCheckpoint,
     pub components: MetricsComponent,
     pub database: MetricsDb,
 }
@@ -32,7 +33,8 @@ impl Metrics {
             settings: None,
             process: MetricsProcess::new(),
             queues: MetricsQueues::new(),
-            checkpoint: MetricsCheckpoint::new(),
+            block_checkpoint: MetricsCheckpoint::new(),
+            vcp_checkpoint: MetricsCheckpoint::new(),
             components: MetricsComponent::new(),
             database: MetricsDb::new(),
         }

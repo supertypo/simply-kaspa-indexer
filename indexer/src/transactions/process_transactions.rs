@@ -17,7 +17,6 @@ use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::cmp::min;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio::task;
@@ -27,7 +26,6 @@ pub async fn process_transactions(
     settings: Settings,
     signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
-    start_vcp: Arc<AtomicBool>,
     txs_queue: Arc<ArrayQueue<TransactionData>>,
     checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
     database: KaspaDbClient,
@@ -107,20 +105,16 @@ pub async fn process_transactions(
                 let last_block_time = last_checkpoint.timestamp;
 
                 if !disable_rejected_transactions {
-                    if start_vcp.load(Ordering::Relaxed) {
-                        loop {
-                            if let Some(vcp) = &metrics.read().await.components.virtual_chain_processor.last_block {
-                                if vcp.daa_score.saturating_sub(checkpoint_blocks.last().unwrap().daa_score)
-                                    >= 3 * settings.net_bps as u64
-                                {
-                                    break;
-                                }
-                            }
-                            debug!("Transaction processor is waiting for virtual chain processor to catch up...");
-                            sleep(Duration::from_millis(1000)).await;
-                            if signal_handler.is_shutdown() {
-                                return;
-                            }
+                    loop {
+                        if let Some(vcp) = &metrics.read().await.components.virtual_chain_processor.last_block
+                            && vcp.daa_score.saturating_sub(checkpoint_blocks.last().unwrap().daa_score) >= 3 * settings.net_bps as u64
+                        {
+                            break;
+                        }
+                        debug!("Transaction processor is waiting for virtual chain processor to catch up...");
+                        sleep(Duration::from_millis(1000)).await;
+                        if signal_handler.is_shutdown() {
+                            return;
                         }
                     }
                     let start_commit_time = Instant::now();

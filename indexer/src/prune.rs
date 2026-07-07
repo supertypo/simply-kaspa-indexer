@@ -78,7 +78,7 @@ pub async fn prune(
         metrics_rw.components.db_pruner.running = Some(true);
         metrics_rw.components.db_pruner.start_time = Some(common_start_time);
         metrics_rw.components.db_pruner.results = Some(HashMap::new());
-        let block = metrics_rw.checkpoint.block.as_ref().unwrap();
+        let block = metrics_rw.block_checkpoint.block.as_ref().unwrap();
         (settings.net_bps as u64, block.blue_score, block.date_time)
     };
     info!("\x1b[33mDatabase pruning started\x1b[0m");

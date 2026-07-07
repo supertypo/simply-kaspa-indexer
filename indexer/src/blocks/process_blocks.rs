@@ -1,6 +1,5 @@
 use std::cmp::min;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::blocks::fetch_blocks::BlockData;
@@ -14,7 +13,6 @@ use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
 use simply_kaspa_database::models::block::Block;
 use simply_kaspa_database::models::block_parent::BlockParent;
-use simply_kaspa_database::models::types::hash::Hash as SqlHash;
 use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use tokio::sync::RwLock;
@@ -24,25 +22,19 @@ pub async fn process_blocks(
     settings: Settings,
     signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
-    start_vcp: Arc<AtomicBool>,
     rpc_blocks_queue: Arc<ArrayQueue<BlockData>>,
     checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
     database: KaspaDbClient,
     mapper: KaspaDbMapper,
 ) {
-    const NOOP_DELETES_BEFORE_VCP: i32 = 10;
     let batch_scale = settings.cli_args.batch_scale;
     let batch_size = (800f64 * batch_scale) as usize;
-    let disable_virtual_chain_processing = settings.cli_args.is_disabled(CliDisable::VirtualChainProcessing);
     let disable_blocks = settings.cli_args.is_disabled(CliDisable::BlocksTable);
     let disable_block_relations = settings.cli_args.is_disabled(CliDisable::BlockParentTable);
-    let mut first_block = true;
-    let mut vcp_started = false;
     let mut blocks = vec![];
     let mut blocks_parents = vec![];
     let mut checkpoint_blocks = vec![];
     let mut last_commit_time = Instant::now();
-    let mut noop_delete_count = 0;
 
     while !signal_handler.is_shutdown() {
         if let Some(block_data) = rpc_blocks_queue.pop() {
@@ -74,32 +66,7 @@ pub async fn process_blocks(
                 };
                 let last_block_datetime = DateTime::from_timestamp_millis(last_checkpoint_block.timestamp as i64).unwrap();
 
-                if !vcp_started && !disable_virtual_chain_processing {
-                    let tas_deleted = delete_transaction_acceptances(
-                        batch_scale,
-                        // Skip deleting acceptance for first block hash, as it's not re-added by vcp:
-                        checkpoint_blocks.iter().skip(first_block as usize).map(|c| c.hash.clone()).collect(),
-                        database.clone(),
-                    )
-                    .await;
-                    first_block = false;
-                    if tas_deleted == 0 {
-                        noop_delete_count += 1;
-                    } else {
-                        noop_delete_count = 0;
-                    }
-                    let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
-                    let bps = checkpoint_blocks.len() as f64 / commit_time as f64 * 1000f64;
-                    info!(
-                        "Committed {} new blocks in {}ms ({:.1} bps, {} bp) [clr {} ta]. Last block: {}",
-                        blocks_inserted, commit_time, bps, block_parents_inserted, tas_deleted, last_block_datetime
-                    );
-                    if noop_delete_count >= NOOP_DELETES_BEFORE_VCP {
-                        info!("Notifying virtual chain processor");
-                        start_vcp.store(true, Ordering::Relaxed);
-                        vcp_started = true;
-                    }
-                } else if !disable_blocks || !disable_block_relations {
+                if !disable_blocks || !disable_block_relations {
                     let commit_time = Instant::now().duration_since(start_commit_time).as_millis();
                     let bps = checkpoint_blocks.len() as f64 / commit_time as f64 * 1000f64;
                     info!(
@@ -152,19 +119,5 @@ async fn insert_block_parents(batch_scale: f64, values: Vec<BlockParent>, databa
         rows_affected += database.insert_block_parents(batch_values).await.unwrap_or_else(|e| panic!("Insert {key} FAILED: {e}"));
     }
     debug!("Committed {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
-    rows_affected
-}
-
-async fn delete_transaction_acceptances(batch_scale: f64, block_hashes: Vec<SqlHash>, db: KaspaDbClient) -> u64 {
-    let batch_size = min((2000f64 * batch_scale) as usize, 65000); // ANY($1): no param limit
-    let key = "transaction_acceptances";
-    let start_time = Instant::now();
-    debug!("Clearing {} {}", block_hashes.len(), key);
-    let mut rows_affected = 0;
-    for batch_values in block_hashes.chunks(batch_size) {
-        rows_affected +=
-            db.delete_transaction_acceptances(batch_values).await.unwrap_or_else(|e| panic!("Deleting {key} FAILED: {e}"));
-    }
-    debug!("Cleared {} {} in {}ms", rows_affected, key, Instant::now().duration_since(start_time).as_millis());
     rows_affected
 }

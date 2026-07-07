@@ -1,13 +1,13 @@
 use crate::checkpoint::{CheckpointBlock, CheckpointOrigin};
 use crate::settings::Settings;
+use crate::vars::save_vcp_checkpoint;
 use crate::virtual_chain::accept_transactions::accept_transactions;
 use crate::virtual_chain::add_chain_blocks::add_chain_blocks;
 use crate::virtual_chain::remove_chain_blocks::remove_chain_blocks;
 use crate::web::model::metrics::Metrics;
 use chrono::DateTime;
-use crossbeam_queue::ArrayQueue;
 use kaspa_rpc_core::GetVirtualChainFromBlockV2Response;
-use log::{debug, info, warn};
+use log::{debug, error, info};
 use mpsc::Receiver;
 use simply_kaspa_cli::cli_args::CliDisable;
 use simply_kaspa_database::client::KaspaDbClient;
@@ -15,16 +15,14 @@ use simply_kaspa_mapping::mapper::KaspaDbMapper;
 use simply_kaspa_signal::signal_handler::SignalHandler;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
-use tokio::time::sleep;
 
 pub async fn process_virtual_chain(
     settings: Settings,
     signal_handler: SignalHandler,
     metrics: Arc<RwLock<Metrics>>,
-    checkpoint_queue: Arc<ArrayQueue<CheckpointBlock>>,
     database: KaspaDbClient,
     mapper: KaspaDbMapper,
     mut receiver: Receiver<GetVirtualChainFromBlockV2Response>,
@@ -119,12 +117,18 @@ pub async fn process_virtual_chain(
                 DateTime::from_timestamp_millis(tip_distance_timestamp as i64);
         }
 
-        while checkpoint_queue.push(checkpoint_block.clone()).is_err() {
-            warn!("Checkpoint queue is full");
-            sleep(Duration::from_secs(1)).await;
-            if signal_handler.is_shutdown() {
-                return;
+        let checkpoint_string = hex::encode(checkpoint_block.hash.as_bytes());
+        match save_vcp_checkpoint(&checkpoint_string, &database).await {
+            Ok(_) => {
+                let mut m = metrics.write().await;
+                m.vcp_checkpoint.origin = Some(format!("{:?}", checkpoint_block.origin));
+                m.vcp_checkpoint.block = Some(checkpoint_block.clone().into());
             }
+            Err(_) => error!("Failed to save vcp_checkpoint {checkpoint_string}"),
+        }
+
+        if signal_handler.is_shutdown() {
+            return;
         }
 
         if !synced && added_blocks_count < 200 {
