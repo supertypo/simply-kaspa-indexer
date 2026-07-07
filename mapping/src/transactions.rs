@@ -88,10 +88,10 @@ pub fn map_transaction_inputs(
                 previous_outpoint_hash: include_previous_outpoint.then_some(input.previous_outpoint.transaction_id.into()),
                 previous_outpoint_index: include_previous_outpoint.then_some(input.previous_outpoint.index as i16),
                 signature_script: include_signature_script.then_some(input.signature_script.clone()),
-                sig_op_count: (include_sig_op_count && input.sig_op_count != 0).then(|| input.sig_op_count as i16),
+                sig_op_count: (include_sig_op_count && input.sig_op_count != 0).then_some(input.sig_op_count as i16),
                 previous_outpoint_script: None,
                 previous_outpoint_amount: None,
-                compute_budget: (include_compute_budget && input.compute_budget != 0).then(|| input.compute_budget as i16),
+                compute_budget: (include_compute_budget && input.compute_budget != 0).then_some(input.compute_budget as i16),
                 covenant_id: None,
             })
             .collect()
@@ -265,7 +265,7 @@ fn map_optional_transaction_outputs(
             .iter()
             .enumerate()
             .map(|(i, output)| {
-                let covenant = output.covenant.as_ref().map(|n| n.0.map(|c| c.0)).flatten();
+                let covenant = output.covenant.as_ref().and_then(|n| n.0.map(|c| c.0));
                 SqlTransactionOutput {
                     index: i as i16,
                     amount: include_amount.then(|| output.value.unwrap() as i64),

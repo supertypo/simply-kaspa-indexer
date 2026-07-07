@@ -46,7 +46,7 @@ pub fn map_block(
 }
 
 pub fn map_block_parents(block: &RpcBlock) -> Vec<SqlBlockParent> {
-    if block.header.parents_by_level.len() == 0 {
+    if block.header.parents_by_level.is_empty() {
         return vec![];
     }
     block.header.parents_by_level[0]

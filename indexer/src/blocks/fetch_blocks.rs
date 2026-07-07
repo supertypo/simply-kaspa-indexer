@@ -100,7 +100,7 @@ impl KaspaBlocksFetcher {
                         {
                             info!("Getting tip hashes from BlockDagInfo for sync check");
                             if let Ok(block_dag_info) = kaspad.get_block_dag_info().await {
-                                self.tip_hashes = HashSet::from_iter(block_dag_info.tip_hashes.into_iter());
+                                self.tip_hashes = HashSet::from_iter(block_dag_info.tip_hashes);
                                 self.last_sync_check = Instant::now();
                             }
                         }
