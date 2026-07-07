@@ -123,7 +123,7 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         info!("Starting from block_checkpoint {}", block_checkpoint);
     } else {
         block_checkpoint = block_dag_info.pruning_point_hash;
-        warn!("block_checkpoint not found, starting from pruning_point {}", block_checkpoint);
+        warn!("Block checkpoint not found, starting from pruning_point {}", block_checkpoint);
     }
 
     let vcp_checkpoint: KaspaHash;
@@ -131,10 +131,10 @@ async fn start_processing(cli_args: CliArgs, kaspad_pool: Pool<KaspadManager, Ob
         vcp_checkpoint = block_checkpoint;
     } else if let Ok(saved_vcp_checkpoint) = load_vcp_checkpoint(&database).await {
         vcp_checkpoint = KaspaHash::from_str(saved_vcp_checkpoint.as_str()).expect("Saved vcp_checkpoint is invalid!");
-        info!("VCP starting from vcp_checkpoint {}", vcp_checkpoint);
+        info!("Starting from vcp_checkpoint {}", vcp_checkpoint);
     } else {
         vcp_checkpoint = block_checkpoint;
-        info!("vcp_checkpoint not found, VCP starting from block_checkpoint {}", vcp_checkpoint);
+        info!("VCP starting from block_checkpoint {}", vcp_checkpoint);
     }
 
     let fetch_checkpoint_block = async |hash: KaspaHash| -> CheckpointBlock {
